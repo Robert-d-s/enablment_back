@@ -16,11 +16,4 @@ export class UserResolver {
     async users(): Promise<User[]> {
         return this.userService.all();
     }
-
-    @Mutation(() => User)
-    async createUser(
-        @Args('userInputCreate') userInputCreate: UserInputCreate,
-    ): Promise<User> {
-        return this.userService.create(userInputCreate.email, userInputCreate.password)
-    }
 }
