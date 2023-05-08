@@ -15,7 +15,6 @@ export class AuthController {
   }
 
   @Post('signup')
-  @Public()
   signUp(@Body() signUpDto: Record<string, string>) {
     return this.authService.signUp(signUpDto.email, signUpDto.password)
   }
