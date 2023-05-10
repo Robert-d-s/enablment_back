@@ -18,4 +18,7 @@ export class Time implements TimeClient {
 
     @Field(() => String)
     projectId: string;
+
+    @Field(() => Int)
+    rateId: number;
 }

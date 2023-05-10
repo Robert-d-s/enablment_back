@@ -11,6 +11,7 @@ import { ProjectModule } from './project/project.module';
 import { TeamModule } from './team/team.module';
 import { RateModule } from './rate/rate.module';
 import { TimeModule } from './time/time.module';
+import { InvoiceModule } from './invoice/invoice.module';
 
 @Module({
   imports: [ConfigModule.forRoot(), AuthModule, UserModule, ProjectModule,
@@ -22,7 +23,8 @@ import { TimeModule } from './time/time.module';
   WebhookModule,
   TeamModule,
   RateModule,
-  TimeModule,],
+  TimeModule,
+  InvoiceModule,],
   controllers: [AppController],
   providers: [AppService],
 })

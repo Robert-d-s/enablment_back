@@ -16,16 +16,16 @@ export class TimeResolver {
   async createTime(
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
-    const { startTime, projectId, userId, endTime } = timeInputCreate;
-    return this.timeService.create(startTime, projectId, userId, endTime);
+    const { startTime, projectId, userId, endTime, rateId } = timeInputCreate;
+    return this.timeService.create(startTime, projectId, userId, rateId, endTime);
   }
 
   @Mutation(() => Time)
   async updateTime(
     @Args('timeInputUpdate') timeInputUpdate: TimeInputUpdate,
   ): Promise<Time> {
-    const { id, startTime, projectId, userId, endTime } = timeInputUpdate;
-    return this.timeService.update(id, startTime, projectId, userId, endTime);
+    const { id, startTime, projectId, userId, endTime, rateId } = timeInputUpdate;
+    return this.timeService.update(id, startTime, projectId, userId, rateId, endTime);
   }
 
   @Mutation(() => Time)

@@ -25,6 +25,12 @@ export class TimeInputCreate {
         description: "User ID",
     })
     userId: number;
+
+    @Field(() => Number, {
+        nullable: false,
+        description: "Rate ID",
+    })
+    rateId: number;
 }
 
 @InputType()
@@ -58,4 +64,10 @@ export class TimeInputUpdate {
         description: "User ID",
     })
     userId?: number;
+
+    @Field(() => Number, {
+        nullable: true,
+        description: "Rate ID",
+    })
+    rateId?: number;
 }

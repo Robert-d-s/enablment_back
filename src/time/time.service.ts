@@ -13,18 +13,19 @@ export class TimeService {
         })
     }
 
-    create(startTime: Date, projectId: string, userId: number, endTime?: Date): Promise<Time> {
+    create(startTime: Date, projectId: string, userId: number, rateId: number, endTime?: Date): Promise<Time> {
         return prisma.time.create({
             data: {
                 startTime,
                 endTime,
                 projectId,
-                userId
+                userId,
+                rateId
             }
         })
     }
 
-    update(id: number, startTime?: Date, projectId?: string, userId?: number, endTime?: Date): Promise<Time> {
+    update(id: number, startTime?: Date, projectId?: string, userId?: number, rateId?: number, endTime?: Date): Promise<Time> {
         return prisma.time.update({
             where: {
                 id
@@ -33,7 +34,8 @@ export class TimeService {
                 startTime,
                 projectId,
                 userId,
-                endTime
+                endTime,
+                rateId
             }
         })
     }

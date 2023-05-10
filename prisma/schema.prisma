@@ -33,6 +33,7 @@ model Rate {
   rate            Int
 
   team            Team    @relation(fields: [teamId], references: [id])
+  times           Time[]
 }
 
 model Project {
@@ -51,7 +52,9 @@ model Time {
   endTime         DateTime?
   userId          Int
   projectId       String
+  rateId          Int
 
   user            User    @relation(fields: [userId], references: [id])
   project         Project @relation(fields: [projectId], references: [id])
+  rate            Rate    @relation(fields: [rateId], references: [id])
 }
