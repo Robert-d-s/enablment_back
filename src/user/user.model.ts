@@ -3,12 +3,12 @@ import { User as UserClient } from '@prisma/client';
 
 @ObjectType()
 export class User implements UserClient {
-   @Field(() => Int)
-   id: number;
+  @Field(() => Int)
+  id: number;
 
-   @Field(() => String)
-   email: string;
+  @Field(() => String)
+  email: string;
 
-   @Field(() => String)
-   password: string;
+  @Field(() => String)
+  password: string;
 }

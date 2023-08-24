@@ -1,7 +1,17 @@
-import { Body, Controller, Post, HttpCode, HttpStatus, Request, Get, UseGuards, SetMetadata } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  HttpCode,
+  HttpStatus,
+  Request,
+  Get,
+  UseGuards,
+  SetMetadata,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 
-export const Public = () => SetMetadata("isPublic", true);
+export const Public = () => SetMetadata('isPublic', true);
 
 @Controller('auth')
 export class AuthController {
@@ -15,8 +25,9 @@ export class AuthController {
   }
 
   @Post('signup')
+  @Public()
   signUp(@Body() signUpDto: Record<string, string>) {
-    return this.authService.signUp(signUpDto.email, signUpDto.password)
+    return this.authService.signUp(signUpDto.email, signUpDto.password);
   }
 
   @Get('profile')

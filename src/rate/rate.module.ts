@@ -3,6 +3,6 @@ import { RateService } from './rate.service';
 import { RateResolver } from './rate.resolver';
 
 @Module({
-  providers: [RateService, RateResolver]
+  providers: [RateService, RateResolver],
 })
 export class RateModule {}

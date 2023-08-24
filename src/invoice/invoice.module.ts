@@ -4,6 +4,6 @@ import { InvoiceResolver } from './invoice.resolver';
 
 @Module({
   providers: [InvoiceService, InvoiceResolver],
-  controllers: []
+  controllers: [],
 })
 export class InvoiceModule {}

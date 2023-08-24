@@ -5,13 +5,12 @@ import { Public } from 'src/auth/auth.controller';
 
 @Controller('webhook')
 export class WebhookController {
+  constructor(private webhookService: WebhookService) {}
 
-    constructor(private webhookService: WebhookService) {}
-
-    @Post()
-    @Public()
-    @UseGuards(WebhookGuard)
-    async handle(@Body() body: any) {
-        await this.webhookService.handle(body)
-    }
+  @Post()
+  @Public()
+  @UseGuards(WebhookGuard)
+  async handle(@Body() body: any) {
+    await this.webhookService.handle(body);
+  }
 }

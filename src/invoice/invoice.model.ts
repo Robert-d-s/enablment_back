@@ -1,33 +1,31 @@
-import { Field, Int, ObjectType } from "@nestjs/graphql";
+import { Field, Int, ObjectType } from '@nestjs/graphql';
 
 @ObjectType()
 export class InvoiceRate {
+  @Field(() => Int)
+  hours: number;
 
-    @Field(() => Int)
-    hours: number;
+  @Field(() => Int)
+  cost: number;
 
-    @Field(() => Int)
-    cost: number;
-
-    @Field(() => String)
-    rateName: string
+  @Field(() => String)
+  rateName: string;
 }
 
 @ObjectType()
 export class Invoice {
+  @Field(() => String)
+  projectId: string;
 
-    @Field(() => String)
-    projectId: string;
+  @Field(() => String)
+  projectName: string;
 
-    @Field(() => String)
-    projectName: string;
+  @Field(() => Int)
+  totalHours: number;
 
-    @Field(() => Int)
-    totalHours: number;
+  @Field(() => Int)
+  totalCost: number;
 
-    @Field(() => Int)
-    totalCost: number;
-
-    @Field(() => [InvoiceRate])
-    rates: InvoiceRate[]
+  @Field(() => [InvoiceRate])
+  rates: InvoiceRate[];
 }

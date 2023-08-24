@@ -4,6 +4,6 @@ import { ProjectResolver } from './project.resolver';
 
 @Module({
   providers: [ProjectService, ProjectResolver],
-  exports: [ProjectResolver]
+  exports: [ProjectResolver],
 })
 export class ProjectModule {}

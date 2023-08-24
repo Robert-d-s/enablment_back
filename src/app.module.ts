@@ -14,18 +14,23 @@ import { TimeModule } from './time/time.module';
 import { InvoiceModule } from './invoice/invoice.module';
 
 @Module({
-  imports: [ConfigModule.forRoot(), AuthModule, UserModule, ProjectModule,
-  GraphQLModule.forRoot<ApolloDriverConfig>({
-    driver: ApolloDriver,
-    autoSchemaFile: true,
-    context: ({ req }) => ({ req })
-  }),
-  WebhookModule,
-  TeamModule,
-  RateModule,
-  TimeModule,
-  InvoiceModule,],
+  imports: [
+    ConfigModule.forRoot(),
+    AuthModule,
+    UserModule,
+    ProjectModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+      context: ({ req }) => ({ req }),
+    }),
+    WebhookModule,
+    TeamModule,
+    RateModule,
+    TimeModule,
+    InvoiceModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
