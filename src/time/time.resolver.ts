@@ -17,15 +17,39 @@ export class TimeResolver {
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
     const { startTime, projectId, userId, endTime, rateId } = timeInputCreate;
-    return this.timeService.create(startTime, projectId, userId, rateId, endTime);
+    return this.timeService.create(
+      startTime,
+      projectId,
+      userId,
+      rateId,
+      endTime,
+    );
   }
 
   @Mutation(() => Time)
   async updateTime(
     @Args('timeInputUpdate') timeInputUpdate: TimeInputUpdate,
   ): Promise<Time> {
-    const { id, startTime, projectId, userId, endTime, rateId } = timeInputUpdate;
-    return this.timeService.update(id, startTime, projectId, userId, rateId, endTime);
+    const { id, startTime, projectId, userId, endTime, rateId } =
+      timeInputUpdate;
+    return this.timeService.update(
+      id,
+      startTime,
+      projectId,
+      userId,
+      rateId,
+      endTime,
+    );
+  }
+
+  @Query(() => Number)
+  async getTotalTimeSpent(
+    @Args('userId') userId: number,
+    @Args('projectId') projectId: string,
+    @Args('date') date: string,
+  ): Promise<number> {
+    const parsedDate = new Date(date); // Convert the date string to a Date object
+    return this.timeService.getTotalTimeSpent(userId, projectId, parsedDate);
   }
 
   @Mutation(() => Time)

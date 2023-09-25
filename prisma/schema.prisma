@@ -53,6 +53,7 @@ model Time {
   userId          Int
   projectId       String
   rateId          Int
+  totalElapsedTime Int  
 
   user            User    @relation(fields: [userId], references: [id])
   project         Project @relation(fields: [projectId], references: [id])

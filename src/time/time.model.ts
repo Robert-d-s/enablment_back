@@ -1,24 +1,26 @@
-import { Field, ObjectType, Int } from "@nestjs/graphql";
+import { Field, ObjectType, Int } from '@nestjs/graphql';
 import { Time as TimeClient } from '@prisma/client';
 
 @ObjectType()
 export class Time implements TimeClient {
+  @Field(() => Int)
+  id: number;
 
-    @Field(() => Int)
-    id: number;
+  @Field(() => Date)
+  startTime: Date;
 
-    @Field(() => Date)
-    startTime: Date;
+  @Field(() => Date, { nullable: true })
+  endTime: Date | null;
 
-    @Field(() => Date, { nullable: true })
-    endTime: Date | null;
+  @Field(() => Int)
+  userId: number;
 
-    @Field(() => Int)
-    userId: number;
+  @Field(() => String)
+  projectId: string;
 
-    @Field(() => String)
-    projectId: string;
+  @Field(() => Int)
+  rateId: number;
 
-    @Field(() => Int)
-    rateId: number;
+  @Field(() => Int, { nullable: true })
+  totalElapsedTime: number | null;
 }

@@ -20,6 +20,24 @@ export class TimeService {
     rateId: number,
     endTime?: Date,
   ): Promise<Time> {
+    const totalElapsedTime = endTime
+      ? new Date(endTime).getTime() - new Date(startTime).getTime()
+      : 0;
+
+    // eslint-disable-next-line no-console
+    console.log('Debugging time values:', {
+      startTime,
+      endTime,
+      totalElapsedTime,
+    });
+    // eslint-disable-next-line no-console
+    console.log('Debugging incoming request data:');
+    console.log('startTime:', startTime);
+    console.log('projectId:', projectId);
+    console.log('userId:', userId);
+    console.log('rateId:', rateId);
+    console.log('endTime:', endTime);
+
     return prisma.time.create({
       data: {
         startTime,
@@ -27,6 +45,7 @@ export class TimeService {
         projectId,
         userId,
         rateId,
+        totalElapsedTime,
       },
     });
   }
@@ -39,6 +58,25 @@ export class TimeService {
     rateId?: number,
     endTime?: Date,
   ): Promise<Time> {
+    const totalElapsedTime =
+      endTime && startTime
+        ? new Date(endTime).getTime() - new Date(startTime).getTime()
+        : undefined;
+
+    // eslint-disable-next-line no-console
+    // console.log('Debugging time values:', {
+    //   startTime,
+    //   endTime,
+    //   totalElapsedTime,
+    // });
+    // eslint-disable-next-line no-console
+    console.log('Debugging incoming request data:');
+    console.log('startTime:', startTime);
+    console.log('projectId:', projectId);
+    console.log('userId:', userId);
+    console.log('rateId:', rateId);
+    console.log('endTime:', endTime);
+
     return prisma.time.update({
       where: {
         id,
@@ -49,6 +87,7 @@ export class TimeService {
         userId,
         endTime,
         rateId,
+        totalElapsedTime,
       },
     });
   }
@@ -59,5 +98,39 @@ export class TimeService {
         id,
       },
     });
+  }
+
+  async getTotalTimeSpent(
+    userId: number,
+    projectId: string,
+    date: Date,
+  ): Promise<number> {
+    console.log(
+      `Debug: UserId: ${userId}, ProjectId: ${projectId}, Date: ${date}`,
+    );
+    const aggregatedTime = await prisma.time.aggregate({
+      where: {
+        userId,
+        projectId,
+        AND: [
+          {
+            startTime: {
+              gte: new Date(date.setHours(0, 0, 0, 0)),
+            },
+          },
+          {
+            endTime: {
+              lte: new Date(date.setHours(23, 59, 59, 999)),
+            },
+          },
+        ],
+      },
+      _sum: {
+        totalElapsedTime: true,
+      },
+    });
+
+    console.log('Debug: Aggregated Time:', aggregatedTime);
+    return aggregatedTime._sum.totalElapsedTime || 0;
   }
 }

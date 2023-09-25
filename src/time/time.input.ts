@@ -31,6 +31,12 @@ export class TimeInputCreate {
     description: 'Rate ID',
   })
   rateId: number;
+
+  @Field(() => Number, {
+    nullable: true, // or false, depending on whether it should be optional or not
+    description: 'Total Elapsed Time',
+  })
+  totalElapsedTime?: number; // or just totalElapsedTime: number; if it's required
 }
 
 @InputType()
@@ -70,4 +76,10 @@ export class TimeInputUpdate {
     description: 'Rate ID',
   })
   rateId?: number;
+
+  @Field(() => Number, {
+    nullable: true, // or false, depending on whether it should be optional or not
+    description: 'Total Elapsed Time',
+  })
+  totalElapsedTime?: number; // or just totalElapsedTime: number; if it's required
 }
