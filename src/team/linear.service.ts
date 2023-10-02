@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { TeamService } from './team.service';
 import fetch from 'node-fetch';
 import { ModuleRef } from '@nestjs/core';
+import { TeamsDTO } from './team.dto';
 
 @Injectable()
 export class LinearService {
@@ -83,6 +84,74 @@ export class LinearService {
       }
     } catch (error) {
       console.error('An error occurred:', error);
+    }
+  }
+
+  // Add this method to your existing LinearService
+  async fetchTeams(): Promise<TeamsDTO> {
+    // Use your Team type here instead of any[]
+    const url = 'https://api.linear.app/graphql';
+    const query = `
+    query {
+      teams {
+        nodes {
+          id
+          name
+          createdAt
+          timezone
+          members {
+            nodes {
+              id
+              name
+            }
+          }
+        }
+      }
+    }
+  `;
+
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `${this.linearApiKey}`,
+      },
+      body: JSON.stringify({ query }),
+    };
+
+    try {
+      const response = await fetch(url, options);
+
+      if (response.status !== 200) {
+        console.log('HTTP Status Code:', response.status);
+        return { nodes: [] };
+      }
+
+      const jsonResponse = await response.json();
+      const { data } = jsonResponse;
+
+      console.log(
+        'Members for each team:',
+        data.teams.nodes.map((node) => node.members),
+      );
+
+      console.log('Data returned from Linear API:', JSON.stringify(data));
+
+      console.log(
+        'Data received in LinearService:',
+        JSON.stringify(data, null, 2),
+      );
+
+      if (data && data.teams && data.teams.nodes) {
+        return data.teams;
+      } else {
+        console.error('Failed to fetch teams');
+        console.log('Response Data:', data);
+        return { nodes: [] };
+      }
+    } catch (error) {
+      console.error('An error occurred:', error);
+      return { nodes: [] };
     }
   }
 }

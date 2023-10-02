@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Team } from '@prisma/client';
-
 import { LinearService } from './linear.service';
+import { TeamsDTO } from './team.dto';
 
 const prisma = new PrismaClient();
 
@@ -44,5 +44,9 @@ export class TeamService {
     await prisma.team.delete({
       where: { id },
     });
+  }
+
+  async getTeams(): Promise<TeamsDTO> {
+    return await this.linearService.fetchTeams();
   }
 }
