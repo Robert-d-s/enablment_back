@@ -1,34 +1,48 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, PrismaClient, Project, Team } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { PrismaClient, Team } from '@prisma/client';
+
+import { LinearService } from './linear.service';
 
 const prisma = new PrismaClient();
 
-type TeamWithProjectsAndRates = Prisma.TeamGetPayload<{
-  include: { projects: true; rates: true };
-}>;
-
 @Injectable()
 export class TeamService {
-  all(): Promise<TeamWithProjectsAndRates[]> {
-    return prisma.team.findMany({
-      include: {
-        projects: true,
-        rates: true,
+  constructor(private readonly linearService: LinearService) {}
+
+  async syncTeamsFromLinear() {
+    await this.linearService.syncTeams();
+  }
+
+  async syncTeam(id: string, name: string): Promise<void> {
+    await prisma.team.upsert({
+      where: { id },
+      update: { name },
+      create: { id, name },
+    });
+  }
+
+  async create(id: string, name: string): Promise<Team> {
+    return await prisma.team.create({
+      data: {
+        id,
+        name,
+        projects: { create: [] },
+        rates: { create: [] },
       },
     });
   }
 
-  public create(name: string): Promise<TeamWithProjectsAndRates> {
-    return prisma.team.create({
-      data: {
-        id: uuidv4(),
-        name,
+  async getAllTeams(): Promise<{ id: string }[]> {
+    return await prisma.team.findMany({
+      select: {
+        id: true,
       },
-      include: {
-        projects: true,
-        rates: true,
-      },
+    });
+  }
+
+  async deleteTeam(id: string): Promise<void> {
+    await prisma.team.delete({
+      where: { id },
     });
   }
 }
