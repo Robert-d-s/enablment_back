@@ -6,7 +6,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:3000',
-      'https://3d3d-152-115-126-50.ngrok-free.app',
+      'https://a869-152-115-126-50.ngrok-free.app ',
     ],
   });
 

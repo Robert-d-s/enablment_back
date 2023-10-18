@@ -57,7 +57,9 @@ export class InvoiceService {
         (acc, time) => {
           const duration =
             (time.endTime?.getTime() || 0) - time.startTime.getTime();
-          const hours = duration / (1000 * 60 * 60);
+          // const hours = duration / (1000 * 60 * 60);
+          const hours = time.totalElapsedTime / (1000 * 60 * 60);
+
           const cost = hours * (time.rate?.rate || 0);
 
           const rateId = time.rateId;
@@ -74,7 +76,23 @@ export class InvoiceService {
       );
 
       // Convert rates object to an array
-      const ratesArray: any[] = Object.values(totalHoursAndCost.rates);
+      // const ratesArray: any[] = Object.values(totalHoursAndCost.rates);
+      interface RateDetails {
+        hours: number;
+        cost: number;
+        rateName: string;
+      }
+
+      const ratesArray = Object.values(totalHoursAndCost.rates).map(
+        (rate: RateDetails) => {
+          return {
+            hours: rate.hours,
+            cost: rate.cost,
+            rateName: rate.rateName,
+            hoursFormatted: this.hoursToHoursAndMinutes(rate.hours),
+          };
+        },
+      );
 
       return {
         projectId: project.id,
@@ -82,9 +100,18 @@ export class InvoiceService {
         rates: ratesArray,
         totalHours: ratesArray.reduce((prev, cur) => prev + cur.hours, 0),
         totalCost: ratesArray.reduce((prev, cur) => prev + cur.cost, 0),
+        // Add the formatted representation
+        totalHoursFormatted: this.hoursToHoursAndMinutes(
+          ratesArray.reduce((prev, cur) => prev + cur.hours, 0),
+        ),
       };
     });
 
     return invoice;
+  }
+  private hoursToHoursAndMinutes(hours: number): string {
+    const hoursPart = Math.floor(hours);
+    const minutesPart = Math.round((hours - hoursPart) * 60);
+    return `${hoursPart}h ${minutesPart}m`;
   }
 }

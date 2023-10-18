@@ -1,11 +1,11 @@
-import { Field, Int, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType, Float } from '@nestjs/graphql';
 
 @ObjectType()
 export class InvoiceRate {
-  @Field(() => Int)
+  @Field(() => Float)
   hours: number;
 
-  @Field(() => Int)
+  @Field(() => Float)
   cost: number;
 
   @Field(() => String)
@@ -20,10 +20,10 @@ export class Invoice {
   @Field(() => String)
   projectName: string;
 
-  @Field(() => Int)
+  @Field(() => Float)
   totalHours: number;
 
-  @Field(() => Int)
+  @Field(() => Float)
   totalCost: number;
 
   @Field(() => [InvoiceRate])

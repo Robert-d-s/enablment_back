@@ -13,13 +13,42 @@ export class TimeService {
     });
   }
 
-  create(
+  async isDuplicate(
+    startTime: Date,
+    endTime: Date,
+    userId: number,
+    projectId: string,
+    rateId: number,
+  ): Promise<boolean> {
+    const existingEntry = await prisma.time.findFirst({
+      where: {
+        startTime,
+        endTime,
+        userId,
+        projectId,
+        rateId,
+      },
+    });
+    return !!existingEntry;
+  }
+  async create(
     startTime: Date,
     projectId: string,
     userId: number,
     rateId: number,
     endTime?: Date,
   ): Promise<Time> {
+    // Check for duplicates
+    const duplicate = await this.isDuplicate(
+      startTime,
+      endTime,
+      userId,
+      projectId,
+      rateId,
+    );
+    if (duplicate) {
+      throw new Error('Duplicate time entry not allowed');
+    }
     const totalElapsedTime = endTime
       ? new Date(endTime).getTime() - new Date(startTime).getTime()
       : 0;
@@ -63,13 +92,6 @@ export class TimeService {
         ? new Date(endTime).getTime() - new Date(startTime).getTime()
         : undefined;
 
-    // eslint-disable-next-line no-console
-    // console.log('Debugging time values:', {
-    //   startTime,
-    //   endTime,
-    //   totalElapsedTime,
-    // });
-    // eslint-disable-next-line no-console
     console.log('Debugging incoming request data:');
     console.log('startTime:', startTime);
     console.log('projectId:', projectId);

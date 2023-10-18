@@ -17,6 +17,21 @@ export class TimeResolver {
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
     const { startTime, projectId, userId, endTime, rateId } = timeInputCreate;
+
+    // Check for duplicate entries
+    const duplicate = await this.timeService.isDuplicate(
+      startTime,
+      endTime,
+      userId,
+      projectId,
+      rateId,
+    );
+
+    if (duplicate) {
+      // If a duplicate entry is found, throw an error
+      throw new Error('Duplicate time entry not allowed');
+    }
+
     return this.timeService.create(
       startTime,
       projectId,
