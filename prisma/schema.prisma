@@ -32,7 +32,7 @@ model Rate {
   teamId          String
   rate            Int
 
-  team            Team    @relation(fields: [teamId], references: [id])
+  team            Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   times           Time[]
 }
 
@@ -43,7 +43,7 @@ model Project {
   teamId          String
 
   time            Time[]
-  team            Team    @relation(fields: [teamId], references: [id])
+  team            Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
 }
 
 model Time {

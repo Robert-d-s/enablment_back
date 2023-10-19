@@ -3,14 +3,17 @@ import { PrismaClient, Team } from '@prisma/client';
 import { LinearService } from './linear.service';
 import { TeamsDTO } from './team.dto';
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
 
 @Injectable()
 export class TeamService {
   constructor(private readonly linearService: LinearService) {}
 
   async syncTeamsFromLinear() {
-    await this.linearService.syncTeams();
+    await this.linearService.synchronizeTeamsWithLinear();
   }
 
   async syncTeam(id: string, name: string): Promise<void> {
@@ -49,4 +52,12 @@ export class TeamService {
   async getTeams(): Promise<TeamsDTO> {
     return await this.linearService.fetchTeams();
   }
+  // ----------------------------------------------------------------
+  async getTeamById(id: string): Promise<Team | null> {
+    return await prisma.team.findUnique({
+      where: { id },
+    });
+  }
+
+  // ----------------------------------------------------------------
 }

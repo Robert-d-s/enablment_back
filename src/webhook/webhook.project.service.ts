@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LinearWebhookBody } from './webhook.service';
-import { ProjectService } from 'src/project/project.service';
+import { ProjectService } from '../project/project.service';
 
 @Injectable()
 export class WebhookProjectService {
