@@ -9,5 +9,6 @@ import { TeamSynchronizationController } from './team.synchhcronization.controll
   imports: [ConfigModule],
   providers: [TeamResolver, TeamService, LinearService],
   controllers: [TeamSynchronizationController],
+  exports: [TeamService, LinearService],
 })
 export class TeamModule {}
