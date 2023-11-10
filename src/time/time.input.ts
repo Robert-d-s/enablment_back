@@ -33,10 +33,10 @@ export class TimeInputCreate {
   rateId: number;
 
   @Field(() => Number, {
-    nullable: true, // or false, depending on whether it should be optional or not
+    nullable: false, // or false, depending on whether it should be optional or not
     description: 'Total Elapsed Time',
   })
-  totalElapsedTime?: number; // or just totalElapsedTime: number; if it's required
+  totalElapsedTime: number; // or just totalElapsedTime: number; if it's required
 }
 
 @InputType()
@@ -47,11 +47,11 @@ export class TimeInputUpdate {
   })
   id: number;
 
-  @Field(() => Date, {
-    nullable: true,
-    description: 'Start time',
-  })
-  startTime?: Date;
+  // @Field(() => Date, {
+  //   nullable: true,
+  //   description: 'Start time',
+  // })
+  // startTime?: Date;
 
   @Field(() => Date, {
     nullable: true,
@@ -59,27 +59,27 @@ export class TimeInputUpdate {
   })
   endTime?: Date;
 
-  @Field(() => String, {
-    nullable: true,
-    description: 'Project ID',
-  })
-  projectId?: string;
+  // @Field(() => String, {
+  //   nullable: true,
+  //   description: 'Project ID',
+  // })
+  // projectId?: string;
+
+  // @Field(() => Number, {
+  //   nullable: true,
+  //   description: 'User ID',
+  // })
+  // userId?: number;
+
+  // @Field(() => Number, {
+  //   nullable: true,
+  //   description: 'Rate ID',
+  // })
+  // rateId?: number;
 
   @Field(() => Number, {
-    nullable: true,
-    description: 'User ID',
-  })
-  userId?: number;
-
-  @Field(() => Number, {
-    nullable: true,
-    description: 'Rate ID',
-  })
-  rateId?: number;
-
-  @Field(() => Number, {
-    nullable: true, // or false, depending on whether it should be optional or not
+    nullable: false, // or false, depending on whether it should be optional or not
     description: 'Total Elapsed Time',
   })
-  totalElapsedTime?: number; // or just totalElapsedTime: number; if it's required
+  totalElapsedTime: number; // or just totalElapsedTime: number; if it's required
 }

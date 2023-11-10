@@ -15,7 +15,7 @@ export class TimeService {
 
   async isDuplicate(
     startTime: Date,
-    endTime: Date,
+    // endTime: Date,
     userId: number,
     projectId: string,
     rateId: number,
@@ -23,7 +23,7 @@ export class TimeService {
     const existingEntry = await prisma.time.findFirst({
       where: {
         startTime,
-        endTime,
+        // endTime,
         userId,
         projectId,
         rateId,
@@ -31,85 +31,67 @@ export class TimeService {
     });
     return !!existingEntry;
   }
+
+  async findExistingEntry(
+    startTime: Date,
+    userId: number,
+    projectId: string,
+    rateId: number,
+  ): Promise<Time | null> {
+    return prisma.time.findFirst({
+      where: {
+        startTime,
+        userId,
+        projectId,
+        rateId,
+      },
+    });
+  }
+
   async create(
     startTime: Date,
     projectId: string,
     userId: number,
     rateId: number,
-    endTime?: Date,
+    endTime: Date,
+    totalElapsedTime: number, // This is passed directly and should not be calculated here.
   ): Promise<Time> {
+    console.log('Backend Service - Creating with Start Time:', startTime);
+    console.log('Backend Service - Creating with End Time:', endTime);
     // Check for duplicates
     const duplicate = await this.isDuplicate(
       startTime,
-      endTime,
       userId,
       projectId,
       rateId,
     );
+
     if (duplicate) {
       throw new Error('Duplicate time entry not allowed');
     }
-    const totalElapsedTime = endTime
-      ? new Date(endTime).getTime() - new Date(startTime).getTime()
-      : 0;
-
-    // eslint-disable-next-line no-console
-    console.log('Debugging time values:', {
-      startTime,
-      endTime,
-      totalElapsedTime,
-    });
-    // eslint-disable-next-line no-console
-    console.log('Debugging incoming request data:');
-    console.log('startTime:', startTime);
-    console.log('projectId:', projectId);
-    console.log('userId:', userId);
-    console.log('rateId:', rateId);
-    console.log('endTime:', endTime);
 
     return prisma.time.create({
       data: {
         startTime,
-        endTime,
+        endTime, // endTime is now the actual time of submission
         projectId,
         userId,
         rateId,
-        totalElapsedTime,
+        totalElapsedTime, // totalElapsedTime is the total active working time
       },
     });
   }
 
   update(
     id: number,
-    startTime?: Date,
-    projectId?: string,
-    userId?: number,
-    rateId?: number,
-    endTime?: Date,
+    endTime: Date,
+    totalElapsedTime: number, // Directly use the provided totalElapsedTime
   ): Promise<Time> {
-    const totalElapsedTime =
-      endTime && startTime
-        ? new Date(endTime).getTime() - new Date(startTime).getTime()
-        : undefined;
-
-    console.log('Debugging incoming request data:');
-    console.log('startTime:', startTime);
-    console.log('projectId:', projectId);
-    console.log('userId:', userId);
-    console.log('rateId:', rateId);
-    console.log('endTime:', endTime);
-
     return prisma.time.update({
-      where: {
-        id,
-      },
+      where: { id },
       data: {
-        startTime,
-        projectId,
-        userId,
-        endTime,
-        rateId,
-        totalElapsedTime,
+        endTime, // Set the endTime to the time of submission
+        totalElapsedTime, // Use the provided totalElapsedTime
       },
     });
   }

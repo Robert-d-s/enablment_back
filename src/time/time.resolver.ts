@@ -16,44 +16,56 @@ export class TimeResolver {
   async createTime(
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
-    const { startTime, projectId, userId, endTime, rateId } = timeInputCreate;
+    console.log(
+      'Backend Resolver - Received Start Time:',
+      timeInputCreate.startTime,
+    );
+    console.log(
+      'Backend Resolver - Received End Time:',
+      timeInputCreate.endTime,
+    );
+    const { startTime, projectId, userId, rateId, totalElapsedTime, endTime } =
+      timeInputCreate;
 
-    // Check for duplicate entries
-    const duplicate = await this.timeService.isDuplicate(
+    // Find an existing entry
+    const existingEntry = await this.timeService.findExistingEntry(
       startTime,
-      endTime,
       userId,
       projectId,
       rateId,
     );
 
-    if (duplicate) {
-      // If a duplicate entry is found, throw an error
-      throw new Error('Duplicate time entry not allowed');
+    if (existingEntry) {
+      // Update the existing entry with the actual endTime and the new totalElapsedTime
+      return this.timeService.update(
+        existingEntry.id,
+        new Date(), // Set to the current time as the endTime
+        totalElapsedTime,
+      );
+    } else {
+      // If no existing entry is found, create a new one with the submitted endTime
+      // const endTime = new Date(); // Set to the current time as the endTime
+      return this.timeService.create(
+        startTime,
+        projectId,
+        userId,
+        rateId,
+        // endTime,
+        new Date(endTime),
+        totalElapsedTime,
+      );
     }
-
-    return this.timeService.create(
-      startTime,
-      projectId,
-      userId,
-      rateId,
-      endTime,
-    );
   }
 
   @Mutation(() => Time)
   async updateTime(
     @Args('timeInputUpdate') timeInputUpdate: TimeInputUpdate,
   ): Promise<Time> {
-    const { id, startTime, projectId, userId, endTime, rateId } =
-      timeInputUpdate;
+    const { id, endTime, totalElapsedTime } = timeInputUpdate;
     return this.timeService.update(
       id,
-      startTime,
-      projectId,
-      userId,
-      rateId,
-      endTime,
+      endTime ?? new Date(), // If endTime is not provided, use the current time
+      totalElapsedTime,
     );
   }
 
