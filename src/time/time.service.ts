@@ -104,14 +104,46 @@ export class TimeService {
     });
   }
 
+  // async getTotalTimeSpent(
+  //   userId: number,
+  //   projectId: string,
+  //   date: Date,
+  // ): Promise<number> {
+  //   console.log(
+  //     `Debug: UserId: ${userId}, ProjectId: ${projectId}, Date: ${date}`,
+  //   );
+  //   const aggregatedTime = await prisma.time.aggregate({
+  //     where: {
+  //       userId,
+  //       projectId,
+  //       AND: [
+  //         {
+  //           startTime: {
+  //             gte: new Date(date.setHours(0, 0, 0, 0)),
+  //           },
+  //         },
+  //         {
+  //           endTime: {
+  //             lte: new Date(date.setHours(23, 59, 59, 999)),
+  //           },
+  //         },
+  //       ],
+  //     },
+  //     _sum: {
+  //       totalElapsedTime: true,
+  //     },
+  //   });
+
+  //   console.log('Debug: Aggregated Time:', aggregatedTime);
+  //   return aggregatedTime._sum.totalElapsedTime || 0;
+  // }
+
   async getTotalTimeSpent(
     userId: number,
     projectId: string,
-    date: Date,
+    startDate: Date,
+    endDate: Date,
   ): Promise<number> {
-    console.log(
-      `Debug: UserId: ${userId}, ProjectId: ${projectId}, Date: ${date}`,
-    );
     const aggregatedTime = await prisma.time.aggregate({
       where: {
         userId,
@@ -119,12 +151,12 @@ export class TimeService {
         AND: [
           {
             startTime: {
-              gte: new Date(date.setHours(0, 0, 0, 0)),
+              gte: startDate,
             },
           },
           {
             endTime: {
-              lte: new Date(date.setHours(23, 59, 59, 999)),
+              lte: endDate,
             },
           },
         ],
@@ -134,7 +166,23 @@ export class TimeService {
       },
     });
 
-    console.log('Debug: Aggregated Time:', aggregatedTime);
+    return aggregatedTime._sum.totalElapsedTime || 0;
+  }
+
+  async getTotalTimeForUserProject(
+    userId: number,
+    projectId: string,
+  ): Promise<number> {
+    const aggregatedTime = await prisma.time.aggregate({
+      where: {
+        userId,
+        projectId,
+      },
+      _sum: {
+        totalElapsedTime: true,
+      },
+    });
+
     return aggregatedTime._sum.totalElapsedTime || 0;
   }
 }

@@ -14,4 +14,24 @@ export class Project implements ProjectClient {
 
   @Field(() => String)
   teamId: string;
+  // ---------------------------------
+  @Field(() => String)
+  createdAt: string;
+
+  @Field(() => String)
+  updatedAt: string;
+
+  @Field(() => String)
+  description: string;
+
+  @Field(() => String)
+  state: string;
+
+  @Field(() => String)
+  startDate: string;
+
+  @Field(() => String)
+  targetDate: string;
+
+  // ---------------------------------
 }

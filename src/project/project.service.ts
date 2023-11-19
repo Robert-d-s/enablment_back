@@ -9,12 +9,28 @@ export class ProjectService {
     return prisma.project.findMany();
   }
 
-  async create(id: string, name: string, teamId: string): Promise<Project> {
+  async create(
+    id: string,
+    name: string,
+    teamId: string,
+    createdAt: string,
+    updatedAt: string,
+    description: string,
+    state: string,
+    startDate: string,
+    targetDate: string,
+  ): Promise<Project> {
     return prisma.project.create({
       data: {
         id,
         name,
         teamId,
+        createdAt,
+        updatedAt,
+        description,
+        state,
+        startDate,
+        targetDate,
       },
     });
   }
@@ -27,7 +43,17 @@ export class ProjectService {
     });
   }
 
-  async update(id: string, name: string, teamId: string): Promise<Project> {
+  async update(
+    id: string,
+    name: string,
+    teamId: string,
+    createdAt: string,
+    updatedAt: string,
+    description: string,
+    state: string,
+    startDate: string,
+    targetDate: string,
+  ): Promise<Project> {
     return prisma.project.update({
       where: {
         id,
@@ -35,6 +61,11 @@ export class ProjectService {
       data: {
         name,
         teamId,
+        updatedAt,
+        description,
+        state,
+        startDate,
+        targetDate,
       },
     });
   }

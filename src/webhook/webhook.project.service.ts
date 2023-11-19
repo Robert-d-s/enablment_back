@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LinearWebhookBody } from './webhook.service';
+import { ProjectWebhookData, LinearWebhookBody } from './webhook.service';
 import { ProjectService } from '../project/project.service';
 
 @Injectable()
@@ -7,6 +7,10 @@ export class WebhookProjectService {
   constructor(private projectService: ProjectService) {}
 
   async handleProject(json: LinearWebhookBody) {
+    if (json.type !== 'Project') {
+      console.error('Expected project data, received:', json.type);
+      return;
+    }
     switch (json.action) {
       case 'create':
         await this.create(json.data);
@@ -15,6 +19,7 @@ export class WebhookProjectService {
         await this.remove(json.data);
         break;
       case 'update':
+        await this.update(json.data);
         break;
       default:
         console.log('UNMATCHED WEBHOOK FROM LINEAR');
@@ -23,7 +28,18 @@ export class WebhookProjectService {
   }
 
   async create(json: LinearWebhookBody['data']) {
-    await this.projectService.create(json.id, json.name, json.teamIds[0]);
+    const projectData = json as ProjectWebhookData;
+    await this.projectService.create(
+      projectData.id,
+      projectData.name,
+      projectData.teamIds[0],
+      projectData.createdAt,
+      projectData.updatedAt,
+      projectData.description,
+      projectData.state,
+      projectData.startDate,
+      projectData.targetDate,
+    );
   }
 
   async remove(json: LinearWebhookBody['data']) {
@@ -31,6 +47,17 @@ export class WebhookProjectService {
   }
 
   async update(json: LinearWebhookBody['data']) {
-    await this.projectService.update(json.id, json.name, json.teamIds[0]);
+    const projectData = json as ProjectWebhookData;
+    await this.projectService.update(
+      projectData.id,
+      projectData.name,
+      projectData.teamIds[0],
+      projectData.createdAt,
+      projectData.updatedAt,
+      projectData.description,
+      projectData.state,
+      projectData.startDate,
+      projectData.targetDate,
+    );
   }
 }

@@ -41,8 +41,15 @@ model Project {
   estimatedTime   Int?
   name            String
   teamId          String
+  createdAt       String
+  updatedAt       String
+  description     String?
+  state           String
+  startDate       String?
+  targetDate      String?
 
   time            Time[]
+  issues          Issue[] 
   team            Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
 }
 
@@ -58,4 +65,22 @@ model Time {
   user            User    @relation(fields: [userId], references: [id])
   project         Project @relation(fields: [projectId], references: [id])
   rate            Rate    @relation(fields: [rateId], references: [id])
+}
+
+model Issue {
+  id              String   @id
+  createdAt       String
+  updatedAt       String
+  title           String
+  dueDate         String?
+  projectId       String
+  priorityLabel   String
+  identifier      String
+  assigneeName    String?
+  projectName     String
+  state           String
+  teamKey         String
+  teamName        String
+
+  project         Project @relation(fields: [projectId], references: [id])
 }

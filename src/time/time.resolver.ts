@@ -69,14 +69,37 @@ export class TimeResolver {
     );
   }
 
+  // @Query(() => Number)
+  // async getTotalTimeSpent(
+  //   @Args('userId') userId: number,
+  //   @Args('projectId') projectId: string,
+  //   @Args('date') date: string,
+  // ): Promise<number> {
+  //   const parsedDate = new Date(date); // Convert the date string to a Date object
+  //   return this.timeService.getTotalTimeSpent(userId, projectId, parsedDate);
+  // }
+
   @Query(() => Number)
   async getTotalTimeSpent(
     @Args('userId') userId: number,
     @Args('projectId') projectId: string,
-    @Args('date') date: string,
+    @Args('startDate') startDate: string,
+    @Args('endDate') endDate: string,
   ): Promise<number> {
-    const parsedDate = new Date(date); // Convert the date string to a Date object
-    return this.timeService.getTotalTimeSpent(userId, projectId, parsedDate);
+    return this.timeService.getTotalTimeSpent(
+      userId,
+      projectId,
+      new Date(startDate),
+      new Date(endDate),
+    );
+  }
+
+  @Query(() => Number)
+  async getTotalTimeForUserProject(
+    @Args('userId') userId: number,
+    @Args('projectId') projectId: string,
+  ): Promise<number> {
+    return this.timeService.getTotalTimeForUserProject(userId, projectId);
   }
 
   @Mutation(() => Time)
