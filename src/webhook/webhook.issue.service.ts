@@ -1,5 +1,3 @@
-// src/issue/webhook.issue.service.ts
-
 import { Injectable } from '@nestjs/common';
 import {
   IssueWebhookData,

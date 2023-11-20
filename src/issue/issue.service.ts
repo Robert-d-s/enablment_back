@@ -38,7 +38,6 @@ export class IssueService {
   }
 
   async update(id: string, data: IssueWebhookData): Promise<Issue> {
-    // Update the issue without handling labels
     return prisma.issue.update({
       where: { id },
       data: {
@@ -109,45 +108,6 @@ export class IssueService {
   async remove(id: string): Promise<void> {
     await prisma.issue.delete({
       where: { id },
-    });
-  }
-
-  async createLabelIfNotExists(label: {
-    id: string;
-    name: string;
-    color: string;
-    parentId?: string;
-    issueId: string;
-  }): Promise<void> {
-    console.log('Checking existence of label:', label.id);
-    try {
-      const labelExists = await prisma.label.findUnique({
-        where: { id: label.id },
-      });
-      console.log('Label exists:', !!labelExists, 'for label:', label.id);
-
-      if (!labelExists) {
-        console.log('Label does not exist, creating new label:', label);
-        const createdLabel = await prisma.label.create({
-          data: label,
-        });
-        console.log('Label created:', createdLabel);
-      } else {
-        console.log('Label already exists, skipping creation:', label.id);
-      }
-    } catch (error) {
-      console.error('Error in createLabelIfNotExists:', error);
-    }
-  }
-
-  async removeLabelFromIssue(issueId: string, labelId: string): Promise<void> {
-    await prisma.issue.update({
-      where: { id: issueId },
-      data: {
-        labels: {
-          disconnect: [{ id: labelId }],
-        },
-      },
     });
   }
 }

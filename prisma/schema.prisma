@@ -82,7 +82,7 @@ model Issue {
   teamKey         String
   teamName        String
 
-  project         Project @relation(fields: [projectId], references: [id])
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   labels          Label[] 
 }
 

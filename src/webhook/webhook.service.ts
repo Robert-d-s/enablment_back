@@ -85,7 +85,6 @@ export class WebhookService {
       }
       await this.webhookProjectService.handleProject(json);
     } else if (json.type === 'Issue') {
-      // Logic to handle issue data
       console.log('Handling issue data from webhook:', json.data);
       await this.webhookIssueService.handleIssue(json);
     }
