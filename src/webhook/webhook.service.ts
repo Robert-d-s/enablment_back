@@ -44,6 +44,7 @@ export type IssueWebhookData = {
     key: string;
     name: string;
   };
+  labels?: Array<{ id: string; name: string; color: string; parentId: string }>;
 };
 
 export type LinearWebhookBody = {
@@ -51,22 +52,6 @@ export type LinearWebhookBody = {
   data: ProjectWebhookData | IssueWebhookData;
   type: 'Project' | 'Issue';
 };
-
-// export type LinearWebhookBody = {
-//   type: 'Project';
-//   action: 'create' | 'remove' | 'update';
-//   data: {
-//     id: string;
-//     name: string;
-//     teamIds: string[];
-//     createdAt: string;
-//     updatedAt: string;
-//     description: string;
-//     state: string;
-//     startDate: string;
-//     targetDate: string;
-//   };
-// };
 
 @Injectable()
 export class WebhookService {
@@ -78,6 +63,7 @@ export class WebhookService {
   ) {}
 
   async handle(json: LinearWebhookBody) {
+    console.log('Received webhook:', json);
     if (json.type == 'Project') {
       const projectData = json.data as ProjectWebhookData;
       const teamId = projectData.teamIds[0];
@@ -100,6 +86,7 @@ export class WebhookService {
       await this.webhookProjectService.handleProject(json);
     } else if (json.type === 'Issue') {
       // Logic to handle issue data
+      console.log('Handling issue data from webhook:', json.data);
       await this.webhookIssueService.handleIssue(json);
     }
   }

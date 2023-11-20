@@ -15,7 +15,7 @@ export class Issue implements IssueClient {
   @Field(() => String)
   title: string;
 
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
   dueDate: string;
 
   @Field(() => String)
@@ -41,4 +41,22 @@ export class Issue implements IssueClient {
 
   @Field(() => String)
   teamName: string;
+
+  @Field(() => [Label], { nullable: 'itemsAndList' })
+  labels: Label[];
+}
+
+@ObjectType()
+export class Label {
+  @Field(() => String)
+  id: string;
+
+  @Field(() => String)
+  color: string;
+
+  @Field(() => String)
+  name: string;
+
+  @Field(() => String, { nullable: true })
+  parentId: string;
 }

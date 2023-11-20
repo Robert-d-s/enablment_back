@@ -54,13 +54,24 @@ export class ProjectService {
     startDate: string,
     targetDate: string,
   ): Promise<Project> {
-    return prisma.project.update({
+    return prisma.project.upsert({
       where: {
         id,
       },
-      data: {
+      update: {
         name,
         teamId,
+        updatedAt,
+        description,
+        state,
+        startDate,
+        targetDate,
+      },
+      create: {
+        id,
+        name,
+        teamId,
+        createdAt,
         updatedAt,
         description,
         state,

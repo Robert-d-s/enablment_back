@@ -7,6 +7,8 @@ export class IssueResolver {
 
   @Query(() => [Issue])
   async issues(): Promise<Issue[]> {
-    return this.issueService.all();
+    const issues = await this.issueService.all();
+    // Transform or assert the type as necessary
+    return issues as Issue[];
   }
 }

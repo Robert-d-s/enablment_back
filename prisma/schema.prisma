@@ -83,4 +83,15 @@ model Issue {
   teamName        String
 
   project         Project @relation(fields: [projectId], references: [id])
+  labels          Label[] 
+}
+
+model Label {
+  id        String   @id
+  color     String
+  name      String
+  parentId  String?
+  issueId   String 
+
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
 }
