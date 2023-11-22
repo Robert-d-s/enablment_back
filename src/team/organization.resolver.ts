@@ -16,6 +16,6 @@ export class OrganizationResolver {
     console.log('Observable from LinearService:', observable);
     const result = await firstValueFrom(observable);
     console.log('Result from LinearService:', result);
-    return result.organization; // Assuming the response structure matches
+    return result.organization;
   }
 }

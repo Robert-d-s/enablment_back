@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaClient, Team } from '@prisma/client';
 import { LinearService } from './linear.service';
 import { TeamsDTO } from './team.dto';
+import { SimpleTeamDTO } from './team.dto';
 
 // const prisma = new PrismaClient();
 const prisma = new PrismaClient({
@@ -39,6 +40,16 @@ export class TeamService {
     return await prisma.team.findMany({
       select: {
         id: true,
+        name: true,
+      },
+    });
+  }
+
+  async getAllSimpleTeams(): Promise<SimpleTeamDTO[]> {
+    return await prisma.team.findMany({
+      select: {
+        id: true,
+        name: true,
       },
     });
   }
@@ -52,12 +63,10 @@ export class TeamService {
   async getTeams(): Promise<TeamsDTO> {
     return await this.linearService.fetchTeams();
   }
-  // ----------------------------------------------------------------
+
   async getTeamById(id: string): Promise<Team | null> {
     return await prisma.team.findUnique({
       where: { id },
     });
   }
-
-  // ----------------------------------------------------------------
 }

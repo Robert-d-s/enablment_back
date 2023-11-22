@@ -3,6 +3,7 @@ import { Team } from './team.model';
 import { TeamService } from './team.service';
 import { TeamsDTO } from './team.dto';
 import { MemberDTO } from './team.dto';
+import { SimpleTeamDTO } from './team.dto';
 
 // Explicitly define the expected type
 interface MemberNodes {
@@ -72,5 +73,10 @@ export class TeamResolver {
       console.error('Error in Resolver:', error);
       throw error;
     }
+  }
+
+  @Query(() => [SimpleTeamDTO])
+  async getAllSimpleTeams(): Promise<SimpleTeamDTO[]> {
+    return this.teamService.getAllSimpleTeams();
   }
 }

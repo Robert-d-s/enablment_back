@@ -104,69 +104,56 @@ export class TimeService {
     });
   }
 
-  // async getTotalTimeSpent(
-  //   userId: number,
-  //   projectId: string,
-  //   date: Date,
-  // ): Promise<number> {
-  //   console.log(
-  //     `Debug: UserId: ${userId}, ProjectId: ${projectId}, Date: ${date}`,
-  //   );
-  //   const aggregatedTime = await prisma.time.aggregate({
-  //     where: {
-  //       userId,
-  //       projectId,
-  //       AND: [
-  //         {
-  //           startTime: {
-  //             gte: new Date(date.setHours(0, 0, 0, 0)),
-  //           },
-  //         },
-  //         {
-  //           endTime: {
-  //             lte: new Date(date.setHours(23, 59, 59, 999)),
-  //           },
-  //         },
-  //       ],
-  //     },
-  //     _sum: {
-  //       totalElapsedTime: true,
-  //     },
-  //   });
-
-  //   console.log('Debug: Aggregated Time:', aggregatedTime);
-  //   return aggregatedTime._sum.totalElapsedTime || 0;
-  // }
-
   async getTotalTimeSpent(
     userId: number,
     projectId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<number> {
-    const aggregatedTime = await prisma.time.aggregate({
-      where: {
-        userId,
-        projectId,
-        AND: [
-          {
-            startTime: {
-              gte: startDate,
-            },
-          },
-          {
-            endTime: {
-              lte: endDate,
-            },
-          },
-        ],
-      },
-      _sum: {
-        totalElapsedTime: true,
-      },
-    });
+    console.log(
+      `getTotalTimeSpent called with userId: ${userId}, projectId: ${projectId}, startDate: ${startDate.toISOString()}, endDate: ${endDate.toISOString()}`,
+    );
 
-    return aggregatedTime._sum.totalElapsedTime || 0;
+    // Adjust startDate to the start of the day
+    const adjustedStartDate = new Date(startDate);
+    adjustedStartDate.setHours(0, 0, 0, 0);
+
+    // Adjust endDate to include the entire day
+    const adjustedEndDate = new Date(endDate);
+    adjustedEndDate.setHours(23, 59, 59, 999);
+
+    console.log('Executing database query to aggregate total time spent...');
+
+    try {
+      const aggregatedTime = await prisma.time.aggregate({
+        where: {
+          userId,
+          projectId,
+          AND: [
+            {
+              startTime: {
+                gte: adjustedStartDate,
+              },
+            },
+            {
+              endTime: {
+                lte: adjustedEndDate,
+              },
+            },
+          ],
+        },
+        _sum: {
+          totalElapsedTime: true,
+        },
+      });
+
+      const totalTime = aggregatedTime._sum.totalElapsedTime || 0;
+      console.log(`Total time spent for the given period: ${totalTime}`);
+      return totalTime;
+    } catch (error) {
+      console.error('Error in getTotalTimeSpent:', error);
+      throw error; // Re-throw the error after logging it
+    }
   }
 
   async getTotalTimeForUserProject(

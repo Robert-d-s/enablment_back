@@ -62,22 +62,8 @@ export class TimeResolver {
     @Args('timeInputUpdate') timeInputUpdate: TimeInputUpdate,
   ): Promise<Time> {
     const { id, endTime, totalElapsedTime } = timeInputUpdate;
-    return this.timeService.update(
-      id,
-      endTime ?? new Date(), // If endTime is not provided, use the current time
-      totalElapsedTime,
-    );
+    return this.timeService.update(id, endTime ?? new Date(), totalElapsedTime);
   }
-
-  // @Query(() => Number)
-  // async getTotalTimeSpent(
-  //   @Args('userId') userId: number,
-  //   @Args('projectId') projectId: string,
-  //   @Args('date') date: string,
-  // ): Promise<number> {
-  //   const parsedDate = new Date(date); // Convert the date string to a Date object
-  //   return this.timeService.getTotalTimeSpent(userId, projectId, parsedDate);
-  // }
 
   @Query(() => Number)
   async getTotalTimeSpent(

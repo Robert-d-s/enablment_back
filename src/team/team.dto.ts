@@ -38,3 +38,12 @@ export class LinearDataDTO {
   @Field(() => TeamsDTO)
   teams: TeamsDTO;
 }
+
+@ObjectType()
+export class SimpleTeamDTO {
+  @Field(() => String)
+  id: string;
+
+  @Field(() => String)
+  name: string;
+}

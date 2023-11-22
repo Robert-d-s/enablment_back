@@ -24,10 +24,16 @@ export class RateService {
   }
 
   remove(id: number): Promise<Rate> {
-    return prisma.rate.delete({
-      where: {
-        id,
-      },
-    });
+    console.log('Removing rate with ID:', id);
+    return prisma.rate
+      .delete({
+        where: {
+          id,
+        },
+      })
+      .catch((err) => {
+        console.error('Error in removing rate:', err);
+        throw err;
+      });
   }
 }

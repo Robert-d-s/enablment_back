@@ -1,4 +1,4 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { RateService } from './rate.service';
 import { Rate } from './rate.model';
 import { RateInputCreate } from './rate.input';
@@ -24,7 +24,10 @@ export class RateResolver {
   }
 
   @Mutation(() => Rate)
-  async deleteRate(@Args('rateId') rateId: number): Promise<Rate> {
+  async deleteRate(
+    @Args('rateId', { type: () => Int }) rateId: number,
+  ): Promise<Rate> {
+    console.log(`Attempting to delete rate with ID: ${rateId}`);
     return this.rateService.remove(rateId);
   }
 }
