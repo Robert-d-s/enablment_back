@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@apollo/server": "^4.7.1",
+    "@appland/appmap-agent-js": "^14.2.0",
     "@nestjs/apollo": "^11.0.5",
     "@nestjs/axios": "^3.0.1",
     "@nestjs/common": "^9.0.0",

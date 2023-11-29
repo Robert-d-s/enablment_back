@@ -1,0 +1,7 @@
+name: tracking
+packages:
+  - path: dist
+  - path: src
+  - path: test
+language: javascript
+appmap_dir: tmp/appmap
