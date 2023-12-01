@@ -1,7 +1,8 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { User } from './user.model';
 import { UserService } from './user.service';
-import { UserInputCreate } from './user.input';
+// import { UserRole } from '@prisma/client';
+import { UserRole } from './user-role.enum';
 
 @Resolver(() => User)
 export class UserResolver {
@@ -10,5 +11,13 @@ export class UserResolver {
   @Query(() => [User])
   async users(): Promise<User[]> {
     return this.userService.all();
+  }
+
+  @Mutation(() => User)
+  async updateUserRole(
+    @Args('userId', { type: () => Int }) userId: number,
+    @Args('newRole', { type: () => UserRole }) newRole: UserRole,
+  ): Promise<User> {
+    return this.userService.updateUserRole(userId, newRole);
   }
 }

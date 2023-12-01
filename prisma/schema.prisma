@@ -12,10 +12,20 @@ datasource db {
 
 model User {
   id              Int       @id       @default(autoincrement())
-  email           String
+  email           String    @unique
   password        String
 
+  role            UserRole  @default(PENDING)
+
+
   times           Time[]
+}
+
+enum UserRole {
+  ADMIN
+  ENABLER
+  COLLABORATOR
+  PENDING
 }
 
 model Team {

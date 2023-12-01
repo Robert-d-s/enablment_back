@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaClient, User, UserRole } from '@prisma/client';
+// import { UserRole } from '../user/user-role.enum';
 
 const prisma = new PrismaClient();
 
@@ -17,11 +18,40 @@ export class UserService {
     });
   }
 
-  async create(email: string, password: string): Promise<User> {
+  // async create(email: string, password: string): Promise<User> {
+  //   return prisma.user.create({
+  //     data: {
+  //       email,
+  //       password,
+  //     },
+  //   });
+  // }
+
+  async create(
+    email: string,
+    hashedPassword: string,
+    role: UserRole,
+  ): Promise<User> {
     return prisma.user.create({
       data: {
         email,
-        password,
+        password: hashedPassword,
+        role,
+      },
+    });
+  }
+
+  async count(): Promise<number> {
+    return prisma.user.count();
+  }
+
+  async updateUserRole(userId: number, newRole: UserRole): Promise<User> {
+    return prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        role: newRole,
       },
     });
   }

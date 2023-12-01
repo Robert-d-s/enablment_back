@@ -1,4 +1,4 @@
-import { Module, SetMetadata } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
@@ -15,7 +15,7 @@ export const IS_PUBLIC_KEY = 'isPublic';
     JwtModule.register({
       global: true,
       secret: jwtConstants.secret,
-      signOptions: { expiresIn: '600s' },
+      signOptions: { expiresIn: '43200s' },
     }),
   ],
   providers: [
