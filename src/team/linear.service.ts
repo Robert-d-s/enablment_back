@@ -4,7 +4,6 @@ import { TeamService } from './team.service';
 import fetch from 'node-fetch';
 import { HttpService } from '@nestjs/axios';
 import { Observable, catchError } from 'rxjs';
-import { AxiosResponse } from 'axios';
 import { map } from 'rxjs/operators';
 import { ModuleRef } from '@nestjs/core';
 import { TeamsDTO } from './team.dto';

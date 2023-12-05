@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { jwtConstants } from './constants';
@@ -12,10 +13,15 @@ import { Reflector } from '@nestjs/core';
 
 import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
+import { GqlExecutionContext } from '@nestjs/graphql';
 
 // @Injectable()
 // export class AuthGuard implements CanActivate {
-//   constructor(private jwtService: JwtService, private reflector: Reflector) {}
+//   constructor(
+//     private jwtService: JwtService,
+//     private reflector: Reflector,
+//     private userService: UserService,
+//   ) {}
 
 //   async canActivate(context: ExecutionContext): Promise<boolean> {
 //     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -24,35 +30,62 @@ import { UserRole } from '@prisma/client';
 //     ]);
 
 //     if (isPublic) {
-//       // 💡 See this condition
 //       return true;
 //     }
 
 //     let request = context.switchToHttp().getRequest();
 
-//     // Needed for authenticaiton with graphql to work.
 //     if (!request) {
 //       request = context.getArgs()[2].req;
 //     }
 
 //     const token = this.extractTokenFromHeader(request);
-
 //     if (!token) {
-//       console.log('No token found in request headers');
-//       throw new UnauthorizedException();
+//       throw new UnauthorizedException('No token found in request headers');
 //     }
+
 //     try {
 //       const payload = await this.jwtService.verifyAsync(token, {
 //         secret: jwtConstants.secret,
 //       });
 //       request['user'] = payload;
+
+//       // Role Checking
+//       const requiredRoles = this.reflector.get<UserRole[]>(
+//         'roles',
+//         context.getHandler(),
+//       );
+//       // if (requiredRoles) {
+//       //   const user = await this.userService.findOne(payload.email);
+//       //   return user && requiredRoles.includes(user.role);
+//       // }
+
+//       // return true;
+//       if (requiredRoles) {
+//         const user = await this.userService.findOne(payload.email);
+//         if (!user) {
+//           throw new UnauthorizedException('User not found');
+//         }
+//         if (!requiredRoles.includes(user.role)) {
+//           throw new ForbiddenException(
+//             'Insufficient permissions to access this resource',
+//           );
+//         }
+//       }
+
+//       return true;
 //     } catch (error) {
 //       console.log('Error verifying token:', error);
-//       throw new UnauthorizedException();
+//       throw new UnauthorizedException('Invalid or expired token');
 //     }
-//     return true;
 //   }
 
+//   private extractTokenFromHeader(request: Request): string | undefined {
+//     const [type, token] = request.headers.authorization?.split(' ') ?? [];
+//     console.log('Extracted token from header:', token);
+//     return type === 'Bearer' ? token : undefined;
+//   }
+// }
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -62,73 +95,87 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Check if the route is public
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-
     if (isPublic) {
       return true;
     }
 
-    let request = context.switchToHttp().getRequest();
+    const ctx = context.switchToHttp();
+    const graphqlCtx = GqlExecutionContext.create(context);
+    const request = ctx.getRequest<Request>() || graphqlCtx.getContext().req;
 
     if (!request) {
-      request = context.getArgs()[2].req;
+      throw new UnauthorizedException('No request found');
     }
-
     const token = this.extractTokenFromHeader(request);
+
     if (!token) {
-      console.log('No token found in request headers');
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('No token found in request headers');
     }
 
     try {
+      // Verify the token
       const payload = await this.jwtService.verifyAsync(token, {
         secret: jwtConstants.secret,
       });
       request['user'] = payload;
 
-      // Role Checking
-      const requiredRoles = this.reflector.get<UserRole[]>(
-        'roles',
-        context.getHandler(),
-      );
-      if (requiredRoles) {
-        const user = await this.userService.findOne(payload.email);
-        return user && requiredRoles.includes(user.role);
-      }
-
-      return true;
+      // Check for roles
+      return await this.checkUserRoles(context, payload.email);
     } catch (error) {
-      console.log('Error verifying token:', error);
-      throw new UnauthorizedException();
+      // Enhance and rethrow the error with custom error information
+      if (error instanceof UnauthorizedException) {
+        throw new UnauthorizedException({
+          message: error.message,
+          code: 'UNAUTHORIZED', // Custom error code
+        });
+      }
+      if (error instanceof ForbiddenException) {
+        throw new ForbiddenException({
+          message: error.message,
+          code: 'FORBIDDEN', // Custom error code
+        });
+      }
+      // If it's not one of the above exceptions, rethrow the original error
+      throw error;
     }
   }
 
+  private async checkUserRoles(
+    context: ExecutionContext,
+    userEmail: string,
+  ): Promise<boolean> {
+    const requiredRoles = this.reflector.get<UserRole[]>(
+      'roles',
+      context.getHandler(),
+    );
+    if (!requiredRoles) {
+      return true; // No specific roles required
+    }
+
+    const user = await this.userService.findOne(userEmail);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!requiredRoles.includes(user.role)) {
+      throw new ForbiddenException(
+        'Insufficient permissions to access this resource',
+      );
+    }
+
+    return true; // User has the required role
+  }
+
   private extractTokenFromHeader(request: Request): string | undefined {
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    console.log('Extracted token from header:', token);
+    if (!request || !request.headers.authorization) {
+      return undefined;
+    }
+    const [type, token] = request.headers.authorization.split(' ');
     return type === 'Bearer' ? token : undefined;
   }
 }
-
-// @Injectable()
-// export class RolesGuard implements CanActivate {
-//   constructor(private reflector: Reflector, private userService: UserService) {}
-
-//   async canActivate(context: ExecutionContext): Promise<boolean> {
-//     const requiredRoles = this.reflector.get<UserRole[]>(
-//       'roles',
-//       context.getHandler(),
-//     );
-//     if (!requiredRoles) {
-//       return true;
-//     }
-
-//     const request = context.switchToHttp().getRequest();
-//     const user = await this.userService.findOne(request.user.email);
-
-//     return user && requiredRoles.includes(user.role);
-//   }
-// }

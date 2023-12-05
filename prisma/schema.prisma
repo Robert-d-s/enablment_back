@@ -19,6 +19,7 @@ model User {
 
 
   times           Time[]
+  teams           UserTeam[]
 }
 
 enum UserRole {
@@ -28,10 +29,21 @@ enum UserRole {
   PENDING
 }
 
+model UserTeam {
+  userId  Int
+  teamId  String
+  user    User   @relation(fields: [userId], references: [id])
+  team    Team   @relation(fields: [teamId], references: [id])
+
+  @@id([userId, teamId])
+}
+
+
 model Team {
   id              String   @id
   name            String
 
+  users           UserTeam[]
   projects        Project[]
   rates           Rate[]
 }

@@ -54,10 +54,27 @@ export class TeamService {
     });
   }
 
+  // async deleteTeam(id: string): Promise<void> {
+  //   await prisma.team.delete({
+  //     where: { id },
+  //   });
+  // }
   async deleteTeam(id: string): Promise<void> {
-    await prisma.team.delete({
-      where: { id },
+    // Start a transaction
+    const transaction = await prisma.$transaction(async (prisma) => {
+      // Retrieve and delete all projects associated with the team
+      await prisma.project.deleteMany({
+        where: { teamId: id },
+      });
+
+      // Now delete the team
+      await prisma.team.delete({
+        where: { id },
+      });
     });
+
+    // Optionally, you can handle the result of the transaction
+    // For example, logging the result or handling errors
   }
 
   async getTeams(): Promise<TeamsDTO> {

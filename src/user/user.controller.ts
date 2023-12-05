@@ -2,7 +2,8 @@ import { Controller, Patch, Param, Body, UseGuards } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { UserRole } from '@prisma/client';
+// import { UserRole } from '@prisma/client';
+import { UserRole } from './user-role.enum';
 
 @Controller('users')
 export class UserController {

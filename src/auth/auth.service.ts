@@ -6,7 +6,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 
-import { User, UserRole } from '@prisma/client';
+import { User } from '@prisma/client';
+import { UserRole } from '../user/user-role.enum';
 
 import * as bcrypt from 'bcrypt';
 
@@ -35,19 +36,6 @@ export class AuthService {
       access_token: await this.jwtService.signAsync(payload),
     };
   }
-
-  // async signUp(email, password) {
-  //   // Check if the email already exists
-  //   const existingUser = await this.userService.findOne(email);
-  //   if (existingUser) {
-  //     throw new ConflictException('Email already exists.');
-  //   }
-
-  //   const salt = bcrypt.genSaltSync(10);
-  //   const hash = bcrypt.hashSync(password, salt);
-
-  //   return this.userService.create(email, hash);
-  // }
 
   async signUp(email: string, password: string): Promise<User> {
     const userCount = await this.userService.count();

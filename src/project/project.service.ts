@@ -35,12 +35,24 @@ export class ProjectService {
     });
   }
 
-  async remove(id: string): Promise<Project> {
-    return prisma.project.delete({
-      where: {
-        id,
-      },
-    });
+  // async remove(id: string): Promise<Project> {
+  //   return prisma.project.delete({
+  //     where: {
+  //       id,
+  //     },
+  //   });
+  // }
+
+  async remove(id: string): Promise<Project | null> {
+    try {
+      return await prisma.project.delete({
+        where: { id },
+      });
+    } catch (error) {
+      console.error('Error in removing project:', error);
+      // Handle or rethrow the error as appropriate
+      return null;
+    }
   }
 
   async update(

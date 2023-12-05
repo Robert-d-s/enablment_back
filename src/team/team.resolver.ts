@@ -69,7 +69,6 @@ export class TeamResolver {
 
       return teams;
     } catch (error) {
-      // Log any errors that occur
       console.error('Error in Resolver:', error);
       throw error;
     }
