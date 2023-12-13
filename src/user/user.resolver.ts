@@ -2,7 +2,6 @@ import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { User } from './user.model';
 import { UserService } from './user.service';
-// import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
 import { UserRole } from './user-role.enum';

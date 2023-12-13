@@ -36,21 +36,17 @@ export class TimeResolver {
     );
 
     if (existingEntry) {
-      // Update the existing entry with the actual endTime and the new totalElapsedTime
       return this.timeService.update(
         existingEntry.id,
-        new Date(), // Set to the current time as the endTime
+        new Date(),
         totalElapsedTime,
       );
     } else {
-      // If no existing entry is found, create a new one with the submitted endTime
-      // const endTime = new Date(); // Set to the current time as the endTime
       return this.timeService.create(
         startTime,
         projectId,
         userId,
         rateId,
-        // endTime,
         new Date(endTime),
         totalElapsedTime,
       );

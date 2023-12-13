@@ -15,77 +15,6 @@ import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 
-// @Injectable()
-// export class AuthGuard implements CanActivate {
-//   constructor(
-//     private jwtService: JwtService,
-//     private reflector: Reflector,
-//     private userService: UserService,
-//   ) {}
-
-//   async canActivate(context: ExecutionContext): Promise<boolean> {
-//     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-//       context.getHandler(),
-//       context.getClass(),
-//     ]);
-
-//     if (isPublic) {
-//       return true;
-//     }
-
-//     let request = context.switchToHttp().getRequest();
-
-//     if (!request) {
-//       request = context.getArgs()[2].req;
-//     }
-
-//     const token = this.extractTokenFromHeader(request);
-//     if (!token) {
-//       throw new UnauthorizedException('No token found in request headers');
-//     }
-
-//     try {
-//       const payload = await this.jwtService.verifyAsync(token, {
-//         secret: jwtConstants.secret,
-//       });
-//       request['user'] = payload;
-
-//       // Role Checking
-//       const requiredRoles = this.reflector.get<UserRole[]>(
-//         'roles',
-//         context.getHandler(),
-//       );
-//       // if (requiredRoles) {
-//       //   const user = await this.userService.findOne(payload.email);
-//       //   return user && requiredRoles.includes(user.role);
-//       // }
-
-//       // return true;
-//       if (requiredRoles) {
-//         const user = await this.userService.findOne(payload.email);
-//         if (!user) {
-//           throw new UnauthorizedException('User not found');
-//         }
-//         if (!requiredRoles.includes(user.role)) {
-//           throw new ForbiddenException(
-//             'Insufficient permissions to access this resource',
-//           );
-//         }
-//       }
-
-//       return true;
-//     } catch (error) {
-//       console.log('Error verifying token:', error);
-//       throw new UnauthorizedException('Invalid or expired token');
-//     }
-//   }
-
-//   private extractTokenFromHeader(request: Request): string | undefined {
-//     const [type, token] = request.headers.authorization?.split(' ') ?? [];
-//     console.log('Extracted token from header:', token);
-//     return type === 'Bearer' ? token : undefined;
-//   }
-// }
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -122,6 +51,7 @@ export class AuthGuard implements CanActivate {
       const payload = await this.jwtService.verifyAsync(token, {
         secret: jwtConstants.secret,
       });
+      console.log('auth payload contains', payload);
       request['user'] = payload;
 
       // Check for roles

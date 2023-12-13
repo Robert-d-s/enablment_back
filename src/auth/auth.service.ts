@@ -31,7 +31,7 @@ export class AuthService {
       throw new UnauthorizedException({ error: 'Invalid email or password.' });
     }
 
-    const payload = { email: user.email };
+    const payload = { email: user.email, id: user.id };
     return {
       access_token: await this.jwtService.signAsync(payload),
     };

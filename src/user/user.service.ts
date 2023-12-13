@@ -1,17 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
-import { UserRole as PrismaUserRole } from '@prisma/client';
 import { User as QlUser } from '../user/user.model';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
-
-// const prisma = new PrismaClient();
-
-// type UserWithoutPassword = {
-//   id: number;
-//   email: string;
-//   role: PrismaUserRole;
-// };
 
 type TeamBasic = {
   id: string;
@@ -19,20 +9,13 @@ type TeamBasic = {
   // other fields as needed
 };
 
-// type UserTeam = {
-//   userId: number;
-//   teamId: string;
-//   user: User;
-//   team: TeamBasic;
-// };
-
 type UserTeam = {
   userId: number;
   teamId: string;
   user: {
     id: number;
     email: string;
-    password?: string | null; // Make password optional or nullable
+    password?: string | null;
     role: UserRole;
   };
   team: TeamBasic;
@@ -66,16 +49,6 @@ export class UserService {
     }));
   }
 
-  // async all(): Promise<UserWithoutPassword[]> {
-  //   const users = await prisma.user.findMany({
-  //     select: {
-  //       id: true,
-  //       email: true,
-  //       role: true,
-  //     },
-  //   });
-  //   return users;
-  // }
   async all(): Promise<QlUser[]> {
     const users = await this.prisma.user.findMany({
       select: {
@@ -167,17 +140,6 @@ export class UserService {
     return this.prisma.user.count();
   }
 
-  // async updateUserRole(userId: number, newRole: UserRole): Promise<User> {
-  //   return prisma.user.update({
-  //     where: {
-  //       id: userId,
-  //     },
-  //     data: {
-  //       role: newRole,
-  //     },
-  //   });
-  // }
-
   async updateUserRole(userId: number, newRole: UserRole): Promise<User> {
     const updatedUser = await this.prisma.user.update({
       where: {
@@ -230,36 +192,6 @@ export class UserService {
     return this.getUserWithTeams(userId);
   }
 
-  // async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
-  //   return await this.prisma.$transaction(async (prisma) => {
-  //     const association = await prisma.userTeam.findUnique({
-  //       where: {
-  //         userId_teamId: {
-  //           userId,
-  //           teamId,
-  //         },
-  //       },
-  //     });
-
-  //     if (association) {
-  //       await prisma.userTeam.delete({
-  //         where: {
-  //           userId_teamId: {
-  //             userId,
-  //             teamId,
-  //           },
-  //         },
-  //       });
-  //       console.log(`Removed team ${teamId} from user ${userId}`);
-  //     } else {
-  //       console.warn(
-  //         `UserTeam association for user ${userId} and team ${teamId} does not exist.`,
-  //       );
-  //     }
-
-  //     return this.getUserWithTeams(userId);
-  //   });
-  // }
   async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
     console.log(`Attempting to remove team ${teamId} from user ${userId}`);
 
@@ -299,28 +231,6 @@ export class UserService {
     return updatedUser;
   }
 
-  // private async getUserWithTeams(userId: number): Promise<User> {
-  //   const user = await prisma.user.findUnique({
-  //     where: { id: userId },
-  //     include: {
-  //       teams: {
-  //         include: {
-  //           team: true,
-  //         },
-  //       },
-  //     },
-  //   });
-  //   console.log(JSON.stringify(user, null, 2));
-
-  //   if (!user) {
-  //     throw new Error(`User with ID ${userId} not found`);
-  //   }
-
-  //   // Ensure each team object has a non-null id
-  //   user.teams = user.teams.filter((ut) => ut.team && ut.team.id != null);
-
-  //   return user;
-  // }
   private async getUserWithTeams(userId: number): Promise<User> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
