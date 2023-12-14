@@ -2,8 +2,6 @@
 import { Resolver, Query } from '@nestjs/graphql';
 import { OrganizationDTO } from './organization.dto';
 import { LinearService } from './linear.service';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 
 @Resolver(() => OrganizationDTO)
