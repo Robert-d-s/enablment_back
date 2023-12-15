@@ -39,7 +39,6 @@ export class LinearService {
     const transformedTeams = teamsFromLinear.nodes.map((team) => ({
       id: team.id,
       name: team.name,
-      // Add other fields if needed
     }));
 
     // Step 1: Retrieve all teams from the database

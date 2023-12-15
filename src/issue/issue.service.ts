@@ -38,9 +38,24 @@ export class IssueService {
   }
 
   async update(id: string, data: IssueWebhookData): Promise<Issue> {
-    return prisma.issue.update({
+    return prisma.issue.upsert({
       where: { id },
-      data: {
+      update: {
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        title: data.title,
+        dueDate: data.dueDate,
+        projectId: data.projectId,
+        priorityLabel: data.priorityLabel,
+        identifier: data.identifier,
+        assigneeName: data.assignee?.name || 'No Assignee',
+        projectName: data.project?.name,
+        state: data.state?.name,
+        teamKey: data.team?.key,
+        teamName: data.team?.name,
+      },
+      create: {
+        id,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         title: data.title,
