@@ -35,8 +35,13 @@ async function bootstrap() {
         'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
         'https://enablment-tt.vercel.app',
       ],
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
       credentials: true,
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'x-apollo-operation-name',
+      ],
     }),
   );
 
