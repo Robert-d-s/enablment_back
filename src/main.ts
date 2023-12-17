@@ -9,6 +9,8 @@ async function bootstrap() {
       'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
       'https://enablment-tt.vercel.app/',
     ],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   await app.listen(process.env.PORT || 8080);
