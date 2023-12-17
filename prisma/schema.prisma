@@ -106,15 +106,19 @@ model Issue {
   teamName        String
 
   project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  labels          Label[] 
+  labels          Label[]
 }
 
 model Label {
-  id        String   @id
+  id        String   
   color     String
   name      String
   parentId  String?
   issueId   String 
 
   issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  internalId  Int @id @default(autoincrement())
+
+  @@index([id, issueId], name: "idx_label_issue")
+  
 }

@@ -21,6 +21,12 @@ export class WebhookIssueService {
         break;
       case 'update':
         await this.updateIssue(json.data as IssueWebhookData);
+        const issueData = json.data as IssueWebhookData;
+        await this.issueService.updateLabelsForIssue(
+          issueData.id,
+          issueData.labels ?? [],
+        );
+        await this.issueService.update(issueData.id, issueData);
         break;
       case 'remove':
         await this.issueService.remove(json.data.id);
@@ -35,13 +41,18 @@ export class WebhookIssueService {
   }
 
   private async updateIssue(data: IssueWebhookData) {
-    if (data.labels && data.labels.length > 0) {
-      await this.issueService.updateLabelsForIssue(data.id, data.labels);
-    }
+    // Assuming labelIds are passed correctly from the webhook
+    // const labels = data.labels ?? [];
+    // await this.issueService.updateLabelsForIssue(data.id, data.labels ?? []);
+
+    // Perform possible other updates
+    // if (labels.length > 0) {
     await this.issueService.update(data.id, data);
+    // }
   }
 
-  async remove(data: LinearWebhookBody['data']) {
-    await this.issueService.remove(data.id);
-  }
+  // private async processIssue(issueData: IssueWebhookData) {
+  //   // Call updateLabelsForIssue with the entire issue data
+  //   await this.issueService.updateLabelsForIssue(issueData);
+  // }
 }
