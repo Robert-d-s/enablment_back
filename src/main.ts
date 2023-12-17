@@ -21,6 +21,7 @@ async function bootstrap() {
         'https://enablment-tt.vercel.app/',
       ],
       credentials: true,
+      preflightContinue: true,
     }),
   );
 
