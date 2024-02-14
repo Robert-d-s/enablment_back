@@ -2,12 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TeamService } from './team.service';
 import fetch from 'node-fetch';
-import { HttpService } from '@nestjs/axios';
-import { Observable, catchError } from 'rxjs';
-import { map } from 'rxjs/operators';
+// import { HttpService } from '@nestjs/axios';
+// import { Observable, catchError } from 'rxjs';
+// import { map } from 'rxjs/operators';
 import { ModuleRef } from '@nestjs/core';
 import { TeamsDTO } from './team.dto';
-import { OrganizationDTO, OrganizationResponse } from './organization.dto';
+// import { OrganizationDTO, OrganizationResponse } from './organization.dto';
 
 @Injectable()
 export class LinearService {
@@ -16,8 +16,7 @@ export class LinearService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly moduleRef: ModuleRef,
-    private readonly httpService: HttpService,
+    private readonly moduleRef: ModuleRef, // private readonly httpService: HttpService,
   ) {
     this.linearApiKey = this.configService.get<string>('LINEAR_KEY');
     if (!this.linearApiKey) {
@@ -41,25 +40,27 @@ export class LinearService {
       name: team.name,
     }));
 
-    // Step 1: Retrieve all teams from the database
+    //Retrieve all teams from the database
     const allTeamsInDb = await this.teamService.getAllTeams();
     const teamsToDelete = new Set(allTeamsInDb.map((team) => team.id));
 
     console.log('Syncing data with the database...');
     for (const teamData of transformedTeams) {
-      const existingTeam = await this.teamService.getTeamById(teamData.id);
+      // const existingTeam = await this.teamService.getTeamById(teamData.id);
+      const existingTeam = allTeamsInDb.find(
+        (dbTeam) => dbTeam.id === teamData.id,
+      );
 
       if (existingTeam) {
         await this.teamService.syncTeam(teamData.id, teamData.name);
       } else {
         await this.teamService.create(teamData.id, teamData.name);
       }
-
-      // Step 2: Remove the team's ID from the list of IDs
+      //Remove the team's ID from the list of IDs
       teamsToDelete.delete(teamData.id);
     }
 
-    // Step 3: Delete teams that don't exist in Linear anymore
+    //Delete teams that don't exist in Linear anymore
     for (const teamId of teamsToDelete) {
       await this.teamService.deleteTeam(teamId);
     }
@@ -137,85 +138,85 @@ export class LinearService {
   }
 
   // Method to query the Linear API
-  queryOrganization(): Observable<OrganizationResponse> {
-    const query = `
-    query Organization {
-      organization {
-        id
-        createdAt
-        updatedAt
-        name
-        users {
-          nodes {
-            id
-            createdAt
-            updatedAt
-            name
-            displayName
-            email
-            avatarUrl
-            lastSeen
-            teams {
-              nodes {
-                id
-                createdAt
-                updatedAt
-                name
-                key
-                description
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
+  // queryOrganization(): Observable<OrganizationResponse> {
+  //   const query = `
+  //   query Organization {
+  //     organization {
+  //       id
+  //       createdAt
+  //       updatedAt
+  //       name
+  //       users {
+  //         nodes {
+  //           id
+  //           createdAt
+  //           updatedAt
+  //           name
+  //           displayName
+  //           email
+  //           avatarUrl
+  //           lastSeen
+  //           teams {
+  //             nodes {
+  //               id
+  //               createdAt
+  //               updatedAt
+  //               name
+  //               key
+  //               description
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+  // `;
 
-    const requestOptions = {
-      method: 'POST',
-      headers: {
-        Authorization: `${this.linearApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query }),
-    };
+  //   const requestOptions = {
+  //     method: 'POST',
+  //     headers: {
+  //       Authorization: `${this.linearApiKey}`,
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({ query }),
+  //   };
 
-    console.log('Requesting Linear API with:', requestOptions);
+  //   console.log('Requesting Linear API with:', requestOptions);
 
-    return this.httpService
-      .post<{ data: { organization: OrganizationDTO } }>(
-        'https://api.linear.app/graphql',
-        {
-          query,
-        },
-        {
-          headers: {
-            Authorization: `${this.linearApiKey}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      )
-      .pipe(
-        map((response) => {
-          if (response.status !== 200) {
-            console.error('Error response from Linear API:', response);
-          }
+  //   return this.httpService
+  //     .post<{ data: { organization: OrganizationDTO } }>(
+  //       'https://api.linear.app/graphql',
+  //       {
+  //         query,
+  //       },
+  //       {
+  //         headers: {
+  //           Authorization: `${this.linearApiKey}`,
+  //           'Content-Type': 'application/json',
+  //         },
+  //       },
+  //     )
+  //     .pipe(
+  //       map((response) => {
+  //         if (response.status !== 200) {
+  //           console.error('Error response from Linear API:', response);
+  //         }
 
-          return {
-            organization: response.data.data.organization,
-          } as OrganizationResponse;
-        }),
-        catchError((error) => {
-          console.error('Error response from Linear API:', error.response);
-          if (
-            error.response &&
-            error.response.data &&
-            error.response.data.errors
-          ) {
-            console.error('GraphQL Errors:', error.response.data.errors);
-          }
-          throw error;
-        }),
-      );
-  }
+  //         return {
+  //           organization: response.data.data.organization,
+  //         } as OrganizationResponse;
+  //       }),
+  //       catchError((error) => {
+  //         console.error('Error response from Linear API:', error.response);
+  //         if (
+  //           error.response &&
+  //           error.response.data &&
+  //           error.response.data.errors
+  //         ) {
+  //           console.error('GraphQL Errors:', error.response.data.errors);
+  //         }
+  //         throw error;
+  //       }),
+  //     );
+  // }
 }

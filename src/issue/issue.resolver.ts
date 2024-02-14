@@ -1,6 +1,7 @@
 import { Query, Resolver } from '@nestjs/graphql';
 import { IssueService } from './issue.service';
 import { Issue } from './issue.model';
+
 @Resolver(() => Issue)
 export class IssueResolver {
   constructor(private issueService: IssueService) {}

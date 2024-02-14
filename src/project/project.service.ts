@@ -35,14 +35,6 @@ export class ProjectService {
     });
   }
 
-  // async remove(id: string): Promise<Project> {
-  //   return prisma.project.delete({
-  //     where: {
-  //       id,
-  //     },
-  //   });
-  // }
-
   async remove(id: string): Promise<Project | null> {
     try {
       return await prisma.project.delete({

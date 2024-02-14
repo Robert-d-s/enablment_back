@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Team } from '@prisma/client';
-import { LinearService } from './linear.service';
-import { TeamsDTO } from './team.dto';
+// import { LinearService } from './linear.service';
+// import { TeamsDTO } from './team.dto';
 import { SimpleTeamDTO } from './team.dto';
 
 // const prisma = new PrismaClient();
@@ -11,11 +11,11 @@ const prisma = new PrismaClient({
 
 @Injectable()
 export class TeamService {
-  constructor(private readonly linearService: LinearService) {}
+  // constructor(private readonly linearService: LinearService) {}
 
-  async syncTeamsFromLinear() {
-    await this.linearService.synchronizeTeamsWithLinear();
-  }
+  // async syncTeamsFromLinear() {
+  //   await this.linearService.synchronizeTeamsWithLinear();
+  // }
 
   async syncTeam(id: string, name: string): Promise<void> {
     await prisma.team.upsert({
@@ -77,9 +77,9 @@ export class TeamService {
     // For example, logging the result or handling errors
   }
 
-  async getTeams(): Promise<TeamsDTO> {
-    return await this.linearService.fetchTeams();
-  }
+  // async getTeams(): Promise<TeamsDTO> {
+  //   return await this.linearService.fetchTeams();
+  // }
 
   async getTeamById(id: string): Promise<Team | null> {
     return await prisma.team.findUnique({

@@ -1,0 +1,188 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type Project {
+  id: String!
+  estimatedTime: Int!
+  name: String!
+  teamId: String!
+  createdAt: String!
+  updatedAt: String!
+  description: String!
+  state: String!
+  startDate: String!
+  targetDate: String!
+}
+
+type Rate {
+  id: Int!
+  name: String!
+  teamId: String!
+  rate: Int!
+}
+
+type Team {
+  id: String!
+  name: String!
+  projects: [Project!]!
+  rates: [Rate!]!
+}
+
+type User {
+  id: Int!
+  email: String!
+  role: UserRole!
+  teams: [Team!]!
+}
+
+enum UserRole {
+  ADMIN
+  ENABLER
+  COLLABORATOR
+  PENDING
+}
+
+type MemberDTO {
+  id: String!
+  name: String!
+}
+
+type TeamDTO {
+  id: String!
+  name: String!
+  createdAt: String!
+  timezone: String!
+  members: [MemberDTO!]!
+}
+
+type TeamsDTO {
+  nodes: [TeamDTO!]!
+}
+
+type SimpleTeamDTO {
+  id: String!
+  name: String!
+}
+
+type Issue {
+  id: String!
+  createdAt: String!
+  updatedAt: String!
+  title: String!
+  dueDate: String
+  projectId: String!
+  priorityLabel: String!
+  identifier: String!
+  assigneeName: String!
+  projectName: String!
+  state: String!
+  teamKey: String!
+  teamName: String!
+  labels: [Label]
+}
+
+type Label {
+  id: String!
+  color: String!
+  name: String!
+  parentId: String
+}
+
+type Time {
+  id: Int!
+  startTime: DateTime!
+  endTime: DateTime
+  userId: Int!
+  projectId: String!
+  rateId: Int!
+  totalElapsedTime: Int
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type Invoice {
+  projectId: String!
+  projectName: String!
+  totalHours: Float!
+  totalCost: Float!
+  rates: [RateDetail!]
+}
+
+type RateDetail {
+  rateId: Int!
+  rateName: String!
+  hours: Float!
+  cost: Float!
+  ratePerHour: Float!
+}
+
+type Query {
+  users: [User!]!
+  projects: [Project!]!
+  issues: [Issue!]!
+  getAllSimpleTeams: [SimpleTeamDTO!]!
+  rates(teamId: String!): [Rate!]!
+  times(projectId: String!): [Time!]!
+  getTotalTimeSpent(userId: Float!, projectId: String!, startDate: String!, endDate: String!): Float!
+  getTotalTimeForUserProject(userId: Float!, projectId: String!): Float!
+  invoiceForProject(projectId: String!, startDate: DateTime!, endDate: DateTime!): Invoice!
+}
+
+type Mutation {
+  updateUserRole(userId: Int!, newRole: UserRole!): User!
+  addUserToTeam(userId: Int!, teamId: String!): User!
+  removeUserFromTeam(userId: Int!, teamId: String!): User!
+  syncTeams: Boolean!
+  createTeam(id: String!, name: String!): Team!
+  createRate(rateInputCreate: RateInputCreate!): Rate!
+  deleteRate(rateId: Int!): Rate!
+  createTime(timeInputCreate: TimeInputCreate!): Time!
+  updateTime(timeInputUpdate: TimeInputUpdate!): Time!
+  deleteTime(id: Float!): Time!
+}
+
+input RateInputCreate {
+  """Rate name"""
+  name: String!
+
+  """Rate"""
+  rate: Int!
+
+  """Rates team id"""
+  teamId: String!
+}
+
+input TimeInputCreate {
+  """Start time"""
+  startTime: DateTime!
+
+  """End time"""
+  endTime: DateTime
+
+  """Project ID"""
+  projectId: String!
+
+  """User ID"""
+  userId: Float!
+
+  """Rate ID"""
+  rateId: Float!
+
+  """Total Elapsed Time"""
+  totalElapsedTime: Float!
+}
+
+input TimeInputUpdate {
+  """Time entry ID"""
+  id: Float!
+
+  """End time"""
+  endTime: DateTime
+
+  """Total Elapsed Time"""
+  totalElapsedTime: Float!
+}

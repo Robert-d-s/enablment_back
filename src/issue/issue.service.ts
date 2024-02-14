@@ -38,7 +38,7 @@ export class IssueService {
   }
 
   async update(id: string, data: IssueWebhookData): Promise<Issue> {
-    return prisma.issue.upsert({
+    const updatedIssue = await prisma.issue.upsert({
       where: { id },
       update: {
         createdAt: data.createdAt,
@@ -70,6 +70,13 @@ export class IssueService {
         teamName: data.team?.name,
       },
     });
+    console.log(
+      `Publishing issueUpdated event for issue ID: ${updatedIssue.id}`,
+    );
+    // Log the updated or created issue object
+    console.log('Updated or created issue:', updatedIssue);
+
+    return updatedIssue;
   }
 
   async createLabelForIssue(
@@ -132,41 +139,6 @@ export class IssueService {
       }
     });
   }
-
-  // private async createOrUpdateLabel(
-  //   label: IssueWebhookData['labels'][number],
-  //   issueId: string,
-  // ): Promise<void> {
-  //   const existingLabel = await prisma.label.findUnique({
-  //     where: { id: label.id },
-  //   });
-
-  //   if (existingLabel) {
-  //     await prisma.label.update({
-  //       where: { id: label.id },
-  //       data: {
-  //         name: label.name,
-  //         color: label.color,
-  //         parentId: label.parentId,
-  //         issue: {
-  //           connect: { id: issueId },
-  //         },
-  //       },
-  //     });
-  //   } else {
-  //     await prisma.label.create({
-  //       data: {
-  //         id: label.id,
-  //         name: label.name,
-  //         color: label.color,
-  //         parentId: label.parentId,
-  //         issue: {
-  //           connect: { id: issueId },
-  //         },
-  //       },
-  //     });
-  //   }
-  // }
 
   async remove(id: string): Promise<void> {
     await prisma.issue.delete({

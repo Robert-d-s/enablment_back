@@ -33,6 +33,7 @@
     "@prisma/client": "^4.13.0",
     "bcrypt": "^5.1.0",
     "graphql": "^16.6.0",
+    "graphql-ws": "^5.14.3",
     "micro": "^10.0.1",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.2.0",

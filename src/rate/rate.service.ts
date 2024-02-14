@@ -23,8 +23,13 @@ export class RateService {
     });
   }
 
-  remove(id: number): Promise<Rate> {
+  async remove(id: number): Promise<Rate> {
     console.log('Removing rate with ID:', id);
+    await prisma.time.updateMany({
+      where: { rateId: id },
+      data: { rateId: { set: null } }, // Or assign to a default rate ID
+    });
+
     return prisma.rate
       .delete({
         where: {

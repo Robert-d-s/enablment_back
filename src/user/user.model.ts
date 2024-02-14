@@ -15,7 +15,6 @@ export class User {
   @Field(() => UserRole)
   role: UserRole;
 
-  // Add teams field
   @Field(() => [Team])
   teams?: Team[];
 }

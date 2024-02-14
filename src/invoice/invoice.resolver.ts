@@ -1,20 +1,21 @@
 import { Args, Query, Resolver } from '@nestjs/graphql';
-import { Invoice } from './invoice.model';
 import { InvoiceService } from './invoice.service';
-import { InvoiceQueryInput } from './invoice.input';
+import { Invoice } from './invoice.model';
 
 @Resolver(() => Invoice)
 export class InvoiceResolver {
-  constructor(private invoiceService: InvoiceService) {}
+  constructor(private readonly invoiceService: InvoiceService) {}
 
-  @Query(() => [Invoice])
-  async invoices(
-    @Args('InvoiceQueryInput') invoiceQueryInput: InvoiceQueryInput,
-  ): Promise<Invoice[]> {
-    return this.invoiceService.generateInvoice(
-      invoiceQueryInput.teamId,
-      invoiceQueryInput.month,
-      invoiceQueryInput.year,
-    ) as any;
+  @Query(() => Invoice)
+  async invoiceForProject(
+    @Args('projectId') projectId: string,
+    @Args('startDate') startDate: Date,
+    @Args('endDate') endDate: Date,
+  ): Promise<Invoice> {
+    return this.invoiceService.generateInvoiceForProject(
+      projectId,
+      startDate,
+      endDate,
+    );
   }
 }

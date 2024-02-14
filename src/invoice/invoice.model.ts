@@ -1,16 +1,4 @@
-import { Field, ObjectType, Float } from '@nestjs/graphql';
-
-@ObjectType()
-export class InvoiceRate {
-  @Field(() => Float)
-  hours: number;
-
-  @Field(() => Float)
-  cost: number;
-
-  @Field(() => String)
-  rateName: string;
-}
+import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class Invoice {
@@ -26,6 +14,24 @@ export class Invoice {
   @Field(() => Float)
   totalCost: number;
 
-  @Field(() => [InvoiceRate])
-  rates: InvoiceRate[];
+  @Field(() => [RateDetail], { nullable: true })
+  rates?: RateDetail[];
+}
+// Assuming you want to include details about the rates applied
+@ObjectType()
+export class RateDetail {
+  @Field(() => Int)
+  rateId: number;
+
+  @Field(() => String)
+  rateName: string;
+
+  @Field(() => Float)
+  hours: number;
+
+  @Field(() => Float)
+  cost: number;
+
+  @Field(() => Float)
+  ratePerHour: number;
 }

@@ -28,24 +28,35 @@ async function bootstrap() {
   //   }
   //   next();
   // });
-  app.use(
-    cors({
-      origin: [
-        'http://localhost:3000',
-        'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
-        'https://enablment-tt.vercel.app',
-      ],
-      methods: ['GET', 'POST', 'PUT', 'DELETE'],
-      credentials: true,
-      allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        'x-apollo-operation-name',
-      ],
-    }),
-  );
+  // app.use(
+  //   cors({
+  //     origin: [
+  //       'http://localhost:3000',
+  //       'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
+  //       'https://8cb0-213-32-242-124.ngrok-free.app',
+  //       'https://enablment-tt.vercel.app',
+  //     ],
+  //     methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  //     credentials: true,
+  //     allowedHeaders: [
+  //       'Content-Type',
+  //       'Authorization',
+  //       'x-apollo-operation-name',
+  //     ],
+  //   }),
+  // );
+  app.enableCors({
+    // origin: [
+    //   'http://localhost:3000',
+    //   'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
+    //   'https://65f3-213-32-242-96.ngrok-free.app',
+    //   'https://enablment-tt.vercel.app/',
+    // ],
+    origin: '*',
+  });
 
   await app.listen(process.env.PORT || 8080);
+  console.log(`Server is running on http://localhost:8080/graphql`);
 }
 
 bootstrap();

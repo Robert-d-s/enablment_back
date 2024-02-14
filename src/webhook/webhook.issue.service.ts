@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  IssueWebhookData,
-  LinearWebhookBody,
-} from '../webhook/webhook.service';
+import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
 import { IssueService } from '../issue/issue.service';
 
 @Injectable()
@@ -41,18 +38,6 @@ export class WebhookIssueService {
   }
 
   private async updateIssue(data: IssueWebhookData) {
-    // Assuming labelIds are passed correctly from the webhook
-    // const labels = data.labels ?? [];
-    // await this.issueService.updateLabelsForIssue(data.id, data.labels ?? []);
-
-    // Perform possible other updates
-    // if (labels.length > 0) {
     await this.issueService.update(data.id, data);
-    // }
   }
-
-  // private async processIssue(issueData: IssueWebhookData) {
-  //   // Call updateLabelsForIssue with the entire issue data
-  //   await this.issueService.updateLabelsForIssue(issueData);
-  // }
 }

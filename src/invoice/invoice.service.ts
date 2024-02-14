@@ -1,117 +1,137 @@
+// import { Injectable } from '@nestjs/common';
+// import { PrismaClient } from '@prisma/client';
+// import { Invoice, RateDetail } from './invoice.model';
+
+// const prisma = new PrismaClient();
+
+// @Injectable()
+// export class InvoiceService {
+//   async generateInvoiceForProject(
+//     projectId: string,
+//     startDate: Date,
+//     endDate: Date,
+//   ): Promise<Invoice> {
+//     const project = await prisma.project.findUnique({
+//       where: { id: projectId },
+//       include: {
+//         time: {
+//           where: {
+//             startTime: { gte: startDate },
+//             endTime: { lte: endDate },
+//           },
+//           include: { rate: true },
+//         },
+//       },
+//     });
+
+//     if (!project) throw new Error('Project not found');
+
+//     let totalHours = 0;
+//     let totalCost = 0;
+//     const ratesMap: { [key: number]: RateDetail } = {};
+
+//     project.time.forEach((entry) => {
+//       const hours = entry.totalElapsedTime / 3600000; // Convert milliseconds to hours
+//       totalHours += hours;
+//       totalCost += hours * entry.rate.rate;
+
+//       if (!ratesMap[entry.rateId]) {
+//         ratesMap[entry.rateId] = {
+//           rateId: entry.rateId,
+//           rateName: entry.rate.name,
+//           hours: 0,
+//           cost: 0,
+//         };
+//       }
+
+//       ratesMap[entry.rateId].hours += hours;
+//       ratesMap[entry.rateId].cost += hours * entry.rate.rate;
+//     });
+
+//     const rates = Object.values(ratesMap).map((rate) => ({
+//       rateId: rate.rateId,
+//       rateName: rate.rateName,
+//       // Round up hours and cost to 2 decimal places
+//       hours: Math.ceil(rate.hours * 100) / 100,
+//       cost: Math.ceil(rate.cost * 100) / 100,
+//     }));
+
+//     return {
+//       projectId: project.id,
+//       projectName: project.name,
+//       // Round up total hours and total cost to 2 decimal places
+//       totalHours: Math.ceil(totalHours * 100) / 100,
+//       totalCost: Math.ceil(totalCost * 100) / 100,
+//       rates,
+//     };
+//   }
+// }
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { Invoice } from './invoice.model';
+import { Invoice, RateDetail } from './invoice.model';
 
 const prisma = new PrismaClient();
 
 @Injectable()
 export class InvoiceService {
-  async generateInvoice(
-    teamId: string,
-    month: number,
-    year: number,
-  ): Promise<Invoice[]> {
-    // Set the date range for the given month and year
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 1);
-
-    // Fetch projects and rates for the given team
-    const team = await prisma.team.findUnique({
-      where: { id: teamId },
-      select: {
-        projects: true,
-        rates: true,
-      },
-    });
-
-    if (!team) {
-      console.log('Team not found');
-      return;
-    }
-
-    // Fetch time records for the projects in the given date range, including rates
-    const times = await prisma.time.findMany({
-      where: {
-        projectId: {
-          in: team.projects.map((project) => project.id),
-        },
-        endTime: {
-          gte: startDate,
-          lt: endDate,
-        },
-      },
+  async generateInvoiceForProject(
+    projectId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<Invoice> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
       include: {
-        rate: true,
+        time: {
+          where: {
+            startTime: { gte: startDate },
+            endTime: { lte: endDate },
+          },
+          include: {
+            rate: true, // Ensures that rate information is included in the query
+          },
+        },
       },
     });
 
-    // Calculate hours and cost for each project
-    const invoice = team.projects.map((project) => {
-      // Filter times for the current project
-      const projectTimes = times.filter(
-        (time) => time.projectId === project.id,
-      );
+    if (!project) throw new Error('Project not found');
 
-      // Calculate total hours and cost for the project
-      const totalHoursAndCost = projectTimes.reduce(
-        (acc, time) => {
-          const duration =
-            (time.endTime?.getTime() || 0) - time.startTime.getTime();
-          // const hours = duration / (1000 * 60 * 60);
-          const hours = time.totalElapsedTime / (1000 * 60 * 60);
+    let totalHours = 0;
+    let totalCost = 0;
+    const ratesMap: { [key: number]: RateDetail & { ratePerHour: number } } =
+      {};
 
-          const cost = hours * (time.rate?.rate || 0);
+    project.time.forEach((entry) => {
+      const hours = entry.totalElapsedTime / 3600000; // Convert milliseconds to hours
+      totalHours += hours;
+      totalCost += hours * entry.rate.rate;
 
-          const rateId = time.rateId;
-          if (!acc.rates[rateId]) {
-            acc.rates[rateId] = { hours: 0, cost: 0, rateName: time.rate.name };
-          }
-
-          acc.rates[rateId].hours += hours;
-          acc.rates[rateId].cost += cost;
-
-          return acc;
-        },
-        { rates: {} },
-      );
-
-      // Convert rates object to an array
-      // const ratesArray: any[] = Object.values(totalHoursAndCost.rates);
-      interface RateDetails {
-        hours: number;
-        cost: number;
-        rateName: string;
+      if (!ratesMap[entry.rateId]) {
+        ratesMap[entry.rateId] = {
+          rateId: entry.rateId,
+          rateName: entry.rate.name,
+          hours: 0,
+          cost: 0,
+          ratePerHour: entry.rate.rate, // Storing the rate per hour
+        };
       }
 
-      const ratesArray = Object.values(totalHoursAndCost.rates).map(
-        (rate: RateDetails) => {
-          return {
-            hours: rate.hours,
-            cost: rate.cost,
-            rateName: rate.rateName,
-            hoursFormatted: this.hoursToHoursAndMinutes(rate.hours),
-          };
-        },
-      );
-
-      return {
-        projectId: project.id,
-        projectName: project.name,
-        rates: ratesArray,
-        totalHours: ratesArray.reduce((prev, cur) => prev + cur.hours, 0),
-        totalCost: ratesArray.reduce((prev, cur) => prev + cur.cost, 0),
-        // Add the formatted representation
-        totalHoursFormatted: this.hoursToHoursAndMinutes(
-          ratesArray.reduce((prev, cur) => prev + cur.hours, 0),
-        ),
-      };
+      ratesMap[entry.rateId].hours += hours;
+      ratesMap[entry.rateId].cost += hours * entry.rate.rate;
     });
 
-    return invoice;
-  }
-  private hoursToHoursAndMinutes(hours: number): string {
-    const hoursPart = Math.floor(hours);
-    const minutesPart = Math.round((hours - hoursPart) * 60);
-    return `${hoursPart}h ${minutesPart}m`;
+    const rates = Object.values(ratesMap).map((rate) => ({
+      ...rate,
+      hours: Math.round(rate.hours * 100) / 100, // Round hours to 2 decimal places
+      cost: Math.round(rate.cost * 100) / 100, // Round cost to 2 decimal places
+    }));
+
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      totalHours: Math.round(totalHours * 100) / 100,
+      totalCost: Math.round(totalCost * 100) / 100,
+      rates,
+    };
   }
 }

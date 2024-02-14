@@ -14,6 +14,7 @@ import { RateModule } from './rate/rate.module';
 import { TimeModule } from './time/time.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { HttpModule } from '@nestjs/axios';
+// import { JwtService } from '@nestjs/jwt';
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -23,7 +24,7 @@ import { HttpModule } from '@nestjs/axios';
     IssueModule,
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: true,
+      autoSchemaFile: './schema.graphql',
       context: ({ req }) => ({ req }),
     }),
     WebhookModule,
