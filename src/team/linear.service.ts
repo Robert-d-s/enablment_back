@@ -2,12 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TeamService } from './team.service';
 import fetch from 'node-fetch';
-// import { HttpService } from '@nestjs/axios';
-// import { Observable, catchError } from 'rxjs';
-// import { map } from 'rxjs/operators';
 import { ModuleRef } from '@nestjs/core';
 import { TeamsDTO } from './team.dto';
-// import { OrganizationDTO, OrganizationResponse } from './organization.dto';
 
 @Injectable()
 export class LinearService {
@@ -136,87 +132,4 @@ export class LinearService {
       return { nodes: [] };
     }
   }
-
-  // Method to query the Linear API
-  // queryOrganization(): Observable<OrganizationResponse> {
-  //   const query = `
-  //   query Organization {
-  //     organization {
-  //       id
-  //       createdAt
-  //       updatedAt
-  //       name
-  //       users {
-  //         nodes {
-  //           id
-  //           createdAt
-  //           updatedAt
-  //           name
-  //           displayName
-  //           email
-  //           avatarUrl
-  //           lastSeen
-  //           teams {
-  //             nodes {
-  //               id
-  //               createdAt
-  //               updatedAt
-  //               name
-  //               key
-  //               description
-  //             }
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-  // `;
-
-  //   const requestOptions = {
-  //     method: 'POST',
-  //     headers: {
-  //       Authorization: `${this.linearApiKey}`,
-  //       'Content-Type': 'application/json',
-  //     },
-  //     body: JSON.stringify({ query }),
-  //   };
-
-  //   console.log('Requesting Linear API with:', requestOptions);
-
-  //   return this.httpService
-  //     .post<{ data: { organization: OrganizationDTO } }>(
-  //       'https://api.linear.app/graphql',
-  //       {
-  //         query,
-  //       },
-  //       {
-  //         headers: {
-  //           Authorization: `${this.linearApiKey}`,
-  //           'Content-Type': 'application/json',
-  //         },
-  //       },
-  //     )
-  //     .pipe(
-  //       map((response) => {
-  //         if (response.status !== 200) {
-  //           console.error('Error response from Linear API:', response);
-  //         }
-
-  //         return {
-  //           organization: response.data.data.organization,
-  //         } as OrganizationResponse;
-  //       }),
-  //       catchError((error) => {
-  //         console.error('Error response from Linear API:', error.response);
-  //         if (
-  //           error.response &&
-  //           error.response.data &&
-  //           error.response.data.errors
-  //         ) {
-  //           console.error('GraphQL Errors:', error.response.data.errors);
-  //         }
-  //         throw error;
-  //       }),
-  //     );
-  // }
 }
