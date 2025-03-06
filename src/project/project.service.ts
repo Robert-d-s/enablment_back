@@ -24,7 +24,10 @@ export class ProjectService {
       data: {
         id,
         name,
-        teamId,
+        // teamId,
+        team: {
+          connect: { id: teamId },
+        },
         createdAt,
         updatedAt,
         description,

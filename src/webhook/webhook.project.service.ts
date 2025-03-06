@@ -36,7 +36,7 @@ export class WebhookProjectService {
       projectData.createdAt,
       projectData.updatedAt,
       projectData.description,
-      projectData.state,
+      projectData.state || 'Active',
       projectData.startDate,
       projectData.targetDate,
     );
@@ -55,7 +55,7 @@ export class WebhookProjectService {
       projectData.createdAt,
       projectData.updatedAt,
       projectData.description,
-      projectData.state,
+      projectData.state || 'Active',
       projectData.startDate,
       projectData.targetDate,
     );
