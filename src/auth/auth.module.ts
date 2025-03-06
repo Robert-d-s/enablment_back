@@ -1,21 +1,27 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
-import { jwtConstants } from './constants';
+// import { jwtConstants } from './constants';
 import { UserModule } from '../user/user.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth.guard';
+
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 export const IS_PUBLIC_KEY = 'isPublic';
 
 @Module({
   imports: [
-    UserModule,
-    JwtModule.register({
-      global: true,
-      secret: jwtConstants.secret,
-      signOptions: { expiresIn: '43200s' },
+    ConfigModule,
+    forwardRef(() => UserModule),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'), // ✅ Load from env correctly
+        signOptions: { expiresIn: '43200s' },
+      }),
     }),
   ],
   providers: [
@@ -26,6 +32,6 @@ export const IS_PUBLIC_KEY = 'isPublic';
     },
   ],
   controllers: [AuthController],
-  exports: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

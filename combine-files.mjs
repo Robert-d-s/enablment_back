@@ -25,7 +25,7 @@ const EXCLUDE_DIRS = new Set([
 const EXCLUDE_FILES = new Set([
   'package-lock.json',
   'project-context.txt',
-  'combine-files.js',
+  'combine-files.mjs',
   'readme.md',
   'next-env.d.ts',
 ]);
