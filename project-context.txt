@@ -155,11 +155,7 @@ module.exports = {
   }
 }
 
-<<<<<<< HEAD
 // ====== FILE: prisma/schema.prisma ======
-=======
-// ====== FILE: prisma\schema.prisma ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 generator client {
   provider = "prisma-client-js"
