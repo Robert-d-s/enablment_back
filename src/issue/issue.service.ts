@@ -24,14 +24,18 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
-        projectId: data.projectId,
+        // projectId: data.projectId,
         priorityLabel: data.priorityLabel,
         identifier: data.identifier,
         assigneeName: data.assignee?.name || 'No Assignee',
-        projectName: data.project?.name,
+        projectName: data.project?.name || 'Unknown Project',
         state: data.state?.name,
         teamKey: data.team?.key,
         teamName: data.team?.name,
+        project: {
+          // <--- Use 'project' relation to connect to existing Project
+          connect: { id: data.projectId }, // <--- Connect to Project using projectId
+        },
       },
     });
     return createdIssue;

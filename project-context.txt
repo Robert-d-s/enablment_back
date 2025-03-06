@@ -155,7 +155,11 @@ module.exports = {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: prisma/schema.prisma ======
+=======
+// ====== FILE: prisma\schema.prisma ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 generator client {
   provider = "prisma-client-js"
@@ -277,7 +281,11 @@ model Label {
 
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/app.controller.ts ======
+=======
+// ====== FILE: src\app.controller.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
@@ -292,7 +300,11 @@ export class AppController {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/app.module.ts ======
+=======
+// ====== FILE: src\app.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
@@ -335,7 +347,11 @@ import { HttpModule } from '@nestjs/axios';
 })
 export class AppModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/app.service.ts ======
+=======
+// ====== FILE: src\app.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 
@@ -346,7 +362,11 @@ export class AppService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/main.ts ======
+=======
+// ====== FILE: src\main.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -411,7 +431,11 @@ async function bootstrap() {
 
 bootstrap();
 
+<<<<<<< HEAD
 // ====== FILE: src/repl.ts ======
+=======
+// ====== FILE: src\repl.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { repl } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -421,7 +445,11 @@ async function bootstrap() {
 }
 bootstrap();
 
+<<<<<<< HEAD
 // ====== FILE: test/app.e2e-spec.ts ======
+=======
+// ====== FILE: test\app.e2e-spec.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
@@ -480,7 +508,11 @@ describe('AppController (e2e)', () => {
   });
 });
 
+<<<<<<< HEAD
 // ====== FILE: test/jest-e2e.json ======
+=======
+// ====== FILE: test\jest-e2e.json ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 {
   "moduleFileExtensions": ["js", "json", "ts"],
@@ -492,7 +524,11 @@ describe('AppController (e2e)', () => {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/auth/auth.controller.ts ======
+=======
+// ====== FILE: src\auth\auth.controller.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import {
   Body,
@@ -531,7 +567,11 @@ export class AuthController {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/auth/auth.guard.ts ======
+=======
+// ====== FILE: src\auth\auth.guard.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import {
   CanActivate,
@@ -645,6 +685,7 @@ export class AuthGuard implements CanActivate {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/auth/auth.module.ts ======
 
 import { Module, forwardRef } from '@nestjs/common';
@@ -652,16 +693,29 @@ import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 // import { jwtConstants } from './constants';
+=======
+// ====== FILE: src\auth\auth.module.ts ======
+
+import { Module } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthController } from './auth.controller';
+import { jwtConstants } from './constants';
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 import { UserModule } from '../user/user.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth.guard';
 
+<<<<<<< HEAD
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
+=======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 export const IS_PUBLIC_KEY = 'isPublic';
 
 @Module({
   imports: [
+<<<<<<< HEAD
     ConfigModule,
     forwardRef(() => UserModule),
     JwtModule.registerAsync({
@@ -671,6 +725,13 @@ export const IS_PUBLIC_KEY = 'isPublic';
         secret: configService.get<string>('JWT_SECRET'), // ✅ Load from env correctly
         signOptions: { expiresIn: '43200s' },
       }),
+=======
+    UserModule,
+    JwtModule.register({
+      global: true,
+      secret: jwtConstants.secret,
+      signOptions: { expiresIn: '43200s' },
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
     }),
   ],
   providers: [
@@ -681,11 +742,19 @@ export const IS_PUBLIC_KEY = 'isPublic';
     },
   ],
   controllers: [AuthController],
+<<<<<<< HEAD
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
 
 // ====== FILE: src/auth/auth.service.ts ======
+=======
+  exports: [AuthService],
+})
+export class AuthModule {}
+
+// ====== FILE: src\auth\auth.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import {
   Injectable,
@@ -742,20 +811,32 @@ export class AuthService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/auth/constants.ts ======
+=======
+// ====== FILE: src\auth\constants.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 export const jwtConstants = {
   secret: process.env.JWT_SECRET,
 };
 
+<<<<<<< HEAD
 // ====== FILE: src/auth/roles.decorator.ts ======
+=======
+// ====== FILE: src\auth\roles.decorator.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { SetMetadata } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
 export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);
 
+<<<<<<< HEAD
 // ====== FILE: src/invoice/invoice.input.ts ======
+=======
+// ====== FILE: src\invoice\invoice.input.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType, Int } from '@nestjs/graphql';
 
@@ -780,7 +861,11 @@ export class InvoiceQueryInput {
   teamId: string;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/invoice/invoice.model.ts ======
+=======
+// ====== FILE: src\invoice\invoice.model.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
@@ -820,7 +905,11 @@ export class RateDetail {
   ratePerHour: number;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/invoice/invoice.module.ts ======
+=======
+// ====== FILE: src\invoice\invoice.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
@@ -832,7 +921,11 @@ import { InvoiceResolver } from './invoice.resolver';
 })
 export class InvoiceModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/invoice/invoice.resolver.ts ======
+=======
+// ====== FILE: src\invoice\invoice.resolver.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Query, Resolver } from '@nestjs/graphql';
 import { InvoiceService } from './invoice.service';
@@ -856,7 +949,11 @@ export class InvoiceResolver {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/invoice/invoice.service.ts ======
+=======
+// ====== FILE: src\invoice\invoice.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 // import { Injectable } from '@nestjs/common';
 // import { PrismaClient } from '@prisma/client';
@@ -996,7 +1093,11 @@ export class InvoiceService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/issue/issue.model.ts ======
+=======
+// ====== FILE: src\issue\issue.model.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType } from '@nestjs/graphql';
 import { Issue as IssueClient } from '@prisma/client';
@@ -1061,7 +1162,11 @@ export class Label {
   parentId: string;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/issue/issue.module.ts ======
+=======
+// ====== FILE: src\issue\issue.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { IssueService } from './issue.service';
@@ -1073,7 +1178,11 @@ import { IssueResolver } from './issue.resolver';
 })
 export class IssueModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/issue/issue.resolver.ts ======
+=======
+// ====== FILE: src\issue\issue.resolver.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Query, Resolver } from '@nestjs/graphql';
 import { IssueService } from './issue.service';
@@ -1091,7 +1200,11 @@ export class IssueResolver {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/issue/issue.service.ts ======
+=======
+// ====== FILE: src\issue\issue.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Issue } from '@prisma/client';
@@ -1119,6 +1232,7 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
+<<<<<<< HEAD
         projectId: data.projectId,
         priorityLabel: data.priorityLabel,
         identifier: data.identifier,
@@ -1127,6 +1241,20 @@ export class IssueService {
         state: data.state?.name,
         teamKey: data.team?.key,
         teamName: data.team?.name,
+=======
+        // projectId: data.projectId,
+        priorityLabel: data.priorityLabel,
+        identifier: data.identifier,
+        assigneeName: data.assignee?.name || 'No Assignee',
+        projectName: data.project?.name || 'Unknown Project',
+        state: data.state?.name,
+        teamKey: data.team?.key,
+        teamName: data.team?.name,
+        project: {
+          // <--- Use 'project' relation to connect to existing Project
+          connect: { id: data.projectId }, // <--- Connect to Project using projectId
+        },
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
       },
     });
     return createdIssue;
@@ -1261,7 +1389,11 @@ export class IssueService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/project/project.model.ts ======
+=======
+// ====== FILE: src\project\project.model.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { Project as ProjectClient } from '@prisma/client';
@@ -1301,7 +1433,11 @@ export class Project implements ProjectClient {
   // ---------------------------------
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/project/project.module.ts ======
+=======
+// ====== FILE: src\project\project.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { ProjectService } from './project.service';
@@ -1313,7 +1449,11 @@ import { ProjectResolver } from './project.resolver';
 })
 export class ProjectModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/project/project.resolver.ts ======
+=======
+// ====== FILE: src\project\project.resolver.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Query, Resolver } from '@nestjs/graphql';
 import { Project } from './project.model';
@@ -1329,7 +1469,11 @@ export class ProjectResolver {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/project/project.service.ts ======
+=======
+// ====== FILE: src\project\project.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Project } from '@prisma/client';
@@ -1357,7 +1501,14 @@ export class ProjectService {
       data: {
         id,
         name,
+<<<<<<< HEAD
         teamId,
+=======
+        // teamId,
+        team: {
+          connect: { id: teamId },
+        },
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
         createdAt,
         updatedAt,
         description,
@@ -1419,7 +1570,11 @@ export class ProjectService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/rate/rate.input.ts ======
+=======
+// ====== FILE: src\rate\rate.input.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType, Int } from '@nestjs/graphql';
 
@@ -1444,7 +1599,11 @@ export class RateInputCreate {
   teamId: string;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/rate/rate.model.ts ======
+=======
+// ====== FILE: src\rate\rate.model.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { Rate as RateClient } from '@prisma/client';
@@ -1464,7 +1623,11 @@ export class Rate implements RateClient {
   rate: number;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/rate/rate.module.ts ======
+=======
+// ====== FILE: src\rate\rate.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { RateService } from './rate.service';
@@ -1475,7 +1638,11 @@ import { RateResolver } from './rate.resolver';
 })
 export class RateModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/rate/rate.resolver.ts ======
+=======
+// ====== FILE: src\rate\rate.resolver.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { RateService } from './rate.service';
@@ -1511,7 +1678,11 @@ export class RateResolver {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/rate/rate.service.ts ======
+=======
+// ====== FILE: src\rate\rate.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Rate } from '@prisma/client';
@@ -1558,7 +1729,11 @@ export class RateService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/team/linear.service.ts ======
+=======
+// ====== FILE: src\team\linear.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -1696,7 +1871,11 @@ export class LinearService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/team/manualSync.ts ======
+=======
+// ====== FILE: src\team\manualSync.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
@@ -1749,7 +1928,11 @@ async function bootstrap() {
 
 bootstrap();
 
+<<<<<<< HEAD
 // ====== FILE: src/team/team.dto.ts ======
+=======
+// ====== FILE: src\team\team.dto.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType } from '@nestjs/graphql';
 
@@ -1801,7 +1984,11 @@ export class SimpleTeamDTO {
   name: string;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/team/team.model.ts ======
+=======
+// ====== FILE: src\team\team.model.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType } from '@nestjs/graphql';
 import { Team as TeamClient } from '@prisma/client';
@@ -1823,7 +2010,11 @@ export class Team implements TeamClient {
   rates: Rate[];
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/team/team.module.ts ======
+=======
+// ====== FILE: src\team\team.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { TeamResolver } from './team.resolver';
@@ -1841,7 +2032,11 @@ import { HttpModule } from '@nestjs/axios';
 })
 export class TeamModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/team/team.resolver.ts ======
+=======
+// ====== FILE: src\team\team.resolver.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { Team } from './team.model';
@@ -1881,7 +2076,11 @@ export class TeamResolver {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/team/team.service.ts ======
+=======
+// ====== FILE: src\team\team.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Team } from '@prisma/client';
@@ -1973,7 +2172,11 @@ export class TeamService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/team/team.synchcronization.controller.ts ======
+=======
+// ====== FILE: src\team\team.synchcronization.controller.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 // team.synchronization.controller.ts
 
@@ -1992,7 +2195,11 @@ export class TeamSynchronizationController {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/time/time.input.ts ======
+=======
+// ====== FILE: src\time\time.input.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType } from '@nestjs/graphql';
 
@@ -2056,7 +2263,11 @@ export class TimeInputUpdate {
   totalElapsedTime: number;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/time/time.model.ts ======
+=======
+// ====== FILE: src\time\time.model.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType, Int } from '@nestjs/graphql';
 import { Time as TimeClient } from '@prisma/client';
@@ -2085,7 +2296,11 @@ export class Time implements TimeClient {
   totalElapsedTime: number | null;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/time/time.module.ts ======
+=======
+// ====== FILE: src\time\time.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { TimeService } from './time.service';
@@ -2096,7 +2311,11 @@ import { TimeResolver } from './time.resolver';
 })
 export class TimeModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/time/time.resolver.ts ======
+=======
+// ====== FILE: src\time\time.resolver.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { TimeService } from './time.service';
@@ -2190,7 +2409,11 @@ export class TimeResolver {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/time/time.service.ts ======
+=======
+// ====== FILE: src\time\time.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Time } from '@prisma/client';
@@ -2368,7 +2591,11 @@ export class TimeService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/user/user-role.enum.ts ======
+=======
+// ====== FILE: src\user\user-role.enum.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { registerEnumType } from '@nestjs/graphql';
 
@@ -2383,7 +2610,11 @@ registerEnumType(UserRole, {
   name: 'UserRole',
 });
 
+<<<<<<< HEAD
 // ====== FILE: src/user/user.controller.ts ======
+=======
+// ====== FILE: src\user\user.controller.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 // import { Controller, Patch, Param, Body, UseGuards } from '@nestjs/common';
 // import { UserService } from '../user/user.service';
@@ -2407,7 +2638,11 @@ registerEnumType(UserRole, {
 //   }
 // }
 
+<<<<<<< HEAD
 // ====== FILE: src/user/user.input.ts ======
+=======
+// ====== FILE: src\user\user.input.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType } from '@nestjs/graphql';
 import { UserRole } from './user-role.enum';
@@ -2434,7 +2669,11 @@ export class UserInputCreate {
   role?: UserRole;
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/user/user.model.ts ======
+=======
+// ====== FILE: src\user\user.model.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { UserRole } from './user-role.enum';
@@ -2457,6 +2696,7 @@ export class User {
   teams?: Team[];
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/user/user.module.ts ======
 
 import { Module, forwardRef } from '@nestjs/common';
@@ -2466,12 +2706,25 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [forwardRef(() => AuthModule)],
+=======
+// ====== FILE: src\user\user.module.ts ======
+
+import { Module } from '@nestjs/common';
+import { UserService } from './user.service';
+import { UserResolver } from './user.resolver';
+
+@Module({
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
   providers: [UserResolver, UserService],
   exports: [UserResolver, UserService],
 })
 export class UserModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/user/user.resolver.ts ======
+=======
+// ====== FILE: src\user\user.resolver.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
@@ -2551,7 +2804,11 @@ export class UserResolver {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/user/user.service.ts ======
+=======
+// ====== FILE: src\user\user.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, User } from '@prisma/client';
@@ -2821,7 +3078,11 @@ export class UserService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/webhook/webhook.controller.ts ======
+=======
+// ====== FILE: src\webhook\webhook.controller.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
@@ -2840,6 +3101,7 @@ export class WebhookController {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/webhook/webhook.guard.ts ======
 
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
@@ -2866,6 +3128,69 @@ export class WebhookGuard implements CanActivate {
 }
 
 // ====== FILE: src/webhook/webhook.issue.service.ts ======
+=======
+// ====== FILE: src\webhook\webhook.guard.ts ======
+
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
+import * as crypto from 'crypto';
+
+@Injectable()
+export class WebhookGuard implements CanActivate {
+  private readonly logger = new Logger(WebhookGuard.name);
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const linearSignature = request.headers['linear-signature'];
+    const webhookSecret = process.env.WEBHOOK_SECRET || '';
+
+    if (!linearSignature) {
+      this.logger.warn('Missing Linear signature header');
+      throw new UnauthorizedException('Missing Linear signature header');
+    }
+
+    this.logger.debug(`recevived Linear signature: ${linearSignature}`);
+    this.logger.debug(
+      `Webhook secret available: ${!!process.env.WEBHOOK_SECRET}`,
+    );
+
+    if (!webhookSecret) {
+      this.logger.error('Webhook secret not configured');
+      return false;
+    }
+
+    const payload = JSON.stringify(request.body);
+
+    const signature = crypto
+      .createHmac('sha256', process.env.WEBHOOK_SECRET || '')
+      .update(payload)
+      .digest('hex');
+
+    this.logger.debug(`Calculated signature: ${signature}`);
+
+    try {
+      const isValid = signature === linearSignature;
+
+      if (!isValid) {
+        this.logger.warn('Signature mismatch - webhook validation failed');
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
+
+      return true;
+    } catch (error) {
+      this.logger.error('Error validating webhook signature', error);
+      throw new UnauthorizedException('Error validating webhook signature');
+    }
+  }
+}
+
+// ====== FILE: src\webhook\webhook.issue.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
@@ -2911,7 +3236,11 @@ export class WebhookIssueService {
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/webhook/webhook.module.ts ======
+=======
+// ====== FILE: src\webhook\webhook.module.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
@@ -2934,7 +3263,11 @@ import { TeamModule } from '../team/team.module';
 })
 export class WebhookModule {}
 
+<<<<<<< HEAD
 // ====== FILE: src/webhook/webhook.project.service.ts ======
+=======
+// ====== FILE: src\webhook\webhook.project.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { ProjectWebhookData, LinearWebhookBody } from './webhook.service';
@@ -2974,7 +3307,11 @@ export class WebhookProjectService {
       projectData.createdAt,
       projectData.updatedAt,
       projectData.description,
+<<<<<<< HEAD
       projectData.state,
+=======
+      projectData.state || 'Active',
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
       projectData.startDate,
       projectData.targetDate,
     );
@@ -2993,14 +3330,22 @@ export class WebhookProjectService {
       projectData.createdAt,
       projectData.updatedAt,
       projectData.description,
+<<<<<<< HEAD
       projectData.state,
+=======
+      projectData.state || 'Active',
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
       projectData.startDate,
       projectData.targetDate,
     );
   }
 }
 
+<<<<<<< HEAD
 // ====== FILE: src/webhook/webhook.service.ts ======
+=======
+// ====== FILE: src\webhook\webhook.service.ts ======
+>>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { WebhookProjectService } from './webhook.project.service';
