@@ -24,18 +24,21 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
-        // projectId: data.projectId,
         priorityLabel: data.priorityLabel,
         identifier: data.identifier,
         assigneeName: data.assignee?.name || 'No Assignee',
         projectName: data.project?.name || 'Unknown Project',
         state: data.state?.name,
-        teamKey: data.team?.key,
+        // teamKey: data.team?.key,
         teamName: data.team?.name,
         project: {
-          // <--- Use 'project' relation to connect to existing Project
-          connect: { id: data.projectId }, // <--- Connect to Project using projectId
+          connect: { id: data.projectId },
         },
+        team: data.team?.key
+          ? {
+              connect: { id: data.team.key },
+            }
+          : undefined,
       },
     });
     return createdIssue;
@@ -49,14 +52,24 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
-        projectId: data.projectId,
-        priorityLabel: data.priorityLabel,
+        // projectId: data.projectId,
+        priorityLabel: data.priorityLabel || 'No Priority',
         identifier: data.identifier,
         assigneeName: data.assignee?.name || 'No Assignee',
-        projectName: data.project?.name,
+        projectName: data.project?.name || 'Unknown Project',
         state: data.state?.name,
-        teamKey: data.team?.key,
+        // teamKey: data.team?.key,
         teamName: data.team?.name,
+        project: {
+          connect: { id: data.projectId },
+        },
+        team: data.team?.key
+          ? {
+              connect: { id: data.team.key },
+            }
+          : {
+              disconnect: true,
+            },
       },
       create: {
         id,
@@ -64,14 +77,21 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
-        projectId: data.projectId,
-        priorityLabel: data.priorityLabel,
+        priorityLabel: data.priorityLabel || 'No Priority',
         identifier: data.identifier,
         assigneeName: data.assignee?.name || 'No Assignee',
-        projectName: data.project?.name,
+        projectName: data.project?.name || 'Unknown Project',
         state: data.state?.name,
-        teamKey: data.team?.key,
+        // teamKey: data.team?.key,
         teamName: data.team?.name,
+        project: {
+          connect: { id: data.projectId },
+        },
+        team: data.team?.key
+          ? {
+              connect: { id: data.team.key },
+            }
+          : undefined,
       },
     });
     console.log(
@@ -133,7 +153,6 @@ export class IssueService {
             data: {
               color: webhookLabel.color,
               name: webhookLabel.name,
-              // ... other fields you might need to update
             },
           });
         } else {

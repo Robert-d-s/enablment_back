@@ -13,8 +13,9 @@ import { TeamModule } from './team/team.module';
 import { RateModule } from './rate/rate.module';
 import { TimeModule } from './time/time.module';
 import { InvoiceModule } from './invoice/invoice.module';
+import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
-// import { JwtService } from '@nestjs/jwt';
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -32,6 +33,7 @@ import { HttpModule } from '@nestjs/axios';
     RateModule,
     TimeModule,
     InvoiceModule,
+    DatabaseSyncModule,
     HttpModule,
   ],
   controllers: [AppController],
