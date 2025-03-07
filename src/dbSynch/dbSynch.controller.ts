@@ -10,8 +10,21 @@ export class DatabaseSyncController {
   @Get('/full')
   @HttpCode(200)
   async synchronizeDatabase() {
-    this.logger.log('Database synchronization requested');
-    await this.databaseSyncService.synchronizeDatabase();
-    return { message: 'Database synchronization completed successfully' };
+    this.logger.log('Full database synchronization requested');
+    try {
+      await this.databaseSyncService.synchronizeDatabase();
+      return {
+        status: 'success',
+        message: 'Database synchronization completed successfully',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(`Synchronization failed: ${error.message}`);
+      return {
+        status: 'error',
+        message: `Synchronization failed: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      };
+    }
   }
 }

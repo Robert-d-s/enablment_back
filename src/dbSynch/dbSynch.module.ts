@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { DatabaseSyncService } from './dbSynch.service';
 import { DatabaseSyncController } from './dbSynch.controller';
-import { TeamModule } from '../team/team.module';
+import { HttpModule } from '@nestjs/axios';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [TeamModule],
+  imports: [HttpModule, ConfigModule],
   providers: [DatabaseSyncService],
   controllers: [DatabaseSyncController],
   exports: [DatabaseSyncService],

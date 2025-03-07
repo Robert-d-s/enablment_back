@@ -45,6 +45,7 @@ export type IssueWebhookData = {
     name: string;
   };
   labels?: Array<{ id: string; name: string; color: string; parentId: string }>;
+  projectName?: string;
 };
 
 export type LinearWebhookBody = {

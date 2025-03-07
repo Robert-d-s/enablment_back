@@ -155,7 +155,7 @@ module.exports = {
   }
 }
 
-// ====== FILE: prisma/schema.prisma ======
+// ====== FILE: prisma\schema.prisma ======
 
 generator client {
   provider = "prisma-client-js"
@@ -167,14 +167,14 @@ datasource db {
 }
 
 model User {
-  id              Int       @id       @default(autoincrement())
-  email           String    @unique
-  password        String
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  password String
 
-  role            UserRole  @default(PENDING)
+  role UserRole @default(PENDING)
 
-  times           Time[]
-  teams           UserTeam[]
+  times Time[]
+  teams UserTeam[]
 }
 
 enum UserRole {
@@ -185,103 +185,100 @@ enum UserRole {
 }
 
 model UserTeam {
-  userId  Int
-  teamId  String
-  user    User   @relation(fields: [userId], references: [id])
-  team    Team   @relation(fields: [teamId], references: [id])
+  userId Int
+  teamId String
+  user   User   @relation(fields: [userId], references: [id])
+  team   Team   @relation(fields: [teamId], references: [id])
 
   @@id([userId, teamId])
 }
 
 model Team {
-  id              String   @id
-  name            String
+  id   String @id
+  name String
 
-  users           UserTeam[]
-  projects        Project[]
-  rates           Rate[]
+  users    UserTeam[]
+  projects Project[]
+  rates    Rate[]
+  issues   Issue[]
 }
 
 model Rate {
-  id              Int     @id       @default(autoincrement())
-  name            String
-  teamId          String
-  rate            Int
+  id     Int    @id @default(autoincrement())
+  name   String
+  teamId String
+  rate   Int
 
-  team            Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  times           Time[]
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  times Time[]
 }
 
 model Project {
-  id              String   @id
-  estimatedTime   Int?
-  name            String
-  teamId          String
-  createdAt       String
-  updatedAt       String
-  description     String?
-  state           String
-  startDate       String?
-  targetDate      String?
+  id            String  @id
+  estimatedTime Int?
+  name          String
+  teamId        String
+  createdAt     String
+  updatedAt     String
+  description   String?
+  state         String
+  startDate     String?
+  targetDate    String?
 
-  time            Time[]
+  time Time[]
 
-  issues          Issue[]
-  team            Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues Issue[]
+  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
 }
 
 model Time {
-  id              Int     @id       @default(autoincrement())
-  startTime       DateTime
-  endTime         DateTime?
-  userId          Int
-  projectId       String
-  rateId          Int?
+  id               Int       @id @default(autoincrement())
+  startTime        DateTime
+  endTime          DateTime?
+  userId           Int
+  projectId        String
+  rateId           Int?
   totalElapsedTime Int
 
-  user            User    @relation(fields: [userId], references: [id])
-  project         Project @relation(fields: [projectId], references: [id],onDelete: Cascade)
-  rate            Rate?    @relation(fields: [rateId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rate    Rate?   @relation(fields: [rateId], references: [id])
 }
 
 model Issue {
-  id              String   @id
-  createdAt       String
-  updatedAt       String
-  title           String
-  dueDate         String?
-  projectId       String
-  priorityLabel   String
-  identifier      String
-  assigneeName    String?
-  projectName     String
-  state           String
-  teamKey         String
-  teamName        String
+  id            String  @id
+  createdAt     String
+  updatedAt     String
+  title         String
+  dueDate       String?
+  projectId     String
+  priorityLabel String
+  identifier    String
+  assigneeName  String?
+  projectName   String
+  state         String
+  teamKey       String?
+  teamName      String?
 
-  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  labels          Label[]
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team    Team?   @relation(fields: [teamKey], references: [id], onDelete: SetNull)
+  labels  Label[]
 }
 
 model Label {
-  id        String
-  color     String
-  name      String
-  parentId  String?
-  issueId   String
+  id       String
+  color    String
+  name     String
+  parentId String?
+  issueId  String
 
-  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  internalId  Int @id @default(autoincrement())
+  issue      Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  internalId Int   @id @default(autoincrement())
 
   @@index([id, issueId], name: "idx_label_issue")
-
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/app.controller.ts ======
-=======
 // ====== FILE: src\app.controller.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
@@ -296,11 +293,7 @@ export class AppController {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/app.module.ts ======
-=======
 // ====== FILE: src\app.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
@@ -317,8 +310,9 @@ import { TeamModule } from './team/team.module';
 import { RateModule } from './rate/rate.module';
 import { TimeModule } from './time/time.module';
 import { InvoiceModule } from './invoice/invoice.module';
+import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
-// import { JwtService } from '@nestjs/jwt';
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -336,6 +330,7 @@ import { HttpModule } from '@nestjs/axios';
     RateModule,
     TimeModule,
     InvoiceModule,
+    DatabaseSyncModule,
     HttpModule,
   ],
   controllers: [AppController],
@@ -343,11 +338,7 @@ import { HttpModule } from '@nestjs/axios';
 })
 export class AppModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/app.service.ts ======
-=======
 // ====== FILE: src\app.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 
@@ -358,11 +349,7 @@ export class AppService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/main.ts ======
-=======
 // ====== FILE: src\main.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -427,11 +414,7 @@ async function bootstrap() {
 
 bootstrap();
 
-<<<<<<< HEAD
-// ====== FILE: src/repl.ts ======
-=======
 // ====== FILE: src\repl.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { repl } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -441,11 +424,7 @@ async function bootstrap() {
 }
 bootstrap();
 
-<<<<<<< HEAD
-// ====== FILE: test/app.e2e-spec.ts ======
-=======
 // ====== FILE: test\app.e2e-spec.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
@@ -504,11 +483,7 @@ describe('AppController (e2e)', () => {
   });
 });
 
-<<<<<<< HEAD
-// ====== FILE: test/jest-e2e.json ======
-=======
 // ====== FILE: test\jest-e2e.json ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 {
   "moduleFileExtensions": ["js", "json", "ts"],
@@ -520,11 +495,7 @@ describe('AppController (e2e)', () => {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/auth/auth.controller.ts ======
-=======
 // ====== FILE: src\auth\auth.controller.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import {
   Body,
@@ -563,11 +534,7 @@ export class AuthController {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/auth/auth.guard.ts ======
-=======
 // ====== FILE: src\auth\auth.guard.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import {
   CanActivate,
@@ -681,37 +648,23 @@ export class AuthGuard implements CanActivate {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/auth/auth.module.ts ======
+// ====== FILE: src\auth\auth.module.ts ======
 
 import { Module, forwardRef } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 // import { jwtConstants } from './constants';
-=======
-// ====== FILE: src\auth\auth.module.ts ======
-
-import { Module } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { JwtModule } from '@nestjs/jwt';
-import { AuthController } from './auth.controller';
-import { jwtConstants } from './constants';
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 import { UserModule } from '../user/user.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth.guard';
 
-<<<<<<< HEAD
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
-=======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 export const IS_PUBLIC_KEY = 'isPublic';
 
 @Module({
   imports: [
-<<<<<<< HEAD
     ConfigModule,
     forwardRef(() => UserModule),
     JwtModule.registerAsync({
@@ -721,13 +674,6 @@ export const IS_PUBLIC_KEY = 'isPublic';
         secret: configService.get<string>('JWT_SECRET'), // ✅ Load from env correctly
         signOptions: { expiresIn: '43200s' },
       }),
-=======
-    UserModule,
-    JwtModule.register({
-      global: true,
-      secret: jwtConstants.secret,
-      signOptions: { expiresIn: '43200s' },
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
     }),
   ],
   providers: [
@@ -738,19 +684,11 @@ export const IS_PUBLIC_KEY = 'isPublic';
     },
   ],
   controllers: [AuthController],
-<<<<<<< HEAD
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
 
-// ====== FILE: src/auth/auth.service.ts ======
-=======
-  exports: [AuthService],
-})
-export class AuthModule {}
-
 // ====== FILE: src\auth\auth.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import {
   Injectable,
@@ -807,32 +745,261 @@ export class AuthService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/auth/constants.ts ======
-=======
 // ====== FILE: src\auth\constants.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 export const jwtConstants = {
   secret: process.env.JWT_SECRET,
 };
 
-<<<<<<< HEAD
-// ====== FILE: src/auth/roles.decorator.ts ======
-=======
 // ====== FILE: src\auth\roles.decorator.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { SetMetadata } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
 export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);
 
-<<<<<<< HEAD
-// ====== FILE: src/invoice/invoice.input.ts ======
-=======
+// ====== FILE: src\dbSynch\dbSynch.controller.ts ======
+
+import { Controller, Get, HttpCode, Logger } from '@nestjs/common';
+import { DatabaseSyncService } from './dbSynch.service';
+
+@Controller('database-sync')
+export class DatabaseSyncController {
+  private readonly logger = new Logger(DatabaseSyncController.name);
+
+  constructor(private readonly databaseSyncService: DatabaseSyncService) {}
+
+  @Get('/full')
+  @HttpCode(200)
+  async synchronizeDatabase() {
+    this.logger.log('Database synchronization requested');
+    await this.databaseSyncService.synchronizeDatabase();
+    return { message: 'Database synchronization completed successfully' };
+  }
+}
+
+// ====== FILE: src\dbSynch\dbSynch.module.ts ======
+
+import { Module } from '@nestjs/common';
+import { DatabaseSyncService } from './dbSynch.service';
+import { DatabaseSyncController } from './dbSynch.controller';
+import { TeamModule } from '../team/team.module';
+
+@Module({
+  imports: [TeamModule],
+  providers: [DatabaseSyncService],
+  controllers: [DatabaseSyncController],
+  exports: [DatabaseSyncService],
+})
+export class DatabaseSyncModule {}
+
+// ====== FILE: src\dbSynch\dbSynch.service.ts ======
+
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+import { LinearService } from '../team/linear.service';
+import { TeamService } from '../team/team.service';
+
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
+
+@Injectable()
+export class DatabaseSyncService {
+  private readonly logger = new Logger(DatabaseSyncService.name);
+
+  constructor(
+    private readonly linearService: LinearService,
+    private readonly teamService: TeamService,
+  ) {}
+
+  /**
+   * Comprehensive database synchronization
+   * This ensures all relationships are properly maintained
+   */
+  async synchronizeDatabase(): Promise<void> {
+    this.logger.log('Starting comprehensive database synchronization');
+
+    // Use a transaction to ensure atomicity
+    await prisma.$transaction(async (tx) => {
+      // 1. First synchronize teams from Linear
+      await this.synchronizeTeams(tx);
+
+      // 2. Clean up any orphaned issues (issues with no valid team)
+      await this.cleanupOrphanedIssues(tx);
+
+      // 3. Clean up orphaned projects
+      await this.cleanupOrphanedProjects(tx);
+
+      // 4. Clean up orphaned rates
+      await this.cleanupOrphanedRates(tx);
+    });
+
+    this.logger.log('Database synchronization completed successfully');
+  }
+
+  /**
+   * Synchronize teams from Linear
+   */
+  private async synchronizeTeams(tx: any): Promise<void> {
+    this.logger.log('Fetching teams from Linear');
+    const teamsFromLinear = await this.linearService.fetchTeams();
+
+    this.logger.log(
+      `Processing ${teamsFromLinear.nodes.length} teams from Linear`,
+    );
+    const transformedTeams = teamsFromLinear.nodes.map((team) => ({
+      id: team.id,
+      name: team.name,
+    }));
+
+    // Get existing teams from database
+    const allTeamsInDb = await tx.team.findMany({
+      select: { id: true, name: true },
+    });
+
+    const teamsToDelete = new Set(allTeamsInDb.map((team) => team.id));
+
+    // Update or create teams
+    for (const teamData of transformedTeams) {
+      await tx.team.upsert({
+        where: { id: teamData.id },
+        update: { name: teamData.name },
+        create: { id: teamData.id, name: teamData.name },
+      });
+      teamsToDelete.delete(teamData.id);
+    }
+
+    // Handle teams that don't exist in Linear
+    for (const teamId of teamsToDelete) {
+      this.logger.warn(
+        `Team ${teamId} no longer exists in Linear, cleaning up references`,
+      );
+
+      // Update issues to remove references to this team
+      await tx.issue.updateMany({
+        where: { teamKey: teamId },
+        data: { teamKey: null, teamName: null },
+      });
+
+      // Now delete the team
+      await tx.team.delete({
+        where: { id: teamId },
+      });
+    }
+  }
+
+  /**
+   * Clean up orphaned issues (issues with invalid team references)
+   */
+  private async cleanupOrphanedIssues(tx: any): Promise<void> {
+    this.logger.log('Cleaning up orphaned issues');
+
+    // Find all issues with team references
+    const issuesWithTeam = await tx.issue.findMany({
+      where: {
+        teamKey: { not: null },
+      },
+      select: { id: true, teamKey: true },
+    });
+
+    // Get all valid team IDs
+    const validTeamIds = new Set(
+      (await tx.team.findMany({ select: { id: true } })).map((t) => t.id),
+    );
+
+    // Find issues with invalid team references
+    const orphanedIssues = issuesWithTeam.filter(
+      (issue) => !validTeamIds.has(issue.teamKey),
+    );
+
+    if (orphanedIssues.length > 0) {
+      this.logger.warn(
+        `Found ${orphanedIssues.length} issues with invalid team references`,
+      );
+
+      // Update these issues to remove the invalid team references
+      for (const issue of orphanedIssues) {
+        await tx.issue.update({
+          where: { id: issue.id },
+          data: { teamKey: null, teamName: null },
+        });
+      }
+    }
+  }
+
+  /**
+   * Clean up orphaned projects (projects with invalid team references)
+   */
+  private async cleanupOrphanedProjects(tx: any): Promise<void> {
+    this.logger.log('Checking for projects with invalid team references');
+
+    // Get all valid team IDs
+    const validTeamIds = new Set(
+      (await tx.team.findMany({ select: { id: true } })).map((t) => t.id),
+    );
+
+    // Find projects with invalid team references
+    const orphanedProjects = await tx.project.findMany({
+      where: {
+        teamId: { notIn: Array.from(validTeamIds) },
+      },
+      select: { id: true, name: true, teamId: true },
+    });
+
+    if (orphanedProjects.length > 0) {
+      this.logger.warn(
+        `Found ${orphanedProjects.length} projects with invalid team references`,
+      );
+
+      // For projects that would be orphaned, you might want to:
+      // 1. Reassign them to a default team
+      // 2. Or delete them if appropriate
+
+      // Option for deletion:
+      for (const project of orphanedProjects) {
+        this.logger.warn(
+          `Deleting orphaned project: ${project.name} (${project.id})`,
+        );
+        await tx.project.delete({ where: { id: project.id } });
+      }
+    }
+  }
+
+  /**
+   * Clean up orphaned rates (rates with invalid team references)
+   */
+  private async cleanupOrphanedRates(tx: any): Promise<void> {
+    this.logger.log('Checking for rates with invalid team references');
+
+    // Get all valid team IDs
+    const validTeamIds = new Set(
+      (await tx.team.findMany({ select: { id: true } })).map((t) => t.id),
+    );
+
+    // Find rates with invalid team references
+    const orphanedRates = await tx.rate.findMany({
+      where: {
+        teamId: { notIn: Array.from(validTeamIds) },
+      },
+      select: { id: true, name: true, teamId: true },
+    });
+
+    if (orphanedRates.length > 0) {
+      this.logger.warn(
+        `Found ${orphanedRates.length} rates with invalid team references`,
+      );
+
+      // Delete orphaned rates
+      for (const rate of orphanedRates) {
+        this.logger.warn(`Deleting orphaned rate: ${rate.name} (${rate.id})`);
+        await tx.rate.delete({ where: { id: rate.id } });
+      }
+    }
+  }
+}
+
 // ====== FILE: src\invoice\invoice.input.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType, Int } from '@nestjs/graphql';
 
@@ -857,11 +1024,7 @@ export class InvoiceQueryInput {
   teamId: string;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/invoice/invoice.model.ts ======
-=======
 // ====== FILE: src\invoice\invoice.model.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
@@ -901,11 +1064,7 @@ export class RateDetail {
   ratePerHour: number;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/invoice/invoice.module.ts ======
-=======
 // ====== FILE: src\invoice\invoice.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
@@ -917,11 +1076,7 @@ import { InvoiceResolver } from './invoice.resolver';
 })
 export class InvoiceModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/invoice/invoice.resolver.ts ======
-=======
 // ====== FILE: src\invoice\invoice.resolver.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Query, Resolver } from '@nestjs/graphql';
 import { InvoiceService } from './invoice.service';
@@ -945,11 +1100,7 @@ export class InvoiceResolver {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/invoice/invoice.service.ts ======
-=======
 // ====== FILE: src\invoice\invoice.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 // import { Injectable } from '@nestjs/common';
 // import { PrismaClient } from '@prisma/client';
@@ -1089,11 +1240,7 @@ export class InvoiceService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/issue/issue.model.ts ======
-=======
 // ====== FILE: src\issue\issue.model.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType } from '@nestjs/graphql';
 import { Issue as IssueClient } from '@prisma/client';
@@ -1158,11 +1305,7 @@ export class Label {
   parentId: string;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/issue/issue.module.ts ======
-=======
 // ====== FILE: src\issue\issue.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { IssueService } from './issue.service';
@@ -1174,11 +1317,7 @@ import { IssueResolver } from './issue.resolver';
 })
 export class IssueModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/issue/issue.resolver.ts ======
-=======
 // ====== FILE: src\issue\issue.resolver.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Query, Resolver } from '@nestjs/graphql';
 import { IssueService } from './issue.service';
@@ -1196,11 +1335,7 @@ export class IssueResolver {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/issue/issue.service.ts ======
-=======
 // ====== FILE: src\issue\issue.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Issue } from '@prisma/client';
@@ -1228,29 +1363,21 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
-<<<<<<< HEAD
-        projectId: data.projectId,
-        priorityLabel: data.priorityLabel,
-        identifier: data.identifier,
-        assigneeName: data.assignee?.name || 'No Assignee',
-        projectName: data.project?.name,
-        state: data.state?.name,
-        teamKey: data.team?.key,
-        teamName: data.team?.name,
-=======
-        // projectId: data.projectId,
         priorityLabel: data.priorityLabel,
         identifier: data.identifier,
         assigneeName: data.assignee?.name || 'No Assignee',
         projectName: data.project?.name || 'Unknown Project',
         state: data.state?.name,
-        teamKey: data.team?.key,
+        // teamKey: data.team?.key,
         teamName: data.team?.name,
         project: {
-          // <--- Use 'project' relation to connect to existing Project
-          connect: { id: data.projectId }, // <--- Connect to Project using projectId
+          connect: { id: data.projectId },
         },
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
+        team: data.team?.key
+          ? {
+              connect: { id: data.team.key },
+            }
+          : undefined,
       },
     });
     return createdIssue;
@@ -1264,14 +1391,24 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
-        projectId: data.projectId,
-        priorityLabel: data.priorityLabel,
+        // projectId: data.projectId,
+        priorityLabel: data.priorityLabel || 'No Priority',
         identifier: data.identifier,
         assigneeName: data.assignee?.name || 'No Assignee',
-        projectName: data.project?.name,
+        projectName: data.project?.name || 'Unknown Project',
         state: data.state?.name,
-        teamKey: data.team?.key,
+        // teamKey: data.team?.key,
         teamName: data.team?.name,
+        project: {
+          connect: { id: data.projectId },
+        },
+        team: data.team?.key
+          ? {
+              connect: { id: data.team.key },
+            }
+          : {
+              disconnect: true,
+            },
       },
       create: {
         id,
@@ -1279,14 +1416,21 @@ export class IssueService {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
-        projectId: data.projectId,
-        priorityLabel: data.priorityLabel,
+        priorityLabel: data.priorityLabel || 'No Priority',
         identifier: data.identifier,
         assigneeName: data.assignee?.name || 'No Assignee',
-        projectName: data.project?.name,
+        projectName: data.project?.name || 'Unknown Project',
         state: data.state?.name,
-        teamKey: data.team?.key,
+        // teamKey: data.team?.key,
         teamName: data.team?.name,
+        project: {
+          connect: { id: data.projectId },
+        },
+        team: data.team?.key
+          ? {
+              connect: { id: data.team.key },
+            }
+          : undefined,
       },
     });
     console.log(
@@ -1348,7 +1492,6 @@ export class IssueService {
             data: {
               color: webhookLabel.color,
               name: webhookLabel.name,
-              // ... other fields you might need to update
             },
           });
         } else {
@@ -1385,11 +1528,7 @@ export class IssueService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/project/project.model.ts ======
-=======
 // ====== FILE: src\project\project.model.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { Project as ProjectClient } from '@prisma/client';
@@ -1429,11 +1568,7 @@ export class Project implements ProjectClient {
   // ---------------------------------
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/project/project.module.ts ======
-=======
 // ====== FILE: src\project\project.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { ProjectService } from './project.service';
@@ -1445,11 +1580,7 @@ import { ProjectResolver } from './project.resolver';
 })
 export class ProjectModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/project/project.resolver.ts ======
-=======
 // ====== FILE: src\project\project.resolver.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Query, Resolver } from '@nestjs/graphql';
 import { Project } from './project.model';
@@ -1465,11 +1596,7 @@ export class ProjectResolver {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/project/project.service.ts ======
-=======
 // ====== FILE: src\project\project.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Project } from '@prisma/client';
@@ -1497,14 +1624,10 @@ export class ProjectService {
       data: {
         id,
         name,
-<<<<<<< HEAD
-        teamId,
-=======
         // teamId,
         team: {
           connect: { id: teamId },
         },
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
         createdAt,
         updatedAt,
         description,
@@ -1566,11 +1689,7 @@ export class ProjectService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/rate/rate.input.ts ======
-=======
 // ====== FILE: src\rate\rate.input.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType, Int } from '@nestjs/graphql';
 
@@ -1595,11 +1714,7 @@ export class RateInputCreate {
   teamId: string;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/rate/rate.model.ts ======
-=======
 // ====== FILE: src\rate\rate.model.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { Rate as RateClient } from '@prisma/client';
@@ -1619,11 +1734,7 @@ export class Rate implements RateClient {
   rate: number;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/rate/rate.module.ts ======
-=======
 // ====== FILE: src\rate\rate.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { RateService } from './rate.service';
@@ -1634,11 +1745,7 @@ import { RateResolver } from './rate.resolver';
 })
 export class RateModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/rate/rate.resolver.ts ======
-=======
 // ====== FILE: src\rate\rate.resolver.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { RateService } from './rate.service';
@@ -1674,11 +1781,7 @@ export class RateResolver {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/rate/rate.service.ts ======
-=======
 // ====== FILE: src\rate\rate.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Rate } from '@prisma/client';
@@ -1725,11 +1828,7 @@ export class RateService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/team/linear.service.ts ======
-=======
 // ====== FILE: src\team\linear.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -1867,11 +1966,7 @@ export class LinearService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/team/manualSync.ts ======
-=======
 // ====== FILE: src\team\manualSync.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
@@ -1924,11 +2019,7 @@ async function bootstrap() {
 
 bootstrap();
 
-<<<<<<< HEAD
-// ====== FILE: src/team/team.dto.ts ======
-=======
 // ====== FILE: src\team\team.dto.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType } from '@nestjs/graphql';
 
@@ -1980,11 +2071,7 @@ export class SimpleTeamDTO {
   name: string;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/team/team.model.ts ======
-=======
 // ====== FILE: src\team\team.model.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType } from '@nestjs/graphql';
 import { Team as TeamClient } from '@prisma/client';
@@ -2006,11 +2093,7 @@ export class Team implements TeamClient {
   rates: Rate[];
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/team/team.module.ts ======
-=======
 // ====== FILE: src\team\team.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { TeamResolver } from './team.resolver';
@@ -2028,11 +2111,7 @@ import { HttpModule } from '@nestjs/axios';
 })
 export class TeamModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/team/team.resolver.ts ======
-=======
 // ====== FILE: src\team\team.resolver.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { Team } from './team.model';
@@ -2072,31 +2151,18 @@ export class TeamResolver {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/team/team.service.ts ======
-=======
 // ====== FILE: src\team\team.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Team } from '@prisma/client';
-// import { LinearService } from './linear.service';
-// import { TeamsDTO } from './team.dto';
 import { SimpleTeamDTO } from './team.dto';
 
-// const prisma = new PrismaClient();
 const prisma = new PrismaClient({
   log: ['query', 'info', 'warn', 'error'],
 });
 
 @Injectable()
 export class TeamService {
-  // constructor(private readonly linearService: LinearService) {}
-
-  // async syncTeamsFromLinear() {
-  //   await this.linearService.synchronizeTeamsWithLinear();
-  // }
-
   async syncTeam(id: string, name: string): Promise<void> {
     await prisma.team.upsert({
       where: { id },
@@ -2134,32 +2200,34 @@ export class TeamService {
     });
   }
 
-  // async deleteTeam(id: string): Promise<void> {
-  //   await prisma.team.delete({
-  //     where: { id },
-  //   });
-  // }
-  async deleteTeam(id: string): Promise<void> {
-    // Start a transaction
-    const transaction = await prisma.$transaction(async (prisma) => {
-      // Retrieve and delete all projects associated with the team
-      await prisma.project.deleteMany({
-        where: { teamId: id },
+  async deleteTeam(teamId: string): Promise<void> {
+    await prisma.$transaction(async (prisma) => {
+      // First find all issues associated with this team
+      const issuesWithTeam = await prisma.issue.findMany({
+        where: {
+          teamKey: teamId,
+        },
       });
+
+      // Update all issues to remove team references
+      if (issuesWithTeam.length > 0) {
+        await prisma.issue.updateMany({
+          where: {
+            teamKey: teamId,
+          },
+          data: {
+            teamKey: null,
+            teamName: null,
+          },
+        });
+      }
 
       // Now delete the team
       await prisma.team.delete({
-        where: { id },
+        where: { id: teamId },
       });
     });
-
-    // Optionally, you can handle the result of the transaction
-    // For example, logging the result or handling errors
   }
-
-  // async getTeams(): Promise<TeamsDTO> {
-  //   return await this.linearService.fetchTeams();
-  // }
 
   async getTeamById(id: string): Promise<Team | null> {
     return await prisma.team.findUnique({
@@ -2168,11 +2236,7 @@ export class TeamService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/team/team.synchcronization.controller.ts ======
-=======
 // ====== FILE: src\team\team.synchcronization.controller.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 // team.synchronization.controller.ts
 
@@ -2191,11 +2255,7 @@ export class TeamSynchronizationController {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/time/time.input.ts ======
-=======
 // ====== FILE: src\time\time.input.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType } from '@nestjs/graphql';
 
@@ -2259,11 +2319,7 @@ export class TimeInputUpdate {
   totalElapsedTime: number;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/time/time.model.ts ======
-=======
 // ====== FILE: src\time\time.model.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, ObjectType, Int } from '@nestjs/graphql';
 import { Time as TimeClient } from '@prisma/client';
@@ -2292,11 +2348,7 @@ export class Time implements TimeClient {
   totalElapsedTime: number | null;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/time/time.module.ts ======
-=======
 // ====== FILE: src\time\time.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { TimeService } from './time.service';
@@ -2307,11 +2359,7 @@ import { TimeResolver } from './time.resolver';
 })
 export class TimeModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/time/time.resolver.ts ======
-=======
 // ====== FILE: src\time\time.resolver.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { TimeService } from './time.service';
@@ -2405,11 +2453,7 @@ export class TimeResolver {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/time/time.service.ts ======
-=======
 // ====== FILE: src\time\time.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Time } from '@prisma/client';
@@ -2587,11 +2631,7 @@ export class TimeService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/user/user-role.enum.ts ======
-=======
 // ====== FILE: src\user\user-role.enum.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { registerEnumType } from '@nestjs/graphql';
 
@@ -2606,42 +2646,7 @@ registerEnumType(UserRole, {
   name: 'UserRole',
 });
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-// ====== FILE: src/user/user.controller.ts ======
-=======
-// ====== FILE: src\user\user.controller.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
-
-// import { Controller, Patch, Param, Body, UseGuards } from '@nestjs/common';
-// import { UserService } from '../user/user.service';
-// import { Roles } from '../auth/roles.decorator';
-// import { AuthGuard } from '../auth/auth.guard';
-// // import { UserRole } from '@prisma/client';
-// import { UserRole } from './user-role.enum';
-
-// @Controller('users')
-// export class UserController {
-//   constructor(private userService: UserService) {}
-
-//   @Patch(':id/role')
-//   @Roles(UserRole.ADMIN) // Only admins can access this route
-//   @UseGuards(AuthGuard) // AuthGuard will check both authentication and role
-//   async updateUserRole(
-//     @Param('id') userId: string,
-//     @Body('role') newRole: UserRole,
-//   ) {
-//     return this.userService.updateUserRole(parseInt(userId), newRole);
-//   }
-// }
-
-<<<<<<< HEAD
-// ====== FILE: src/user/user.input.ts ======
-=======
->>>>>>> 9c706efebb5c2a03448c53ac8d9b67c98a94298a
 // ====== FILE: src\user\user.input.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, InputType } from '@nestjs/graphql';
 import { UserRole } from './user-role.enum';
@@ -2668,11 +2673,7 @@ export class UserInputCreate {
   role?: UserRole;
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/user/user.model.ts ======
-=======
 // ====== FILE: src\user\user.model.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { UserRole } from './user-role.enum';
@@ -2695,8 +2696,7 @@ export class User {
   teams?: Team[];
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/user/user.module.ts ======
+// ====== FILE: src\user\user.module.ts ======
 
 import { Module, forwardRef } from '@nestjs/common';
 import { UserService } from './user.service';
@@ -2705,25 +2705,12 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [forwardRef(() => AuthModule)],
-=======
-// ====== FILE: src\user\user.module.ts ======
-
-import { Module } from '@nestjs/common';
-import { UserService } from './user.service';
-import { UserResolver } from './user.resolver';
-
-@Module({
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
   providers: [UserResolver, UserService],
   exports: [UserResolver, UserService],
 })
 export class UserModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/user/user.resolver.ts ======
-=======
 // ====== FILE: src\user\user.resolver.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
@@ -2803,11 +2790,7 @@ export class UserResolver {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/user/user.service.ts ======
-=======
 // ====== FILE: src\user\user.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, User } from '@prisma/client';
@@ -3077,11 +3060,7 @@ export class UserService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/webhook/webhook.controller.ts ======
-=======
 // ====== FILE: src\webhook\webhook.controller.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
@@ -3100,34 +3079,6 @@ export class WebhookController {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/webhook/webhook.guard.ts ======
-
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
-// import { Observable } from 'rxjs';
-import * as crypto from 'crypto';
-// import * as micro from 'micro';
-
-@Injectable()
-export class WebhookGuard implements CanActivate {
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
-
-    const signature = crypto
-      .createHmac('sha256', process.env.WEBHOOK_SECRET)
-      .update(JSON.stringify(request.body))
-      .digest('hex');
-
-    if (signature !== request.headers['linear-signature']) {
-      return false;
-    }
-
-    return true;
-  }
-}
-
-// ====== FILE: src/webhook/webhook.issue.service.ts ======
-=======
 // ====== FILE: src\webhook\webhook.guard.ts ======
 
 import {
@@ -3189,7 +3140,6 @@ export class WebhookGuard implements CanActivate {
 }
 
 // ====== FILE: src\webhook\webhook.issue.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
@@ -3235,11 +3185,7 @@ export class WebhookIssueService {
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/webhook/webhook.module.ts ======
-=======
 // ====== FILE: src\webhook\webhook.module.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Module } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
@@ -3262,11 +3208,7 @@ import { TeamModule } from '../team/team.module';
 })
 export class WebhookModule {}
 
-<<<<<<< HEAD
-// ====== FILE: src/webhook/webhook.project.service.ts ======
-=======
 // ====== FILE: src\webhook\webhook.project.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { ProjectWebhookData, LinearWebhookBody } from './webhook.service';
@@ -3306,11 +3248,7 @@ export class WebhookProjectService {
       projectData.createdAt,
       projectData.updatedAt,
       projectData.description,
-<<<<<<< HEAD
-      projectData.state,
-=======
       projectData.state || 'Active',
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
       projectData.startDate,
       projectData.targetDate,
     );
@@ -3329,22 +3267,14 @@ export class WebhookProjectService {
       projectData.createdAt,
       projectData.updatedAt,
       projectData.description,
-<<<<<<< HEAD
-      projectData.state,
-=======
       projectData.state || 'Active',
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
       projectData.startDate,
       projectData.targetDate,
     );
   }
 }
 
-<<<<<<< HEAD
-// ====== FILE: src/webhook/webhook.service.ts ======
-=======
 // ====== FILE: src\webhook\webhook.service.ts ======
->>>>>>> 7f766fae13e8e1667f17eda580673b279964a969
 
 import { Injectable } from '@nestjs/common';
 import { WebhookProjectService } from './webhook.project.service';
