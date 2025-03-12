@@ -17,7 +17,7 @@ export class Invoice {
   @Field(() => [RateDetail], { nullable: true })
   rates?: RateDetail[];
 }
-// Assuming you want to include details about the rates applied
+
 @ObjectType()
 export class RateDetail {
   @Field(() => Int)

@@ -391,7 +391,7 @@ export class DatabaseSyncService {
                 identifier: issue.identifier,
                 assigneeName: issue.assignee
                   ? issue.assignee.name
-                  : 'Unassigned',
+                  : 'No assignee',
                 state: issue.state ? issue.state.name : 'Triage',
                 teamKey: issue.team.id,
                 teamName: issue.team.name,

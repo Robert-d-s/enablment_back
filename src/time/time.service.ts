@@ -15,7 +15,6 @@ export class TimeService {
 
   async isDuplicate(
     startTime: Date,
-    // endTime: Date,
     userId: number,
     projectId: string,
     rateId: number,
@@ -23,7 +22,6 @@ export class TimeService {
     const existingEntry = await prisma.time.findFirst({
       where: {
         startTime,
-        // endTime,
         userId,
         projectId,
         rateId,
