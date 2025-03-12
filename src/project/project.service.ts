@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Project } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
+import { Project } from '@prisma/client';
 
 @Injectable()
 export class ProjectService {
+  constructor(private prisma: PrismaService) {}
+
   async all(): Promise<Project[]> {
-    return prisma.project.findMany();
+    return this.prisma.project.findMany();
   }
 
   async create(
@@ -20,11 +21,10 @@ export class ProjectService {
     startDate: string,
     targetDate: string,
   ): Promise<Project> {
-    return prisma.project.create({
+    return this.prisma.project.create({
       data: {
         id,
         name,
-        // teamId,
         team: {
           connect: { id: teamId },
         },
@@ -40,7 +40,7 @@ export class ProjectService {
 
   async remove(id: string): Promise<Project | null> {
     try {
-      return await prisma.project.delete({
+      return await this.prisma.project.delete({
         where: { id },
       });
     } catch (error) {
@@ -61,7 +61,7 @@ export class ProjectService {
     startDate: string,
     targetDate: string,
   ): Promise<Project> {
-    return prisma.project.upsert({
+    return this.prisma.project.upsert({
       where: {
         id,
       },

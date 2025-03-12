@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Time } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
+import { Time } from '@prisma/client';
 
 @Injectable()
 export class TimeService {
+  constructor(private prisma: PrismaService) {}
+
   all(projectId: string): Promise<Time[]> {
-    return prisma.time.findMany({
+    return this.prisma.time.findMany({
       where: {
         projectId,
       },
@@ -19,7 +20,7 @@ export class TimeService {
     projectId: string,
     rateId: number,
   ): Promise<boolean> {
-    const existingEntry = await prisma.time.findFirst({
+    const existingEntry = await this.prisma.time.findFirst({
       where: {
         startTime,
         userId,
@@ -36,7 +37,7 @@ export class TimeService {
     projectId: string,
     rateId: number,
   ): Promise<Time | null> {
-    return prisma.time.findFirst({
+    return this.prisma.time.findFirst({
       where: {
         startTime,
         userId,
@@ -52,11 +53,11 @@ export class TimeService {
     userId: number,
     rateId: number,
     endTime: Date,
-    totalElapsedTime: number, // This is passed directly and should not be calculated here.
+    totalElapsedTime: number,
   ): Promise<Time> {
     console.log('Backend Service - Creating with Start Time:', startTime);
     console.log('Backend Service - Creating with End Time:', endTime);
-    // Check for duplicates
+
     const duplicate = await this.isDuplicate(
       startTime,
       userId,
@@ -68,7 +69,7 @@ export class TimeService {
       throw new Error('Duplicate time entry not allowed');
     }
 
-    return prisma.time.create({
+    return this.prisma.time.create({
       data: {
         startTime,
         endTime, // endTime is now the actual time of submission
@@ -85,7 +86,7 @@ export class TimeService {
     endTime: Date,
     totalElapsedTime: number, // Directly use the provided totalElapsedTime
   ): Promise<Time> {
-    return prisma.time.update({
+    return this.prisma.time.update({
       where: { id },
       data: {
         endTime, // Set the endTime to the time of submission
@@ -95,7 +96,7 @@ export class TimeService {
   }
 
   remove(id: number): Promise<Time> {
-    return prisma.time.delete({
+    return this.prisma.time.delete({
       where: {
         id,
       },
@@ -123,7 +124,7 @@ export class TimeService {
     console.log('Executing database query to aggregate total time spent...');
 
     try {
-      const aggregatedTime = await prisma.time.aggregate({
+      const aggregatedTime = await this.prisma.time.aggregate({
         where: {
           userId,
           projectId,
@@ -158,7 +159,7 @@ export class TimeService {
     userId: number,
     projectId: string,
   ): Promise<number> {
-    const aggregatedTime = await prisma.time.aggregate({
+    const aggregatedTime = await this.prisma.time.aggregate({
       where: {
         userId,
         projectId,

@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
 import { User as QlUser } from '../user/user.model';
 
 type TeamBasic = {
   id: string;
   name: string;
-  // other fields as needed
 };
 
 type UserTeam = {
@@ -23,7 +23,7 @@ type UserTeam = {
 
 @Injectable()
 export class UserService {
-  private prisma = new PrismaClient();
+  constructor(private prisma: PrismaService) {}
   async getUserTeams(): Promise<UserTeam[]> {
     const userTeams = await this.prisma.userTeam.findMany({
       include: {

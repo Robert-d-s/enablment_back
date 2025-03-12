@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Rate } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
+import { Rate } from '@prisma/client';
 
 @Injectable()
 export class RateService {
+  constructor(private prisma: PrismaService) {}
+
   all(teamId: string): Promise<Rate[]> {
-    return prisma.rate.findMany({
+    return this.prisma.rate.findMany({
       where: {
         teamId: teamId,
       },
@@ -14,7 +15,7 @@ export class RateService {
   }
 
   create(name: string, rate: number, teamId: string): Promise<Rate> {
-    return prisma.rate.create({
+    return this.prisma.rate.create({
       data: {
         name,
         rate,
@@ -25,12 +26,12 @@ export class RateService {
 
   async remove(id: number): Promise<Rate> {
     console.log('Removing rate with ID:', id);
-    await prisma.time.updateMany({
+    await this.prisma.time.updateMany({
       where: { rateId: id },
       data: { rateId: { set: null } }, // Or assign to a default rate ID
     });
 
-    return prisma.rate
+    return this.prisma.rate
       .delete({
         where: {
           id,

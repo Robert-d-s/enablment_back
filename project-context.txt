@@ -62,7 +62,6 @@ module.exports = {
   },
   "dependencies": {
     "@apollo/server": "^4.7.1",
-    "@appland/appmap-agent-js": "^14.2.0",
     "@nestjs/apollo": "^11.0.5",
     "@nestjs/axios": "^3.0.1",
     "@nestjs/common": "^9.0.0",
@@ -71,6 +70,8 @@ module.exports = {
     "@nestjs/graphql": "^11.0.5",
     "@nestjs/jwt": "^10.0.3",
     "@nestjs/platform-express": "^9.0.0",
+    "@nestjs/platform-socket.io": "^9.4.3",
+    "@nestjs/websockets": "^9.4.3",
     "@prisma/client": "^4.13.0",
     "bcrypt": "^5.1.0",
     "graphql": "^16.6.0",
@@ -312,6 +313,7 @@ import { TimeModule } from './time/time.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
+import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 
 @Module({
   imports: [
@@ -332,6 +334,7 @@ import { HttpModule } from '@nestjs/axios';
     InvoiceModule,
     DatabaseSyncModule,
     HttpModule,
+    IssueUpdatesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -1202,7 +1205,7 @@ export class DatabaseSyncService {
                 identifier: issue.identifier,
                 assigneeName: issue.assignee
                   ? issue.assignee.name
-                  : 'Unassigned',
+                  : 'No assignee',
                 state: issue.state ? issue.state.name : 'Triage',
                 teamKey: issue.team.id,
                 teamName: issue.team.name,
@@ -1383,7 +1386,7 @@ export class Invoice {
   @Field(() => [RateDetail], { nullable: true })
   rates?: RateDetail[];
 }
-// Assuming you want to include details about the rates applied
+
 @ObjectType()
 export class RateDetail {
   @Field(() => Int)
@@ -1440,74 +1443,6 @@ export class InvoiceResolver {
 
 // ====== FILE: src\invoice\invoice.service.ts ======
 
-// import { Injectable } from '@nestjs/common';
-// import { PrismaClient } from '@prisma/client';
-// import { Invoice, RateDetail } from './invoice.model';
-
-// const prisma = new PrismaClient();
-
-// @Injectable()
-// export class InvoiceService {
-//   async generateInvoiceForProject(
-//     projectId: string,
-//     startDate: Date,
-//     endDate: Date,
-//   ): Promise<Invoice> {
-//     const project = await prisma.project.findUnique({
-//       where: { id: projectId },
-//       include: {
-//         time: {
-//           where: {
-//             startTime: { gte: startDate },
-//             endTime: { lte: endDate },
-//           },
-//           include: { rate: true },
-//         },
-//       },
-//     });
-
-//     if (!project) throw new Error('Project not found');
-
-//     let totalHours = 0;
-//     let totalCost = 0;
-//     const ratesMap: { [key: number]: RateDetail } = {};
-
-//     project.time.forEach((entry) => {
-//       const hours = entry.totalElapsedTime / 3600000; // Convert milliseconds to hours
-//       totalHours += hours;
-//       totalCost += hours * entry.rate.rate;
-
-//       if (!ratesMap[entry.rateId]) {
-//         ratesMap[entry.rateId] = {
-//           rateId: entry.rateId,
-//           rateName: entry.rate.name,
-//           hours: 0,
-//           cost: 0,
-//         };
-//       }
-
-//       ratesMap[entry.rateId].hours += hours;
-//       ratesMap[entry.rateId].cost += hours * entry.rate.rate;
-//     });
-
-//     const rates = Object.values(ratesMap).map((rate) => ({
-//       rateId: rate.rateId,
-//       rateName: rate.rateName,
-//       // Round up hours and cost to 2 decimal places
-//       hours: Math.ceil(rate.hours * 100) / 100,
-//       cost: Math.ceil(rate.cost * 100) / 100,
-//     }));
-
-//     return {
-//       projectId: project.id,
-//       projectName: project.name,
-//       // Round up total hours and total cost to 2 decimal places
-//       totalHours: Math.ceil(totalHours * 100) / 100,
-//       totalCost: Math.ceil(totalCost * 100) / 100,
-//       rates,
-//     };
-//   }
-// }
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { Invoice, RateDetail } from './invoice.model';
@@ -1870,6 +1805,49 @@ export class IssueService {
     return issue;
   }
 }
+
+// ====== FILE: src\issue-updates\issue-updates.gateway.ts ======
+
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+} from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
+import { Server, Socket } from 'socket.io';
+
+@WebSocketGateway({ cors: { origin: '*' } })
+export class IssueUpdatesGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
+  @WebSocketServer() server: Server;
+  private logger: Logger = new Logger('IssueUpdatesGateway');
+
+  handleConnection(client: Socket) {
+    this.logger.log(`Client connected: ${client.id}`);
+  }
+
+  handleDisconnect(client: Socket) {
+    this.logger.log(`Client disconnected: ${client.id}`);
+  }
+
+  broadcastIssueUpdate(issueUpdate: any) {
+    this.server.emit('issueUpdate', issueUpdate);
+    this.logger.debug(`Broadcasted issue update: ${issueUpdate.id}`);
+  }
+}
+
+// ====== FILE: src\issue-updates\issue-updates.module.ts ======
+
+import { Module } from '@nestjs/common';
+import { IssueUpdatesGateway } from './issue-updates.gateway';
+
+@Module({
+  providers: [IssueUpdatesGateway],
+  exports: [IssueUpdatesGateway],
+})
+export class IssueUpdatesModule {}
 
 // ====== FILE: src\project\project.model.ts ======
 
@@ -2308,59 +2286,6 @@ export class LinearService {
     }
   }
 }
-
-// ====== FILE: src\team\manualSync.ts ======
-
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../app.module';
-import { LinearService } from './linear.service';
-import { TeamService } from './team.service';
-
-async function bootstrap() {
-  const appContext = await NestFactory.createApplicationContext(AppModule);
-
-  const linearService = appContext.get(LinearService);
-  const teamService = appContext.get(TeamService);
-
-  try {
-    console.log('Fetching teams from Linear...');
-    const teamsFromLinear = await linearService.fetchTeams();
-
-    console.log('Transforming data for database insertion...');
-    const transformedTeams = teamsFromLinear.nodes.map((team) => ({
-      id: team.id,
-      name: team.name,
-      // Add other fields if needed
-    }));
-
-    console.log('Syncing data with the database...');
-    const linearTeamIds = new Set(teamsFromLinear.nodes.map((team) => team.id));
-    const dbTeams = await teamService.getAllTeams();
-
-    // Handle addition and update
-    for (const teamData of transformedTeams) {
-      await teamService.syncTeam(teamData.id, teamData.name);
-    }
-
-    // Handle deletion
-    for (const dbTeam of dbTeams) {
-      if (!linearTeamIds.has(dbTeam.id)) {
-        console.log(
-          `Deleting team with ID: ${dbTeam.id} as it's no longer in Linear.`,
-        );
-        await teamService.deleteTeam(dbTeam.id);
-      }
-    }
-
-    console.log('Manual synchronization completed.');
-  } catch (error) {
-    console.error('Error during manual synchronization:', error);
-  } finally {
-    await appContext.close();
-  }
-}
-
-bootstrap();
 
 // ====== FILE: src\team\team.dto.ts ======
 
@@ -2815,7 +2740,6 @@ export class TimeService {
 
   async isDuplicate(
     startTime: Date,
-    // endTime: Date,
     userId: number,
     projectId: string,
     rateId: number,
@@ -2823,7 +2747,6 @@ export class TimeService {
     const existingEntry = await prisma.time.findFirst({
       where: {
         startTime,
-        // endTime,
         userId,
         projectId,
         rateId,
@@ -2993,7 +2916,6 @@ registerEnumType(UserRole, {
 
 import { Field, InputType } from '@nestjs/graphql';
 import { UserRole } from './user-role.enum';
-// import { UserRole } from '@prisma/client';
 
 @InputType()
 export class UserInputCreate {
@@ -3020,8 +2942,6 @@ export class UserInputCreate {
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { UserRole } from './user-role.enum';
-// import { User as UserClient } from '@prisma/client';
-// import { UserRole } from '@prisma/client';
 import { Team } from '../team/team.model';
 
 @ObjectType()
@@ -3484,60 +3404,21 @@ export class WebhookGuard implements CanActivate {
 
 // ====== FILE: src\webhook\webhook.issue.service.ts ======
 
-// import { Injectable } from '@nestjs/common';
-// import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
-// import { IssueService } from '../issue/issue.service';
-
-// @Injectable()
-// export class WebhookIssueService {
-//   constructor(private issueService: IssueService) {}
-
-//   async handleIssue(json: LinearWebhookBody) {
-//     if (json.type !== 'Issue') {
-//       console.error('Expected issue data, received:', json.type);
-//       return;
-//     }
-
-//     switch (json.action) {
-//       case 'create':
-//         await this.createIssue(json.data as IssueWebhookData);
-//         break;
-//       case 'update':
-//         await this.updateIssue(json.data as IssueWebhookData);
-//         const issueData = json.data as IssueWebhookData;
-//         await this.issueService.updateLabelsForIssue(
-//           issueData.id,
-//           issueData.labels ?? [],
-//         );
-//         await this.issueService.update(issueData.id, issueData);
-//         break;
-//       case 'remove':
-//         await this.issueService.remove(json.data.id);
-//         break;
-//       default:
-//         console.log('Unhandled webhook action:', json.action);
-//     }
-//   }
-
-//   private async createIssue(data: IssueWebhookData) {
-//     await this.issueService.create(data);
-//   }
-
-//   private async updateIssue(data: IssueWebhookData) {
-//     await this.issueService.update(data.id, data);
-//   }
-// }
-
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
 import { IssueService } from '../issue/issue.service';
 import { PrismaClient } from '@prisma/client';
+import { IssueUpdatesGateway } from '../issue-updates/issue-updates.gateway';
 
 const prisma = new PrismaClient();
 
 @Injectable()
 export class WebhookIssueService {
-  constructor(private issueService: IssueService) {}
+  private readonly logger = new Logger(WebhookIssueService.name);
+  constructor(
+    private issueService: IssueService,
+    private readonly issueUpdatesGateway: IssueUpdatesGateway,
+  ) {}
 
   async handleIssue(json: LinearWebhookBody) {
     if (json.type !== 'Issue') {
@@ -3560,7 +3441,7 @@ export class WebhookIssueService {
             return;
           }
 
-          await this.createIssue(issueData);
+          const createdIssue = await this.createIssue(issueData);
 
           // Also update labels for newly created issue
           if (issueData.labels && issueData.labels.length > 0) {
@@ -3569,6 +3450,9 @@ export class WebhookIssueService {
               issueData.labels,
             );
           }
+
+          this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
+
           break;
 
         case 'update':
@@ -3610,10 +3494,19 @@ export class WebhookIssueService {
               );
             }
           }
+
+          const updatedIssue = await this.updateExistingIssue(issueData);
+          this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
           break;
 
         case 'remove':
           console.log(`Processing issue remove webhook for: ${issueData.id}`);
+          await this.issueService.remove(issueData.id);
+
+          this.issueUpdatesGateway.broadcastIssueUpdate({
+            id: issueData.id,
+            action: 'remove',
+          }); // Broadcast remove event, send minimal info
           await this.issueService.remove(issueData.id);
           break;
 
@@ -3621,7 +3514,6 @@ export class WebhookIssueService {
           console.log('Unhandled webhook action:', json.action);
       }
     } catch (error) {
-      // Handle specific errors better
       if (error.message.includes('Missing projectId')) {
         console.warn(
           `Could not process issue ${issueData.id}: Missing projectId. This might be a standalone issue not connected to any project.`,
@@ -3678,9 +3570,6 @@ export class WebhookIssueService {
           return true;
         }
 
-        // Third attempt: Create an "Unassigned" project if needed
-        // You can uncomment this if you want this functionality
-
         const unassignedProject = await this.createOrGetUnassignedProject();
         if (unassignedProject) {
           console.log(`Using "Unassigned" project for issue ${data.id}`);
@@ -3716,7 +3605,7 @@ export class WebhookIssueService {
       }
 
       // Create unassigned project if it doesn't exist
-      // First, we need to make sure there's at least one team
+      // First need to make sure there's at least one team
       const team = await prisma.team.findFirst();
       if (!team) {
         console.error('Cannot create unassigned project: No teams exist');
@@ -3759,8 +3648,6 @@ export class WebhookIssueService {
 
   private async updateExistingIssue(data: IssueWebhookData) {
     try {
-      // For updates to existing issues, we don't need the projectId
-      // since we're only updating fields that don't involve the project relation
       const updateData: any = {
         updatedAt: data.updatedAt,
         title: data.title,
@@ -3825,8 +3712,9 @@ import { ProjectService } from '../project/project.service';
 import { WebhookIssueService } from './webhook.issue.service';
 import { IssueService } from '../issue/issue.service';
 import { TeamModule } from '../team/team.module';
+import { IssueUpdatesModule } from '../issue-updates/issue-updates.module';
 @Module({
-  imports: [TeamModule],
+  imports: [TeamModule, IssueUpdatesModule],
   providers: [
     ProjectService,
     WebhookService,
@@ -3972,7 +3860,6 @@ export class WebhookService {
   ) {}
 
   async handle(json: LinearWebhookBody) {
-    // console.log('Received webhook:', json);
     if (json.type == 'Project') {
       const projectData = json.data as ProjectWebhookData;
       const teamId = projectData.teamIds[0];
@@ -3994,7 +3881,6 @@ export class WebhookService {
       }
       await this.webhookProjectService.handleProject(json);
     } else if (json.type === 'Issue') {
-      // console.log('Handling issue data from webhook:', json.data);
       await this.webhookIssueService.handleIssue(json);
     }
   }

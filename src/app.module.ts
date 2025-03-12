@@ -15,6 +15,8 @@ import { TimeModule } from './time/time.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
+import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { HttpModule } from '@nestjs/axios';
     InvoiceModule,
     DatabaseSyncModule,
     HttpModule,
+    IssueUpdatesModule,
+    PrismaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

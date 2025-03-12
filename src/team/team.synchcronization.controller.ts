@@ -1,5 +1,3 @@
-// team.synchronization.controller.ts
-
 import { Controller, Get, HttpCode } from '@nestjs/common';
 import { LinearService } from './linear.service';
 

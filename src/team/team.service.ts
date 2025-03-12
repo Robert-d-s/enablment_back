@@ -1,15 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Team } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Team } from '@prisma/client';
 import { SimpleTeamDTO } from './team.dto';
-
-const prisma = new PrismaClient({
-  log: ['query', 'info', 'warn', 'error'],
-});
 
 @Injectable()
 export class TeamService {
+  constructor(private prisma: PrismaService) {}
+
   async syncTeam(id: string, name: string): Promise<void> {
-    await prisma.team.upsert({
+    await this.prisma.team.upsert({
       where: { id },
       update: { name },
       create: { id, name },
@@ -17,7 +16,7 @@ export class TeamService {
   }
 
   async create(id: string, name: string): Promise<Team> {
-    return await prisma.team.create({
+    return await this.prisma.team.create({
       data: {
         id,
         name,
@@ -28,7 +27,7 @@ export class TeamService {
   }
 
   async getAllTeams(): Promise<{ id: string }[]> {
-    return await prisma.team.findMany({
+    return await this.prisma.team.findMany({
       select: {
         id: true,
         name: true,
@@ -37,7 +36,7 @@ export class TeamService {
   }
 
   async getAllSimpleTeams(): Promise<SimpleTeamDTO[]> {
-    return await prisma.team.findMany({
+    return await this.prisma.team.findMany({
       select: {
         id: true,
         name: true,
@@ -46,9 +45,9 @@ export class TeamService {
   }
 
   async deleteTeam(teamId: string): Promise<void> {
-    await prisma.$transaction(async (prisma) => {
+    await this.prisma.$transaction(async (prisma) => {
       // First find all issues associated with this team
-      const issuesWithTeam = await prisma.issue.findMany({
+      const issuesWithTeam = await this.prisma.issue.findMany({
         where: {
           teamKey: teamId,
         },
@@ -56,7 +55,7 @@ export class TeamService {
 
       // Update all issues to remove team references
       if (issuesWithTeam.length > 0) {
-        await prisma.issue.updateMany({
+        await this.prisma.issue.updateMany({
           where: {
             teamKey: teamId,
           },
@@ -68,14 +67,14 @@ export class TeamService {
       }
 
       // Now delete the team
-      await prisma.team.delete({
+      await this.prisma.team.delete({
         where: { id: teamId },
       });
     });
   }
 
   async getTeamById(id: string): Promise<Team | null> {
-    return await prisma.team.findUnique({
+    return await this.prisma.team.findUnique({
       where: { id },
     });
   }

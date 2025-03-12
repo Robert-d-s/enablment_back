@@ -64,7 +64,6 @@ export class WebhookService {
   ) {}
 
   async handle(json: LinearWebhookBody) {
-    // console.log('Received webhook:', json);
     if (json.type == 'Project') {
       const projectData = json.data as ProjectWebhookData;
       const teamId = projectData.teamIds[0];
@@ -86,7 +85,6 @@ export class WebhookService {
       }
       await this.webhookProjectService.handleProject(json);
     } else if (json.type === 'Issue') {
-      // console.log('Handling issue data from webhook:', json.data);
       await this.webhookIssueService.handleIssue(json);
     }
   }

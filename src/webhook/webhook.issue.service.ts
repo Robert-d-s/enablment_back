@@ -1,13 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
 import { IssueService } from '../issue/issue.service';
 import { PrismaClient } from '@prisma/client';
+import { IssueUpdatesGateway } from '../issue-updates/issue-updates.gateway';
 
 const prisma = new PrismaClient();
 
 @Injectable()
 export class WebhookIssueService {
-  constructor(private issueService: IssueService) {}
+  private readonly logger = new Logger(WebhookIssueService.name);
+  constructor(
+    private issueService: IssueService,
+    private readonly issueUpdatesGateway: IssueUpdatesGateway,
+  ) {}
 
   async handleIssue(json: LinearWebhookBody) {
     if (json.type !== 'Issue') {
@@ -30,7 +35,7 @@ export class WebhookIssueService {
             return;
           }
 
-          await this.createIssue(issueData);
+          const createdIssue = await this.createIssue(issueData);
 
           // Also update labels for newly created issue
           if (issueData.labels && issueData.labels.length > 0) {
@@ -39,6 +44,9 @@ export class WebhookIssueService {
               issueData.labels,
             );
           }
+
+          this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
+
           break;
 
         case 'update':
@@ -80,10 +88,19 @@ export class WebhookIssueService {
               );
             }
           }
+
+          const updatedIssue = await this.updateExistingIssue(issueData);
+          this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
           break;
 
         case 'remove':
           console.log(`Processing issue remove webhook for: ${issueData.id}`);
+          await this.issueService.remove(issueData.id);
+
+          this.issueUpdatesGateway.broadcastIssueUpdate({
+            id: issueData.id,
+            action: 'remove',
+          }); // Broadcast remove event, send minimal info
           await this.issueService.remove(issueData.id);
           break;
 
@@ -91,7 +108,6 @@ export class WebhookIssueService {
           console.log('Unhandled webhook action:', json.action);
       }
     } catch (error) {
-      // Handle specific errors better
       if (error.message.includes('Missing projectId')) {
         console.warn(
           `Could not process issue ${issueData.id}: Missing projectId. This might be a standalone issue not connected to any project.`,
@@ -148,9 +164,6 @@ export class WebhookIssueService {
           return true;
         }
 
-        // Third attempt: Create an "Unassigned" project if needed
-        // You can uncomment this if you want this functionality
-
         const unassignedProject = await this.createOrGetUnassignedProject();
         if (unassignedProject) {
           console.log(`Using "Unassigned" project for issue ${data.id}`);
@@ -186,7 +199,7 @@ export class WebhookIssueService {
       }
 
       // Create unassigned project if it doesn't exist
-      // First, we need to make sure there's at least one team
+      // First need to make sure there's at least one team
       const team = await prisma.team.findFirst();
       if (!team) {
         console.error('Cannot create unassigned project: No teams exist');

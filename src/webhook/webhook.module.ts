@@ -6,8 +6,10 @@ import { ProjectService } from '../project/project.service';
 import { WebhookIssueService } from './webhook.issue.service';
 import { IssueService } from '../issue/issue.service';
 import { TeamModule } from '../team/team.module';
+import { IssueUpdatesModule } from '../issue-updates/issue-updates.module';
+import { PrismaModule } from '../prisma/prisma.module';
 @Module({
-  imports: [TeamModule],
+  imports: [TeamModule, IssueUpdatesModule, PrismaModule],
   providers: [
     ProjectService,
     WebhookService,

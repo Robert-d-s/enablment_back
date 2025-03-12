@@ -1,15 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Issue } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { Issue } from '@prisma/client';
 import { IssueWebhookData } from '../webhook/webhook.service';
-
-const prisma = new PrismaClient({
-  log: ['query', 'info', 'warn', 'error'],
-});
 
 @Injectable()
 export class IssueService {
+  constructor(private prisma: PrismaService) {}
+
   async all(): Promise<Issue[]> {
-    return prisma.issue.findMany({
+    return this.prisma.issue.findMany({
       include: {
         labels: true,
       },
@@ -44,7 +43,7 @@ export class IssueService {
         createData.teamKey = data.team.id;
       }
 
-      const createdIssue = await prisma.issue.create({
+      const createdIssue = await this.prisma.issue.create({
         data: createData,
       });
 
@@ -58,7 +57,7 @@ export class IssueService {
   async update(id: string, data: IssueWebhookData): Promise<Issue> {
     try {
       // First check if the issue exists
-      const existingIssue = await prisma.issue.findUnique({
+      const existingIssue = await this.prisma.issue.findUnique({
         where: { id },
         select: { id: true },
       });
@@ -91,7 +90,7 @@ export class IssueService {
 
       if (existingIssue) {
         // If issue exists, perform update
-        const updatedIssue = await prisma.issue.update({
+        const updatedIssue = await this.prisma.issue.update({
           where: { id },
           data: updateData,
         });
@@ -112,7 +111,7 @@ export class IssueService {
     webhookLabel: IssueWebhookData['labels'][number],
     issueId: string,
   ): Promise<void> {
-    await prisma.label.create({
+    await this.prisma.label.create({
       data: {
         id: webhookLabel.id,
         issueId,
@@ -126,7 +125,7 @@ export class IssueService {
     issueId: string,
     webhookLabels: IssueWebhookData['labels'],
   ): Promise<void> {
-    await prisma.$transaction(async (prisma) => {
+    await this.prisma.$transaction(async (prisma) => {
       // Get all labels connected to this issue
       const currentLabels = await prisma.label.findMany({
         where: { issueId },
@@ -138,7 +137,7 @@ export class IssueService {
         (id) => !webhookLabels.some((label) => label.id === id),
       );
 
-      await prisma.label.deleteMany({
+      await this.prisma.label.deleteMany({
         where: {
           issueId,
           id: { in: removedLabelIds },
@@ -153,7 +152,7 @@ export class IssueService {
 
         if (existingLabel) {
           // Update existing label
-          await prisma.label.update({
+          await this.prisma.label.update({
             where: { internalId: existingLabel.internalId },
             data: {
               color: webhookLabel.color,
@@ -169,7 +168,7 @@ export class IssueService {
   }
 
   async remove(id: string): Promise<void> {
-    await prisma.issue.delete({
+    await this.prisma.issue.delete({
       where: { id },
     });
   }
@@ -179,7 +178,7 @@ export class IssueService {
     issueId: string,
     data: IssueWebhookData,
   ): Promise<Issue> {
-    let issue = await prisma.issue.findUnique({
+    let issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
 
