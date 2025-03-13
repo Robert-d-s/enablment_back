@@ -1,17 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
-
-const prisma = new PrismaClient();
 
 @Injectable()
 export class InvoiceService {
+  constructor(private prisma: PrismaService) {}
   async generateInvoiceForProject(
     projectId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<Invoice> {
-    const project = await prisma.project.findUnique({
+    const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
         time: {
@@ -20,7 +19,7 @@ export class InvoiceService {
             endTime: { lte: endDate },
           },
           include: {
-            rate: true, // Ensures that rate information is included in the query
+            rate: true,
           },
         },
       },
@@ -34,7 +33,7 @@ export class InvoiceService {
       {};
 
     project.time.forEach((entry) => {
-      const hours = entry.totalElapsedTime / 3600000; // Convert milliseconds to hours
+      const hours = entry.totalElapsedTime / 3600000;
       totalHours += hours;
       totalCost += hours * entry.rate.rate;
 
@@ -44,7 +43,7 @@ export class InvoiceService {
           rateName: entry.rate.name,
           hours: 0,
           cost: 0,
-          ratePerHour: entry.rate.rate, // Storing the rate per hour
+          ratePerHour: entry.rate.rate,
         };
       }
 
@@ -54,8 +53,8 @@ export class InvoiceService {
 
     const rates = Object.values(ratesMap).map((rate) => ({
       ...rate,
-      hours: Math.round(rate.hours * 100) / 100, // Round hours to 2 decimal places
-      cost: Math.round(rate.cost * 100) / 100, // Round cost to 2 decimal places
+      hours: Math.round(rate.hours * 100) / 100,
+      cost: Math.round(rate.cost * 100) / 100,
     }));
 
     return {

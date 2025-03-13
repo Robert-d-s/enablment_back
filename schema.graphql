@@ -112,7 +112,18 @@ type Query {
   times(projectId: String!): [Time!]!
   getTotalTimeSpent(userId: Float!, projectId: String!, startDate: String!, endDate: String!): Float!
   getTotalTimeForUserProject(userId: Float!, projectId: String!): Float!
-  invoiceForProject(projectId: String!, startDate: DateTime!, endDate: DateTime!): Invoice!
+  invoiceForProject(input: InvoiceInput!): Invoice!
+}
+
+input InvoiceInput {
+  """Project id for invoice"""
+  projectId: String!
+
+  """Start date for invoice period"""
+  startDate: DateTime!
+
+  """End date for invoice period"""
+  endDate: DateTime!
 }
 
 type Mutation {

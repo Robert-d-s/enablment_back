@@ -1,6 +1,7 @@
 import { Args, Query, Resolver } from '@nestjs/graphql';
 import { InvoiceService } from './invoice.service';
 import { Invoice } from './invoice.model';
+import { InvoiceInput } from './invoice.input';
 
 @Resolver(() => Invoice)
 export class InvoiceResolver {
@@ -8,14 +9,12 @@ export class InvoiceResolver {
 
   @Query(() => Invoice)
   async invoiceForProject(
-    @Args('projectId') projectId: string,
-    @Args('startDate') startDate: Date,
-    @Args('endDate') endDate: Date,
+    @Args('input') input: InvoiceInput,
   ): Promise<Invoice> {
     return this.invoiceService.generateInvoiceForProject(
-      projectId,
-      startDate,
-      endDate,
+      input.projectId,
+      input.startDate,
+      input.endDate,
     );
   }
 }

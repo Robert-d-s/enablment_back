@@ -1,22 +1,26 @@
-import { Field, InputType, Int } from '@nestjs/graphql';
+import { Field, InputType } from '@nestjs/graphql';
+import { IsDate, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 @InputType()
-export class InvoiceQueryInput {
-  @Field(() => Int, {
-    nullable: false,
-    description: 'Month of invoice',
-  })
-  month: number;
-
-  @Field(() => Int, {
-    nullable: false,
-    description: 'Year of invoice',
-  })
-  year: number;
-
+export class InvoiceInput {
   @Field(() => String, {
-    nullable: false,
-    description: 'Team id for invoice',
+    description: 'Project id for invoice',
   })
-  teamId: string;
+  @IsString()
+  projectId: string;
+
+  @Field(() => Date, {
+    description: 'Start date for invoice period',
+  })
+  @IsDate()
+  @Type(() => Date)
+  startDate: Date;
+
+  @Field(() => Date, {
+    description: 'End date for invoice period',
+  })
+  @IsDate()
+  @Type(() => Date)
+  endDate: Date;
 }

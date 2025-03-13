@@ -314,6 +314,7 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
 import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
@@ -335,6 +336,7 @@ import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
     DatabaseSyncModule,
     HttpModule,
     IssueUpdatesModule,
+    PrismaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -356,58 +358,11 @@ export class AppService {
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import * as cors from 'cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  // app.enableCors({
-  //   origin: [
-  //     'http://localhost:3000',
-  //     'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
-  //     'https://enablment-tt.vercel.app/',
-  //   ],
-  //   credentials: true,
-  //   allowedHeaders: ['Content-Type', 'Authorization'],
-  // });
-  // app.use((req, res, next) => {
-  //   res.header('Access-Control-Allow-Origin', '*');
-  //   res.header(
-  //     'Access-Control-Allow-Headers',
-  //     'Origin, X-Requested-With, Content-Type, Accept',
-  //   );
-  //   if (req.method === 'OPTIONS') {
-  //     res.header(
-  //       'Access-Control-Allow-Methods',
-  //       'PUT, POST, PATCH, DELETE, GET',
-  //     );
-  //     return res.status(200).json({});
-  //   }
-  //   next();
-  // });
-  // app.use(
-  //   cors({
-  //     origin: [
-  //       'http://localhost:3000',
-  //       'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
-  //       'https://8cb0-213-32-242-124.ngrok-free.app',
-  //       'https://enablment-tt.vercel.app',
-  //     ],
-  //     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  //     credentials: true,
-  //     allowedHeaders: [
-  //       'Content-Type',
-  //       'Authorization',
-  //       'x-apollo-operation-name',
-  //     ],
-  //   }),
-  // );
+
   app.enableCors({
-    // origin: [
-    //   'http://localhost:3000',
-    //   'https://52d3-2a02-2f08-d106-c300-70dd-50f2-5394-12aa.ngrok-free.app',
-    //   'https://65f3-213-32-242-96.ngrok-free.app',
-    //   'https://enablment-tt.vercel.app/',
-    // ],
     origin: '*',
   });
 
@@ -930,7 +885,7 @@ export class DatabaseSyncService {
   /**
    * Synchronize teams from Linear
    */
-  private async synchronizeTeams(tx: any): Promise<void> {
+  public async synchronizeTeams(tx: any): Promise<void> {
     this.logger.log('Fetching teams from Linear');
 
     const query = `
@@ -981,7 +936,23 @@ export class DatabaseSyncService {
       throw error;
     }
   }
+  public async synchronizeTeamsOnly(): Promise<void> {
+    this.logger.log('Starting teams-only synchronization');
 
+    try {
+      await prisma.$transaction(async (tx) => {
+        await this.synchronizeTeams(tx);
+      });
+
+      this.logger.log('Teams synchronization completed successfully');
+    } catch (error) {
+      this.logger.error(
+        `Teams synchronization failed: ${error.message}`,
+        error.stack,
+      );
+      throw new Error(`Teams synchronization failed: ${error.message}`);
+    }
+  }
   /**
    * Synchronize projects from Linear
    */
@@ -1410,8 +1381,10 @@ export class RateDetail {
 import { Module } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
 import { InvoiceResolver } from './invoice.resolver';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
+  imports: [PrismaModule],
   providers: [InvoiceService, InvoiceResolver],
   controllers: [],
 })
@@ -1444,19 +1417,18 @@ export class InvoiceResolver {
 // ====== FILE: src\invoice\invoice.service.ts ======
 
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
-
-const prisma = new PrismaClient();
 
 @Injectable()
 export class InvoiceService {
+  constructor(private prisma: PrismaService) {}
   async generateInvoiceForProject(
     projectId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<Invoice> {
-    const project = await prisma.project.findUnique({
+    const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
         time: {
@@ -1465,7 +1437,7 @@ export class InvoiceService {
             endTime: { lte: endDate },
           },
           include: {
-            rate: true, // Ensures that rate information is included in the query
+            rate: true,
           },
         },
       },
@@ -1479,7 +1451,7 @@ export class InvoiceService {
       {};
 
     project.time.forEach((entry) => {
-      const hours = entry.totalElapsedTime / 3600000; // Convert milliseconds to hours
+      const hours = entry.totalElapsedTime / 3600000;
       totalHours += hours;
       totalCost += hours * entry.rate.rate;
 
@@ -1489,7 +1461,7 @@ export class InvoiceService {
           rateName: entry.rate.name,
           hours: 0,
           cost: 0,
-          ratePerHour: entry.rate.rate, // Storing the rate per hour
+          ratePerHour: entry.rate.rate,
         };
       }
 
@@ -1499,8 +1471,8 @@ export class InvoiceService {
 
     const rates = Object.values(ratesMap).map((rate) => ({
       ...rate,
-      hours: Math.round(rate.hours * 100) / 100, // Round hours to 2 decimal places
-      cost: Math.round(rate.cost * 100) / 100, // Round cost to 2 decimal places
+      hours: Math.round(rate.hours * 100) / 100,
+      cost: Math.round(rate.cost * 100) / 100,
     }));
 
     return {
@@ -1583,8 +1555,10 @@ export class Label {
 import { Module } from '@nestjs/common';
 import { IssueService } from './issue.service';
 import { IssueResolver } from './issue.resolver';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
+  imports: [PrismaModule],
   providers: [IssueService, IssueResolver],
   exports: [IssueResolver],
 })
@@ -1611,17 +1585,16 @@ export class IssueResolver {
 // ====== FILE: src\issue\issue.service.ts ======
 
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Issue } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { Issue } from '@prisma/client';
 import { IssueWebhookData } from '../webhook/webhook.service';
-
-const prisma = new PrismaClient({
-  log: ['query', 'info', 'warn', 'error'],
-});
 
 @Injectable()
 export class IssueService {
+  constructor(private prisma: PrismaService) {}
+
   async all(): Promise<Issue[]> {
-    return prisma.issue.findMany({
+    return this.prisma.issue.findMany({
       include: {
         labels: true,
       },
@@ -1656,7 +1629,7 @@ export class IssueService {
         createData.teamKey = data.team.id;
       }
 
-      const createdIssue = await prisma.issue.create({
+      const createdIssue = await this.prisma.issue.create({
         data: createData,
       });
 
@@ -1670,7 +1643,7 @@ export class IssueService {
   async update(id: string, data: IssueWebhookData): Promise<Issue> {
     try {
       // First check if the issue exists
-      const existingIssue = await prisma.issue.findUnique({
+      const existingIssue = await this.prisma.issue.findUnique({
         where: { id },
         select: { id: true },
       });
@@ -1703,7 +1676,7 @@ export class IssueService {
 
       if (existingIssue) {
         // If issue exists, perform update
-        const updatedIssue = await prisma.issue.update({
+        const updatedIssue = await this.prisma.issue.update({
           where: { id },
           data: updateData,
         });
@@ -1724,7 +1697,7 @@ export class IssueService {
     webhookLabel: IssueWebhookData['labels'][number],
     issueId: string,
   ): Promise<void> {
-    await prisma.label.create({
+    await this.prisma.label.create({
       data: {
         id: webhookLabel.id,
         issueId,
@@ -1738,7 +1711,7 @@ export class IssueService {
     issueId: string,
     webhookLabels: IssueWebhookData['labels'],
   ): Promise<void> {
-    await prisma.$transaction(async (prisma) => {
+    await this.prisma.$transaction(async (prisma) => {
       // Get all labels connected to this issue
       const currentLabels = await prisma.label.findMany({
         where: { issueId },
@@ -1750,7 +1723,7 @@ export class IssueService {
         (id) => !webhookLabels.some((label) => label.id === id),
       );
 
-      await prisma.label.deleteMany({
+      await this.prisma.label.deleteMany({
         where: {
           issueId,
           id: { in: removedLabelIds },
@@ -1765,7 +1738,7 @@ export class IssueService {
 
         if (existingLabel) {
           // Update existing label
-          await prisma.label.update({
+          await this.prisma.label.update({
             where: { internalId: existingLabel.internalId },
             data: {
               color: webhookLabel.color,
@@ -1781,7 +1754,7 @@ export class IssueService {
   }
 
   async remove(id: string): Promise<void> {
-    await prisma.issue.delete({
+    await this.prisma.issue.delete({
       where: { id },
     });
   }
@@ -1791,7 +1764,7 @@ export class IssueService {
     issueId: string,
     data: IssueWebhookData,
   ): Promise<Issue> {
-    let issue = await prisma.issue.findUnique({
+    let issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
 
@@ -1849,6 +1822,53 @@ import { IssueUpdatesGateway } from './issue-updates.gateway';
 })
 export class IssueUpdatesModule {}
 
+// ====== FILE: src\prisma\prisma.module.ts ======
+
+import { Module } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],
+})
+export class PrismaModule {}
+
+// ====== FILE: src\prisma\prisma.service.ts ======
+
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+
+@Injectable()
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
+  private readonly logger = new Logger(PrismaService.name);
+
+  constructor() {
+    super({
+      log: ['query', 'info', 'warn', 'error'],
+    });
+  }
+
+  async onModuleInit() {
+    this.logger.log('Prisma Client initializing...');
+    await this.$connect();
+    this.logger.log('Prisma Client connected');
+  }
+
+  async onModuleDestroy() {
+    this.logger.log('Prisma Client disconnecting...');
+    await this.$disconnect();
+    this.logger.log('Prisma Client disconnected');
+  }
+}
+
 // ====== FILE: src\project\project.model.ts ======
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
@@ -1894,8 +1914,10 @@ export class Project implements ProjectClient {
 import { Module } from '@nestjs/common';
 import { ProjectService } from './project.service';
 import { ProjectResolver } from './project.resolver';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
+  imports: [PrismaModule],
   providers: [ProjectService, ProjectResolver],
   exports: [ProjectResolver],
 })
@@ -1920,14 +1942,15 @@ export class ProjectResolver {
 // ====== FILE: src\project\project.service.ts ======
 
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Project } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
+import { Project } from '@prisma/client';
 
 @Injectable()
 export class ProjectService {
+  constructor(private prisma: PrismaService) {}
+
   async all(): Promise<Project[]> {
-    return prisma.project.findMany();
+    return this.prisma.project.findMany();
   }
 
   async create(
@@ -1941,11 +1964,10 @@ export class ProjectService {
     startDate: string,
     targetDate: string,
   ): Promise<Project> {
-    return prisma.project.create({
+    return this.prisma.project.create({
       data: {
         id,
         name,
-        // teamId,
         team: {
           connect: { id: teamId },
         },
@@ -1961,7 +1983,7 @@ export class ProjectService {
 
   async remove(id: string): Promise<Project | null> {
     try {
-      return await prisma.project.delete({
+      return await this.prisma.project.delete({
         where: { id },
       });
     } catch (error) {
@@ -1982,7 +2004,7 @@ export class ProjectService {
     startDate: string,
     targetDate: string,
   ): Promise<Project> {
-    return prisma.project.upsert({
+    return this.prisma.project.upsert({
       where: {
         id,
       },
@@ -2060,8 +2082,10 @@ export class Rate implements RateClient {
 import { Module } from '@nestjs/common';
 import { RateService } from './rate.service';
 import { RateResolver } from './rate.resolver';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
+  imports: [PrismaModule],
   providers: [RateService, RateResolver],
 })
 export class RateModule {}
@@ -2105,14 +2129,15 @@ export class RateResolver {
 // ====== FILE: src\rate\rate.service.ts ======
 
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Rate } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
+import { Rate } from '@prisma/client';
 
 @Injectable()
 export class RateService {
+  constructor(private prisma: PrismaService) {}
+
   all(teamId: string): Promise<Rate[]> {
-    return prisma.rate.findMany({
+    return this.prisma.rate.findMany({
       where: {
         teamId: teamId,
       },
@@ -2120,7 +2145,7 @@ export class RateService {
   }
 
   create(name: string, rate: number, teamId: string): Promise<Rate> {
-    return prisma.rate.create({
+    return this.prisma.rate.create({
       data: {
         name,
         rate,
@@ -2131,12 +2156,12 @@ export class RateService {
 
   async remove(id: number): Promise<Rate> {
     console.log('Removing rate with ID:', id);
-    await prisma.time.updateMany({
+    await this.prisma.time.updateMany({
       where: { rateId: id },
       data: { rateId: { set: null } }, // Or assign to a default rate ID
     });
 
-    return prisma.rate
+    return this.prisma.rate
       .delete({
         where: {
           id,
@@ -2147,196 +2172,6 @@ export class RateService {
         throw err;
       });
   }
-}
-
-// ====== FILE: src\team\linear.service.ts ======
-
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { TeamService } from './team.service';
-import fetch from 'node-fetch';
-import { ModuleRef } from '@nestjs/core';
-import { TeamsDTO } from './team.dto';
-
-@Injectable()
-export class LinearService {
-  private linearApiKey: string;
-  private teamService: TeamService;
-
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly moduleRef: ModuleRef, // private readonly httpService: HttpService,
-  ) {
-    this.linearApiKey = this.configService.get<string>('LINEAR_KEY');
-    if (!this.linearApiKey) {
-      throw new NotFoundException(
-        'LINEAR_API_KEY not found in environment variables.',
-      );
-    }
-  }
-
-  onModuleInit() {
-    this.teamService = this.moduleRef.get(TeamService, { strict: false });
-  }
-
-  async synchronizeTeamsWithLinear() {
-    console.log('Fetching teams from Linear...');
-    const teamsFromLinear = await this.fetchTeams();
-
-    console.log('Transforming data for database insertion...');
-    const transformedTeams = teamsFromLinear.nodes.map((team) => ({
-      id: team.id,
-      name: team.name,
-    }));
-
-    //Retrieve all teams from the database
-    const allTeamsInDb = await this.teamService.getAllTeams();
-    const teamsToDelete = new Set(allTeamsInDb.map((team) => team.id));
-
-    console.log('Syncing data with the database...');
-    for (const teamData of transformedTeams) {
-      // const existingTeam = await this.teamService.getTeamById(teamData.id);
-      const existingTeam = allTeamsInDb.find(
-        (dbTeam) => dbTeam.id === teamData.id,
-      );
-
-      if (existingTeam) {
-        await this.teamService.syncTeam(teamData.id, teamData.name);
-      } else {
-        await this.teamService.create(teamData.id, teamData.name);
-      }
-      //Remove the team's ID from the list of IDs
-      teamsToDelete.delete(teamData.id);
-    }
-
-    //Delete teams that don't exist in Linear anymore
-    for (const teamId of teamsToDelete) {
-      await this.teamService.deleteTeam(teamId);
-    }
-
-    console.log('Manual synchronization completed.');
-  }
-
-  async fetchTeams(): Promise<TeamsDTO> {
-    const url = 'https://api.linear.app/graphql';
-    const query = `
-      query {
-        teams {
-          nodes {
-            id
-            name
-            createdAt
-            timezone
-            members {
-              nodes {
-                id
-                name
-              }
-            }
-          }
-        }
-      }
-    `;
-
-    const options = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `${this.linearApiKey}`,
-      },
-      body: JSON.stringify({ query }),
-    };
-
-    try {
-      const response = await fetch(url, options);
-
-      if (response.status !== 200) {
-        console.log('HTTP Status Code:', response.status);
-        return { nodes: [] };
-      }
-
-      const jsonResponse = await response.json();
-      const { data } = jsonResponse;
-
-      console.log(
-        'Members for each team:',
-        data.teams.nodes.map((node) => node.members),
-      );
-
-      console.log('Data returned from Linear API:', JSON.stringify(data));
-
-      if (data && data.teams && Array.isArray(data.teams.nodes)) {
-        console.log(`Fetched ${data.teams.nodes.length} teams from Linear.`);
-      } else {
-        console.error(
-          'Failed to fetch teams from Linear or unexpected data structure.',
-        );
-      }
-
-      if (data && data.teams && data.teams.nodes) {
-        return data.teams;
-      } else {
-        console.error('Failed to fetch teams');
-        console.log('Response Data:', data);
-        return { nodes: [] };
-      }
-    } catch (error) {
-      console.error('An error occurred:', error);
-      return { nodes: [] };
-    }
-  }
-}
-
-// ====== FILE: src\team\team.dto.ts ======
-
-import { Field, ObjectType } from '@nestjs/graphql';
-
-@ObjectType()
-export class MemberDTO {
-  @Field(() => String)
-  id: string;
-
-  @Field(() => String)
-  name: string;
-}
-
-@ObjectType()
-export class TeamDTO {
-  @Field(() => String)
-  id: string;
-
-  @Field(() => String)
-  name: string;
-
-  @Field(() => String)
-  createdAt: string;
-
-  @Field(() => String)
-  timezone: string;
-
-  @Field(() => [MemberDTO])
-  members: MemberDTO[];
-}
-
-@ObjectType()
-export class TeamsDTO {
-  @Field(() => [TeamDTO])
-  nodes: TeamDTO[];
-}
-
-@ObjectType()
-export class LinearDataDTO {
-  @Field(() => TeamsDTO)
-  teams: TeamsDTO;
-}
-
-@ObjectType()
-export class SimpleTeamDTO {
-  @Field(() => String)
-  id: string;
-
-  @Field(() => String)
-  name: string;
 }
 
 // ====== FILE: src\team\team.model.ts ======
@@ -2361,21 +2196,28 @@ export class Team implements TeamClient {
   rates: Rate[];
 }
 
+@ObjectType()
+export class SimpleTeamDTO {
+  @Field(() => String)
+  id: string;
+
+  @Field(() => String)
+  name: string;
+}
+
 // ====== FILE: src\team\team.module.ts ======
 
 import { Module } from '@nestjs/common';
 import { TeamResolver } from './team.resolver';
 import { TeamService } from './team.service';
 import { ConfigModule } from '@nestjs/config';
-import { LinearService } from './linear.service';
-import { TeamSynchronizationController } from './team.synchcronization.controller';
 import { HttpModule } from '@nestjs/axios';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [ConfigModule, HttpModule],
-  providers: [TeamResolver, TeamService, LinearService],
-  controllers: [TeamSynchronizationController],
-  exports: [TeamService, LinearService],
+  imports: [ConfigModule, HttpModule, PrismaModule],
+  providers: [TeamResolver, TeamService],
+  exports: [TeamService],
 })
 export class TeamModule {}
 
@@ -2384,21 +2226,11 @@ export class TeamModule {}
 import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { Team } from './team.model';
 import { TeamService } from './team.service';
-import { LinearService } from './linear.service';
-import { SimpleTeamDTO } from './team.dto';
+import { SimpleTeamDTO } from './team.model';
 
 @Resolver(() => Team)
 export class TeamResolver {
-  constructor(
-    private teamService: TeamService,
-    private linearService: LinearService,
-  ) {}
-
-  @Mutation(() => Boolean)
-  async syncTeams() {
-    await this.linearService.synchronizeTeamsWithLinear();
-    return true;
-  }
+  constructor(private teamService: TeamService) {}
 
   @Mutation(() => Team)
   async createTeam(
@@ -2421,105 +2253,53 @@ export class TeamResolver {
 
 // ====== FILE: src\team\team.service.ts ======
 
-import { Injectable } from '@nestjs/common';
-import { PrismaClient, Team } from '@prisma/client';
-import { SimpleTeamDTO } from './team.dto';
-
-const prisma = new PrismaClient({
-  log: ['query', 'info', 'warn', 'error'],
-});
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Team } from '@prisma/client';
+import { SimpleTeamDTO } from './team.model';
 
 @Injectable()
 export class TeamService {
-  async syncTeam(id: string, name: string): Promise<void> {
-    await prisma.team.upsert({
-      where: { id },
-      update: { name },
-      create: { id, name },
-    });
-  }
+  private readonly logger = new Logger(TeamService.name);
+
+  constructor(private prisma: PrismaService) {}
 
   async create(id: string, name: string): Promise<Team> {
-    return await prisma.team.create({
-      data: {
-        id,
-        name,
-        projects: { create: [] },
-        rates: { create: [] },
-      },
-    });
-  }
+    this.logger.debug(`Creating team with id: ${id}, name: ${name}`);
 
-  async getAllTeams(): Promise<{ id: string }[]> {
-    return await prisma.team.findMany({
-      select: {
-        id: true,
-        name: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      return tx.team.create({
+        data: {
+          id,
+          name,
+          projects: { create: [] },
+          rates: { create: [] },
+        },
+      });
     });
   }
 
   async getAllSimpleTeams(): Promise<SimpleTeamDTO[]> {
-    return await prisma.team.findMany({
-      select: {
-        id: true,
-        name: true,
-      },
-    });
-  }
+    this.logger.debug('Fetching all teams (simple format)');
 
-  async deleteTeam(teamId: string): Promise<void> {
-    await prisma.$transaction(async (prisma) => {
-      // First find all issues associated with this team
-      const issuesWithTeam = await prisma.issue.findMany({
-        where: {
-          teamKey: teamId,
+    return this.prisma.$transaction(async (tx) => {
+      return tx.team.findMany({
+        select: {
+          id: true,
+          name: true,
         },
-      });
-
-      // Update all issues to remove team references
-      if (issuesWithTeam.length > 0) {
-        await prisma.issue.updateMany({
-          where: {
-            teamKey: teamId,
-          },
-          data: {
-            teamKey: null,
-            teamName: null,
-          },
-        });
-      }
-
-      // Now delete the team
-      await prisma.team.delete({
-        where: { id: teamId },
       });
     });
   }
 
   async getTeamById(id: string): Promise<Team | null> {
-    return await prisma.team.findUnique({
-      where: { id },
+    this.logger.debug(`Fetching team with id: ${id}`);
+
+    return this.prisma.$transaction(async (tx) => {
+      return tx.team.findUnique({
+        where: { id },
+      });
     });
-  }
-}
-
-// ====== FILE: src\team\team.synchcronization.controller.ts ======
-
-// team.synchronization.controller.ts
-
-import { Controller, Get, HttpCode } from '@nestjs/common';
-import { LinearService } from './linear.service';
-
-@Controller('team-synchronize')
-export class TeamSynchronizationController {
-  constructor(private readonly linearService: LinearService) {}
-
-  @Get('/teams')
-  @HttpCode(200)
-  async synchronizeTeams() {
-    await this.linearService.synchronizeTeamsWithLinear();
-    return { message: 'Team synchronization process initiated' };
   }
 }
 
@@ -2621,8 +2401,10 @@ export class Time implements TimeClient {
 import { Module } from '@nestjs/common';
 import { TimeService } from './time.service';
 import { TimeResolver } from './time.resolver';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
+  imports: [PrismaModule],
   providers: [TimeService, TimeResolver],
 })
 export class TimeModule {}
@@ -2724,14 +2506,15 @@ export class TimeResolver {
 // ====== FILE: src\time\time.service.ts ======
 
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Time } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
+import { Time } from '@prisma/client';
 
 @Injectable()
 export class TimeService {
+  constructor(private prisma: PrismaService) {}
+
   all(projectId: string): Promise<Time[]> {
-    return prisma.time.findMany({
+    return this.prisma.time.findMany({
       where: {
         projectId,
       },
@@ -2744,7 +2527,7 @@ export class TimeService {
     projectId: string,
     rateId: number,
   ): Promise<boolean> {
-    const existingEntry = await prisma.time.findFirst({
+    const existingEntry = await this.prisma.time.findFirst({
       where: {
         startTime,
         userId,
@@ -2761,7 +2544,7 @@ export class TimeService {
     projectId: string,
     rateId: number,
   ): Promise<Time | null> {
-    return prisma.time.findFirst({
+    return this.prisma.time.findFirst({
       where: {
         startTime,
         userId,
@@ -2777,11 +2560,11 @@ export class TimeService {
     userId: number,
     rateId: number,
     endTime: Date,
-    totalElapsedTime: number, // This is passed directly and should not be calculated here.
+    totalElapsedTime: number,
   ): Promise<Time> {
     console.log('Backend Service - Creating with Start Time:', startTime);
     console.log('Backend Service - Creating with End Time:', endTime);
-    // Check for duplicates
+
     const duplicate = await this.isDuplicate(
       startTime,
       userId,
@@ -2793,7 +2576,7 @@ export class TimeService {
       throw new Error('Duplicate time entry not allowed');
     }
 
-    return prisma.time.create({
+    return this.prisma.time.create({
       data: {
         startTime,
         endTime, // endTime is now the actual time of submission
@@ -2810,7 +2593,7 @@ export class TimeService {
     endTime: Date,
     totalElapsedTime: number, // Directly use the provided totalElapsedTime
   ): Promise<Time> {
-    return prisma.time.update({
+    return this.prisma.time.update({
       where: { id },
       data: {
         endTime, // Set the endTime to the time of submission
@@ -2820,7 +2603,7 @@ export class TimeService {
   }
 
   remove(id: number): Promise<Time> {
-    return prisma.time.delete({
+    return this.prisma.time.delete({
       where: {
         id,
       },
@@ -2848,7 +2631,7 @@ export class TimeService {
     console.log('Executing database query to aggregate total time spent...');
 
     try {
-      const aggregatedTime = await prisma.time.aggregate({
+      const aggregatedTime = await this.prisma.time.aggregate({
         where: {
           userId,
           projectId,
@@ -2883,7 +2666,7 @@ export class TimeService {
     userId: number,
     projectId: string,
   ): Promise<number> {
-    const aggregatedTime = await prisma.time.aggregate({
+    const aggregatedTime = await this.prisma.time.aggregate({
       where: {
         userId,
         projectId,
@@ -2965,9 +2748,10 @@ import { Module, forwardRef } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserResolver } from './user.resolver';
 import { AuthModule } from '../auth/auth.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [forwardRef(() => AuthModule)],
+  imports: [forwardRef(() => AuthModule), PrismaModule],
   providers: [UserResolver, UserService],
   exports: [UserResolver, UserService],
 })
@@ -3056,14 +2840,14 @@ export class UserResolver {
 // ====== FILE: src\user\user.service.ts ======
 
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
 import { User as QlUser } from '../user/user.model';
 
 type TeamBasic = {
   id: string;
   name: string;
-  // other fields as needed
 };
 
 type UserTeam = {
@@ -3080,7 +2864,7 @@ type UserTeam = {
 
 @Injectable()
 export class UserService {
-  private prisma = new PrismaClient();
+  constructor(private prisma: PrismaService) {}
   async getUserTeams(): Promise<UserTeam[]> {
     const userTeams = await this.prisma.userTeam.findMany({
       include: {
@@ -3713,8 +3497,10 @@ import { WebhookIssueService } from './webhook.issue.service';
 import { IssueService } from '../issue/issue.service';
 import { TeamModule } from '../team/team.module';
 import { IssueUpdatesModule } from '../issue-updates/issue-updates.module';
+import { PrismaModule } from '../prisma/prisma.module';
+import { DatabaseSyncModule } from '../dbSynch/dbSynch.module';
 @Module({
-  imports: [TeamModule, IssueUpdatesModule],
+  imports: [TeamModule, IssueUpdatesModule, PrismaModule, DatabaseSyncModule],
   providers: [
     ProjectService,
     WebhookService,
@@ -3794,11 +3580,11 @@ export class WebhookProjectService {
 
 // ====== FILE: src\webhook\webhook.service.ts ======
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { WebhookProjectService } from './webhook.project.service';
 import { WebhookIssueService } from './webhook.issue.service';
 import { TeamService } from '../team/team.service';
-import { LinearService } from '../team/linear.service';
+import { DatabaseSyncService } from '../dbSynch/dbSynch.service';
 
 export type ProjectWebhookData = {
   id: string;
@@ -3852,11 +3638,13 @@ export type LinearWebhookBody = {
 
 @Injectable()
 export class WebhookService {
+  private readonly logger = new Logger(WebhookService.name);
+
   constructor(
     private webhookProjectService: WebhookProjectService,
     private webhookIssueService: WebhookIssueService,
     private teamService: TeamService,
-    private linearService: LinearService,
+    private databaseSyncService: DatabaseSyncService,
   ) {}
 
   async handle(json: LinearWebhookBody) {
@@ -3867,13 +3655,14 @@ export class WebhookService {
       const team = await this.teamService.getTeamById(teamId);
       if (!team) {
         // Synchronize teams using the LinearService
-        console.log('Team not found. Synchronizing teams from Linear.');
-        await this.linearService.synchronizeTeamsWithLinear();
+        this.logger.log('Team not found. Synchronizing from Linear.');
+
+        await this.databaseSyncService.synchronizeTeamsOnly();
 
         // Re-check if the team is now present after synchronization
         const synchronizedTeam = await this.teamService.getTeamById(teamId);
         if (!synchronizedTeam) {
-          console.error(
+          this.logger.error(
             'Team still not found after synchronization. Cannot process project.',
           );
           return;
