@@ -1,21 +1,11 @@
 import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { Team } from './team.model';
 import { TeamService } from './team.service';
-import { LinearService } from './linear.service';
-import { SimpleTeamDTO } from './team.dto';
+import { SimpleTeamDTO } from './team.model';
 
 @Resolver(() => Team)
 export class TeamResolver {
-  constructor(
-    private teamService: TeamService,
-    private linearService: LinearService,
-  ) {}
-
-  @Mutation(() => Boolean)
-  async syncTeams() {
-    await this.linearService.synchronizeTeamsWithLinear();
-    return true;
-  }
+  constructor(private teamService: TeamService) {}
 
   @Mutation(() => Team)
   async createTeam(

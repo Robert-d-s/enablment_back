@@ -17,3 +17,12 @@ export class Team implements TeamClient {
   @Field(() => [Rate])
   rates: Rate[];
 }
+
+@ObjectType()
+export class SimpleTeamDTO {
+  @Field(() => String)
+  id: string;
+
+  @Field(() => String)
+  name: string;
+}

@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { WebhookProjectService } from './webhook.project.service';
 import { WebhookIssueService } from './webhook.issue.service';
 import { TeamService } from '../team/team.service';
-import { LinearService } from '../team/linear.service';
+import { DatabaseSyncService } from '../dbSynch/dbSynch.service';
 
 export type ProjectWebhookData = {
   id: string;
@@ -56,11 +56,13 @@ export type LinearWebhookBody = {
 
 @Injectable()
 export class WebhookService {
+  private readonly logger = new Logger(WebhookService.name);
+
   constructor(
     private webhookProjectService: WebhookProjectService,
     private webhookIssueService: WebhookIssueService,
     private teamService: TeamService,
-    private linearService: LinearService,
+    private databaseSyncService: DatabaseSyncService,
   ) {}
 
   async handle(json: LinearWebhookBody) {
@@ -71,13 +73,14 @@ export class WebhookService {
       const team = await this.teamService.getTeamById(teamId);
       if (!team) {
         // Synchronize teams using the LinearService
-        console.log('Team not found. Synchronizing teams from Linear.');
-        await this.linearService.synchronizeTeamsWithLinear();
+        this.logger.log('Team not found. Synchronizing from Linear.');
+
+        await this.databaseSyncService.synchronizeTeamsOnly();
 
         // Re-check if the team is now present after synchronization
         const synchronizedTeam = await this.teamService.getTeamById(teamId);
         if (!synchronizedTeam) {
-          console.error(
+          this.logger.error(
             'Team still not found after synchronization. Cannot process project.',
           );
           return;

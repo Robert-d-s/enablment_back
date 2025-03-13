@@ -8,8 +8,9 @@ import { IssueService } from '../issue/issue.service';
 import { TeamModule } from '../team/team.module';
 import { IssueUpdatesModule } from '../issue-updates/issue-updates.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { DatabaseSyncModule } from '../dbSynch/dbSynch.module';
 @Module({
-  imports: [TeamModule, IssueUpdatesModule, PrismaModule],
+  imports: [TeamModule, IssueUpdatesModule, PrismaModule, DatabaseSyncModule],
   providers: [
     ProjectService,
     WebhookService,

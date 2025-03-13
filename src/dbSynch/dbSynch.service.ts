@@ -116,7 +116,7 @@ export class DatabaseSyncService {
   /**
    * Synchronize teams from Linear
    */
-  private async synchronizeTeams(tx: any): Promise<void> {
+  public async synchronizeTeams(tx: any): Promise<void> {
     this.logger.log('Fetching teams from Linear');
 
     const query = `
@@ -167,7 +167,23 @@ export class DatabaseSyncService {
       throw error;
     }
   }
+  public async synchronizeTeamsOnly(): Promise<void> {
+    this.logger.log('Starting teams-only synchronization');
 
+    try {
+      await prisma.$transaction(async (tx) => {
+        await this.synchronizeTeams(tx);
+      });
+
+      this.logger.log('Teams synchronization completed successfully');
+    } catch (error) {
+      this.logger.error(
+        `Teams synchronization failed: ${error.message}`,
+        error.stack,
+      );
+      throw new Error(`Teams synchronization failed: ${error.message}`);
+    }
+  }
   /**
    * Synchronize projects from Linear
    */

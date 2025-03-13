@@ -29,6 +29,11 @@ type Team {
   rates: [Rate!]!
 }
 
+type SimpleTeamDTO {
+  id: String!
+  name: String!
+}
+
 type User {
   id: Int!
   email: String!
@@ -41,28 +46,6 @@ enum UserRole {
   ENABLER
   COLLABORATOR
   PENDING
-}
-
-type MemberDTO {
-  id: String!
-  name: String!
-}
-
-type TeamDTO {
-  id: String!
-  name: String!
-  createdAt: String!
-  timezone: String!
-  members: [MemberDTO!]!
-}
-
-type TeamsDTO {
-  nodes: [TeamDTO!]!
-}
-
-type SimpleTeamDTO {
-  id: String!
-  name: String!
 }
 
 type Issue {
@@ -136,7 +119,6 @@ type Mutation {
   updateUserRole(userId: Int!, newRole: UserRole!): User!
   addUserToTeam(userId: Int!, teamId: String!): User!
   removeUserFromTeam(userId: Int!, teamId: String!): User!
-  syncTeams: Boolean!
   createTeam(id: String!, name: String!): Team!
   createRate(rateInputCreate: RateInputCreate!): Rate!
   deleteRate(rateId: Int!): Rate!
