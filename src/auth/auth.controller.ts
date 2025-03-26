@@ -6,9 +6,9 @@ import {
   HttpStatus,
   Request,
   Get,
-  SetMetadata,
   ClassSerializerInterceptor,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignInDto } from './dto/sign-in.dto';
@@ -16,6 +16,7 @@ import { SignUpDto } from './dto/sign-up.dto';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { Request as ExpressRequest } from 'express';
 import { UserRole } from '../user/user-role.enum';
+import { AuthGuard } from './auth.guard';
 
 // Interface to define our authenticated request type
 interface RequestWithUser extends ExpressRequest {
@@ -26,8 +27,6 @@ interface RequestWithUser extends ExpressRequest {
   };
 }
 
-export const Public = () => SetMetadata('isPublic', true);
-
 @Controller('auth')
 @UseInterceptors(ClassSerializerInterceptor)
 export class AuthController {
@@ -35,18 +34,17 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  @Public()
   signIn(@Body() signInDto: SignInDto) {
     return this.authService.signIn(signInDto.email, signInDto.password);
   }
 
   @Post('signup')
-  @Public()
   signUp(@Body() signUpDto: SignUpDto) {
     return this.authService.signUp(signUpDto.email, signUpDto.password);
   }
 
   @Get('profile')
+  @UseGuards(AuthGuard)
   getProfile(@Request() req: RequestWithUser) {
     return new UserProfileDto(req.user);
   }

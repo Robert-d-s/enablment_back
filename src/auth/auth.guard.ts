@@ -25,15 +25,23 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check if the route is public
+    const handler = context.getHandler();
+    const controllerClass = context.getClass();
+    console.log(
+      `AuthGuard activated for: ${controllerClass?.name}.${handler?.name}`,
+    );
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
+      handler,
+      controllerClass,
     ]);
+    console.log(
+      `IS_PUBLIC (${controllerClass?.name}.${handler?.name}): ${isPublic}`,
+    );
     if (isPublic) {
+      console.log(`Route is public, skipping auth.`);
       return true;
     }
-
+    console.log(`Route is NOT public, proceeding with auth.`);
     const ctx = context.switchToHttp();
     const graphqlCtx = GqlExecutionContext.create(context);
     const request = ctx.getRequest<Request>() || graphqlCtx.getContext().req;

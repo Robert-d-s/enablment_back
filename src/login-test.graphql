@@ -1,0 +1,28 @@
+# Login using direct arguments
+mutation Login {
+  login(email: "user@example.com", password: "password123") {
+    access_token
+    user {
+      email
+    }
+  }
+}
+
+# Login using input object
+mutation LoginWithInput {
+  login(input: { email: "user@example.com", password: "password123" }) {
+    access_token
+    user {
+      email
+    }
+  }
+}
+
+# Test query for me endpoint (requires auth token)
+query Me {
+  me {
+    id
+    email
+    role
+  }
+}

@@ -20,9 +20,9 @@ module.exports = {
   ignorePatterns: ['.eslintrc.js'],
   rules: {
     '@typescript-eslint/interface-name-prefix': 'off',
-    '@typescript-eslint/explicit-function-return-type': 'off',
-    '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/explicit-function-return-type': 'on',
+    '@typescript-eslint/explicit-module-boundary-types': 'on',
+    '@typescript-eslint/no-explicit-any': 'on',
   },
 };
 
@@ -87,6 +87,7 @@ module.exports = {
     "@nestjs/cli": "^9.0.0",
     "@nestjs/schematics": "^9.0.0",
     "@nestjs/testing": "^9.0.0",
+    "@types/bcrypt": "^5.0.2",
     "@types/express": "^4.17.13",
     "@types/jest": "29.2.4",
     "@types/node": "18.11.18",
@@ -150,9 +151,9 @@ module.exports = {
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": false,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false
   }
@@ -317,6 +318,7 @@ import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
 import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { Request } from 'express';
 
 @Module({
   imports: [
@@ -328,7 +330,7 @@ import { PrismaModule } from './prisma/prisma.module';
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
-      context: ({ req }) => ({ req }),
+      context: ({ req }: { req: Request }) => ({ req }),
     }),
     WebhookModule,
     TeamModule,
@@ -465,32 +467,47 @@ import {
   HttpStatus,
   Request,
   Get,
-  SetMetadata,
+  ClassSerializerInterceptor,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { SignInDto } from './dto/sign-in.dto';
+import { SignUpDto } from './dto/sign-up.dto';
+import { UserProfileDto } from './dto/user-profile.dto';
+import { Request as ExpressRequest } from 'express';
+import { UserRole } from '../user/user-role.enum';
+import { Public } from './public.decorator';
 
-export const Public = () => SetMetadata('isPublic', true);
+// Interface to define our authenticated request type
+interface RequestWithUser extends ExpressRequest {
+  user: {
+    id: number;
+    email: string;
+    role: UserRole;
+  };
+}
 
 @Controller('auth')
+@UseInterceptors(ClassSerializerInterceptor)
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
   @Public()
-  signIn(@Body() signInDto: Record<string, any>) {
+  signIn(@Body() signInDto: SignInDto) {
     return this.authService.signIn(signInDto.email, signInDto.password);
   }
 
   @Post('signup')
   @Public()
-  signUp(@Body() signUpDto: Record<string, string>) {
+  signUp(@Body() signUpDto: SignUpDto) {
     return this.authService.signUp(signUpDto.email, signUpDto.password);
   }
 
   @Get('profile')
-  getProfile(@Request() req) {
-    return req.user;
+  getProfile(@Request() req: RequestWithUser) {
+    return new UserProfileDto(req.user);
   }
 }
 
@@ -504,10 +521,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { jwtConstants } from './constants';
 import { Request } from 'express';
 import { IS_PUBLIC_KEY } from './auth.module';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 
 import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
@@ -519,6 +536,7 @@ export class AuthGuard implements CanActivate {
     private jwtService: JwtService,
     private reflector: Reflector,
     private userService: UserService,
+    private configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -547,10 +565,15 @@ export class AuthGuard implements CanActivate {
     try {
       // Verify the token
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: jwtConstants.secret,
+        secret: this.configService.get<string>('JWT_SECRET'),
       });
       console.log('auth payload contains', payload);
-      request['user'] = payload;
+
+      interface JwtPayload {
+        email: string;
+        sub: string;
+      }
+      (request as Request & { user: JwtPayload }).user = payload as JwtPayload;
 
       // Check for roles
       return await this.checkUserRoles(context, payload.email);
@@ -620,7 +643,9 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth.guard';
 
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AuthResolver } from './auth.resolver';
 
+// Key for metadata to mark routes as public
 export const IS_PUBLIC_KEY = 'isPublic';
 
 @Module({
@@ -638,6 +663,7 @@ export const IS_PUBLIC_KEY = 'isPublic';
   ],
   providers: [
     AuthService,
+    AuthResolver,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
@@ -648,12 +674,86 @@ export const IS_PUBLIC_KEY = 'isPublic';
 })
 export class AuthModule {}
 
+// ====== FILE: src\auth\auth.resolver.ts ======
+
+import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { AuthService } from './auth.service';
+import { UserProfileDto } from './dto/user-profile.dto';
+import { SignInInput } from './dto/sign-in.input';
+import { SignUpInput } from './dto/sign-up.input';
+import { AuthResponse } from './dto/auth-response';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from './auth.guard';
+import { CurrentUser } from './current-user.decorator';
+import { Public } from './public.decorator';
+
+@Resolver()
+export class AuthResolver {
+  constructor(private authService: AuthService) {}
+
+  @Public()
+  @Mutation(() => AuthResponse)
+  async login(
+    @Args('input', { nullable: true }) signInInput?: SignInInput,
+    @Args('email', { nullable: true }) email?: string,
+    @Args('password', { nullable: true }) password?: string,
+  ): Promise<AuthResponse> {
+    const emailToUse = signInInput?.email || email;
+    const passwordToUse = signInInput?.password || password;
+
+    if (!emailToUse || !passwordToUse) {
+      throw new Error('Email and password are required');
+    }
+
+    const result = await this.authService.signIn(emailToUse, passwordToUse);
+
+    return {
+      ...result,
+      user: new UserProfileDto({
+        email: emailToUse,
+      }),
+    };
+  }
+
+  @Public()
+  @Mutation(() => AuthResponse)
+  async signup(
+    @Args('input', { nullable: true }) signUpInput?: SignUpInput,
+    @Args('email', { nullable: true }) email?: string,
+    @Args('password', { nullable: true }) password?: string,
+  ): Promise<AuthResponse> {
+    const emailToUse = signUpInput?.email || email;
+    const passwordToUse = signUpInput?.password || password;
+
+    if (!emailToUse || !passwordToUse) {
+      throw new Error('Email and password are required');
+    }
+
+    await this.authService.signUp(emailToUse, passwordToUse);
+    const result = await this.authService.signIn(emailToUse, passwordToUse);
+
+    return {
+      ...result,
+      user: new UserProfileDto({
+        email: emailToUse,
+      }),
+    };
+  }
+
+  @Query(() => UserProfileDto)
+  @UseGuards(AuthGuard)
+  async me(@CurrentUser() user: any): Promise<UserProfileDto> {
+    return new UserProfileDto(user);
+  }
+}
+
 // ====== FILE: src\auth\auth.service.ts ======
 
 import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
@@ -670,46 +770,82 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async signIn(username, pass) {
-    const user = await this.userService.findOne(username);
+  async signIn(username: string, pass: string) {
+    try {
+      const user = await this.userService.findOne(username);
 
-    // Check if the user exists
-    if (!user) {
-      throw new UnauthorizedException({ error: 'Invalid email or password.' });
+      // Check if the user exists
+      if (!user) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      // Check if the password is correct
+      const isMatch = await bcrypt.compare(pass, user.password);
+      if (!isMatch) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      const payload = { email: user.email, id: user.id };
+      return {
+        access_token: await this.jwtService.signAsync(payload),
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'An error occurred during sign in',
+      );
     }
-
-    // Check if the password is correct
-    if (!bcrypt.compareSync(pass, user.password)) {
-      throw new UnauthorizedException({ error: 'Invalid email or password.' });
-    }
-
-    const payload = { email: user.email, id: user.id };
-    return {
-      access_token: await this.jwtService.signAsync(payload),
-    };
   }
 
   async signUp(email: string, password: string): Promise<User> {
-    const userCount = await this.userService.count();
-    const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
+    try {
+      const userCount = await this.userService.count();
+      const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
 
-    if (userCount > 0) {
-      const existingUser = await this.userService.findOne(email);
-      if (existingUser) {
-        throw new ConflictException('Email already exists.');
+      if (userCount > 0) {
+        const existingUser = await this.userService.findOne(email);
+        if (existingUser) {
+          throw new ConflictException('Email already exists');
+        }
       }
-    }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    return this.userService.create(email, hashedPassword, role);
+      const hashedPassword = await bcrypt.hash(password, 10);
+      return this.userService.create(email, hashedPassword, role);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'An error occurred during sign up',
+      );
+    }
   }
 }
 
-// ====== FILE: src\auth\constants.ts ======
+// ====== FILE: src\auth\current-user.decorator.ts ======
 
-export const jwtConstants = {
-  secret: process.env.JWT_SECRET,
-};
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { GqlExecutionContext } from '@nestjs/graphql';
+
+export const CurrentUser = createParamDecorator(
+  (data: unknown, context: ExecutionContext) => {
+    const ctx = GqlExecutionContext.create(context);
+    return ctx.getContext().req.user;
+  },
+);
+
+// ====== FILE: src\auth\public.decorator.ts ======
+
+import { SetMetadata } from '@nestjs/common';
+import { IS_PUBLIC_KEY } from './auth.module';
+
+/**
+ * Decorator that marks a route or resolver method as public
+ * Public routes/methods don't require authentication
+ */
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 // ====== FILE: src\auth\roles.decorator.ts ======
 
@@ -722,6 +858,7 @@ export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);
 
 import { Controller, Get, HttpCode, Logger } from '@nestjs/common';
 import { DatabaseSyncService } from './dbSynch.service';
+import { Public } from '../auth/public.decorator';
 
 @Controller('database-sync')
 export class DatabaseSyncController {
@@ -731,6 +868,7 @@ export class DatabaseSyncController {
 
   @Get('/full')
   @HttpCode(200)
+  @Public()
   async synchronizeDatabase() {
     this.logger.log('Full database synchronization requested');
     try {
@@ -753,31 +891,77 @@ export class DatabaseSyncController {
 
 // ====== FILE: src\dbSynch\dbSynch.module.ts ======
 
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseSyncService } from './dbSynch.service';
 import { DatabaseSyncController } from './dbSynch.controller';
 import { HttpModule } from '@nestjs/axios';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PrismaModule } from '../prisma/prisma.module';
+import { DatabaseSyncResolver } from './dbSynch.resolver';
+import { JwtModule } from '@nestjs/jwt';
+import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [HttpModule, ConfigModule],
-  providers: [DatabaseSyncService],
+  imports: [
+    HttpModule,
+    ConfigModule,
+    PrismaModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '43200s' },
+      }),
+    }),
+    forwardRef(() => UserModule),
+  ],
+  providers: [DatabaseSyncService, DatabaseSyncResolver],
   controllers: [DatabaseSyncController],
   exports: [DatabaseSyncService],
 })
 export class DatabaseSyncModule {}
 
+// ====== FILE: src\dbSynch\dbSynch.resolver.ts ======
+
+import { Mutation, Resolver } from '@nestjs/graphql';
+import { DatabaseSyncService } from './dbSynch.service';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
+import { SyncResponse } from './dto/sync-response';
+import { Public } from '../auth/public.decorator';
+
+@Resolver()
+export class DatabaseSyncResolver {
+  constructor(private readonly databaseSyncService: DatabaseSyncService) {}
+
+  @Mutation(() => SyncResponse)
+  @Public()
+  async synchronizeDatabase(): Promise<SyncResponse> {
+    try {
+      await this.databaseSyncService.synchronizeDatabase();
+      return {
+        status: 'success',
+        message: 'Database synchronization completed successfully',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: `Synchronization failed: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+}
+
 // ====== FILE: src\dbSynch\dbSynch.service.ts ======
 
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-
-const prisma = new PrismaClient({
-  log: ['error'],
-});
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DatabaseSyncService {
@@ -787,8 +971,9 @@ export class DatabaseSyncService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {
-    this.linearApiKey = this.configService.get<string>('LINEAR_KEY');
+    this.linearApiKey = this.configService.get<string>('LINEAR_KEY') || '';
 
     if (!this.linearApiKey) {
       this.logger.error('LINEAR_KEY not found in environment');
@@ -800,7 +985,7 @@ export class DatabaseSyncService {
 
     try {
       // Use a transaction to ensure atomicity
-      await prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async (tx) => {
         // 1. Synchronize teams from Linear
         await this.synchronizeTeams(tx);
 
@@ -856,7 +1041,9 @@ export class DatabaseSyncService {
 
       // Check for GraphQL errors
       if (response.data.errors) {
-        const errorMsg = response.data.errors.map((e) => e.message).join(', ');
+        const errorMsg = response.data.errors
+          .map((e: { message: string }) => e.message)
+          .join(', ');
         this.logger.error(`GraphQL errors: ${errorMsg}`);
         throw new Error(`GraphQL errors: ${errorMsg}`);
       }
@@ -913,7 +1100,9 @@ export class DatabaseSyncService {
         select: { id: true, name: true },
       });
 
-      const teamsToDelete = new Set(allTeamsInDb.map((team) => team.id));
+      const teamsToDelete = new Set(
+        allTeamsInDb.map((team: { id: string }) => team.id),
+      );
 
       // Update or create teams
       for (const teamData of teams) {
@@ -942,7 +1131,7 @@ export class DatabaseSyncService {
     this.logger.log('Starting teams-only synchronization');
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async (tx) => {
         await this.synchronizeTeams(tx);
       });
 
@@ -1041,7 +1230,9 @@ export class DatabaseSyncService {
             where: { teamId: team.id }, // Filter by team ID
             select: { id: true },
           });
-          const existingProjectIds = new Set(existingProjects.map((p) => p.id));
+          const existingProjectIds = new Set(
+            existingProjects.map((p: { id: string }) => p.id),
+          );
 
           for (const project of projects) {
             const projectData = {
@@ -1250,8 +1441,12 @@ export class DatabaseSyncService {
 
     const data = await this.fetchFromLinear(query);
 
-    const linearTeamIds = new Set(data.teams.nodes.map((t) => t.id));
-    const linearProjectIds = new Set(data.projects.nodes.map((p) => p.id));
+    const linearTeamIds = new Set(
+      data.teams.nodes.map((t: { id: string }) => t.id),
+    );
+    const linearProjectIds = new Set(
+      data.projects.nodes.map((p: { id: string }) => p.id),
+    );
 
     // 1. Clean up orphaned projects (projects not in Linear)
     const orphanedProjects = await tx.project.findMany({
@@ -1294,7 +1489,9 @@ export class DatabaseSyncService {
 
     // 3. Clean up orphaned rates (rates with invalid team references)
     const validTeamIds = new Set(
-      (await tx.team.findMany({ select: { id: true } })).map((t) => t.id),
+      (await tx.team.findMany({ select: { id: true } })).map(
+        (t: { id: string }) => t.id,
+      ),
     );
 
     const orphanedRates = await tx.rate.findMany({
@@ -1421,72 +1618,91 @@ export class InvoiceResolver {
 
 // ====== FILE: src\invoice\invoice.service.ts ======
 
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
 
 @Injectable()
 export class InvoiceService {
   constructor(private prisma: PrismaService) {}
+
   async generateInvoiceForProject(
     projectId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<Invoice> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        time: {
-          where: {
-            startTime: { gte: startDate },
-            endTime: { lte: endDate },
-          },
-          include: {
-            rate: true,
+    try {
+      const project = await this.prisma.project.findUnique({
+        where: { id: projectId },
+        include: {
+          time: {
+            where: {
+              startTime: { gte: startDate },
+              endTime: { lte: endDate },
+            },
+            include: {
+              rate: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!project) throw new Error('Project not found');
-
-    let totalHours = 0;
-    let totalCost = 0;
-    const ratesMap: { [key: number]: RateDetail & { ratePerHour: number } } =
-      {};
-
-    project.time.forEach((entry) => {
-      const hours = entry.totalElapsedTime / 3600000;
-      totalHours += hours;
-      totalCost += hours * entry.rate.rate;
-
-      if (!ratesMap[entry.rateId]) {
-        ratesMap[entry.rateId] = {
-          rateId: entry.rateId,
-          rateName: entry.rate.name,
-          hours: 0,
-          cost: 0,
-          ratePerHour: entry.rate.rate,
-        };
+      if (!project) {
+        throw new NotFoundException(`Project with ID ${projectId} not found`);
       }
 
-      ratesMap[entry.rateId].hours += hours;
-      ratesMap[entry.rateId].cost += hours * entry.rate.rate;
-    });
+      let totalHours = 0;
+      let totalCost = 0;
+      const ratesMap: { [key: number]: RateDetail & { ratePerHour: number } } =
+        {};
 
-    const rates = Object.values(ratesMap).map((rate) => ({
-      ...rate,
-      hours: Math.round(rate.hours * 100) / 100,
-      cost: Math.round(rate.cost * 100) / 100,
-    }));
+      project.time.forEach((entry) => {
+        if (!entry.rate) return;
 
-    return {
-      projectId: project.id,
-      projectName: project.name,
-      totalHours: Math.round(totalHours * 100) / 100,
-      totalCost: Math.round(totalCost * 100) / 100,
-      rates,
-    };
+        const hours = entry.totalElapsedTime / 3600000;
+        totalHours += hours;
+        totalCost += hours * entry.rate.rate;
+
+        const rateId = entry.rateId as number;
+        if (!ratesMap[rateId]) {
+          ratesMap[rateId] = {
+            rateId,
+            rateName: entry.rate.name,
+            hours: 0,
+            cost: 0,
+            ratePerHour: entry.rate.rate,
+          };
+        }
+
+        ratesMap[rateId].hours += hours;
+        ratesMap[rateId].cost += hours * entry.rate.rate;
+      });
+
+      const rates = Object.values(ratesMap).map((rate) => ({
+        ...rate,
+        hours: Math.round(rate.hours * 100) / 100,
+        cost: Math.round(rate.cost * 100) / 100,
+      }));
+
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        totalHours: Math.round(totalHours * 100) / 100,
+        totalCost: Math.round(totalCost * 100) / 100,
+        rates,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to generate invoice for project',
+      );
+    }
   }
 }
 
@@ -1589,7 +1805,12 @@ export class IssueResolver {
 
 // ====== FILE: src\issue\issue.service.ts ======
 
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Issue } from '@prisma/client';
 import { IssueWebhookData } from '../webhook/webhook.service';
@@ -1607,13 +1828,15 @@ export class IssueService {
   }
 
   async create(data: IssueWebhookData): Promise<Issue> {
-    // Make sure we have a valid projectId
-    if (!data.projectId) {
-      console.warn(`Cannot create issue ${data.id}: Missing projectId`);
-      throw new Error('ProjectId is required to create an issue');
-    }
-
     try {
+      // Make sure we have a valid projectId
+      if (!data.projectId) {
+        console.warn(`Cannot create issue ${data.id}: Missing projectId`);
+        throw new BadRequestException(
+          'ProjectId is required to create an issue',
+        );
+      }
+
       const createData: any = {
         id: data.id,
         createdAt: data.createdAt,
@@ -1641,7 +1864,12 @@ export class IssueService {
       return createdIssue;
     } catch (error) {
       console.error('Error creating issue:', error);
-      throw error;
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Failed to create issue: ${error.message}`,
+      );
     }
   }
 
@@ -1694,14 +1922,24 @@ export class IssueService {
       }
     } catch (error) {
       console.error(`Error updating issue ${id}:`, error);
-      throw error;
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Failed to update issue ${id}: ${error.message}`,
+      );
     }
   }
 
   async createLabelForIssue(
-    webhookLabel: IssueWebhookData['labels'][number],
+    // webhookLabel: IssueWebhookData['labels'][number],
+    webhookLabel: NonNullable<IssueWebhookData['labels']>[number],
     issueId: string,
   ): Promise<void> {
+    if (!webhookLabel) return;
     await this.prisma.label.create({
       data: {
         id: webhookLabel.id,
@@ -1712,6 +1950,7 @@ export class IssueService {
       },
     });
   }
+
   async updateLabelsForIssue(
     issueId: string,
     webhookLabels: IssueWebhookData['labels'],
@@ -1725,7 +1964,7 @@ export class IssueService {
       // Process removed labels
       const currentLabelIds = currentLabels.map((label) => label.id);
       const removedLabelIds = currentLabelIds.filter(
-        (id) => !webhookLabels.some((label) => label.id === id),
+        (id) => !webhookLabels?.some((label) => label.id === id),
       );
 
       await this.prisma.label.deleteMany({
@@ -1736,23 +1975,25 @@ export class IssueService {
       });
 
       // Process existing and new labels
-      for (const webhookLabel of webhookLabels) {
-        const existingLabel = currentLabels.find(
-          (label) => label.id === webhookLabel.id,
-        );
+      if (webhookLabels) {
+        for (const webhookLabel of webhookLabels) {
+          const existingLabel = currentLabels.find(
+            (label) => label.id === webhookLabel.id,
+          );
 
-        if (existingLabel) {
-          // Update existing label
-          await this.prisma.label.update({
-            where: { internalId: existingLabel.internalId },
-            data: {
-              color: webhookLabel.color,
-              name: webhookLabel.name,
-            },
-          });
-        } else {
-          // Create new label
-          await this.createLabelForIssue(webhookLabel, issueId);
+          if (existingLabel) {
+            // Update existing label
+            await this.prisma.label.update({
+              where: { internalId: existingLabel.internalId },
+              data: {
+                color: webhookLabel.color,
+                name: webhookLabel.name,
+              },
+            });
+          } else {
+            // Create new label
+            await this.createLabelForIssue(webhookLabel, issueId);
+          }
         }
       }
     });
@@ -1884,8 +2125,8 @@ export class Project implements ProjectClient {
   @Field(() => String)
   id: string;
 
-  @Field(() => Int)
-  estimatedTime: number;
+  @Field(() => Int, { nullable: true })
+  estimatedTime: number | null;
 
   @Field(() => String)
   name: string;
@@ -1899,17 +2140,17 @@ export class Project implements ProjectClient {
   @Field(() => String)
   updatedAt: string;
 
-  @Field(() => String)
-  description: string;
+  @Field(() => String, { nullable: true })
+  description: string | null;
 
   @Field(() => String)
   state: string;
 
-  @Field(() => String)
-  startDate: string;
+  @Field(() => String, { nullable: true })
+  startDate: string | null;
 
-  @Field(() => String)
-  targetDate: string;
+  @Field(() => String, { nullable: true })
+  targetDate: string | null;
 
   // ---------------------------------
 }
@@ -2161,21 +2402,24 @@ export class RateService {
 
   async remove(id: number): Promise<Rate> {
     console.log('Removing rate with ID:', id);
-    await this.prisma.time.updateMany({
-      where: { rateId: id },
-      data: { rateId: { set: null } },
-    });
 
-    return this.prisma.rate
-      .delete({
-        where: {
-          id,
-        },
-      })
-      .catch((err) => {
+    return this.prisma.$transaction(async (tx) => {
+      // First, update all time entries to remove references to this rate
+      await tx.time.updateMany({
+        where: { rateId: id },
+        data: { rateId: { set: null } },
+      });
+
+      // Then delete the rate
+      try {
+        return await tx.rate.delete({
+          where: { id },
+        });
+      } catch (err) {
         console.error('Error in removing rate:', err);
         throw err;
-      });
+      }
+    });
   }
 }
 
@@ -2394,11 +2638,14 @@ export class Time implements TimeClient {
   @Field(() => String)
   projectId: string;
 
-  @Field(() => Int)
-  rateId: number;
-
   @Field(() => Int, { nullable: true })
-  totalElapsedTime: number | null;
+  rateId: number | null;
+
+  // @Field(() => Int, { nullable: true })
+  // totalElapsedTime: number | null;
+
+  @Field(() => Int)
+  totalElapsedTime: number;
 }
 
 // ====== FILE: src\time\time.module.ts ======
@@ -2465,7 +2712,7 @@ export class TimeResolver {
         projectId,
         userId,
         rateId,
-        new Date(endTime),
+        endTime ? new Date(endTime) : new Date(),
         totalElapsedTime,
       );
     }
@@ -2510,7 +2757,12 @@ export class TimeResolver {
 
 // ====== FILE: src\time\time.service.ts ======
 
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Time } from '@prisma/client';
 
@@ -2567,52 +2819,93 @@ export class TimeService {
     endTime: Date,
     totalElapsedTime: number,
   ): Promise<Time> {
-    console.log('Backend Service - Creating with Start Time:', startTime);
-    console.log('Backend Service - Creating with End Time:', endTime);
+    try {
+      console.log('Backend Service - Creating with Start Time:', startTime);
+      console.log('Backend Service - Creating with End Time:', endTime);
 
-    const duplicate = await this.isDuplicate(
-      startTime,
-      userId,
-      projectId,
-      rateId,
-    );
-
-    if (duplicate) {
-      throw new Error('Duplicate time entry not allowed');
-    }
-
-    return this.prisma.time.create({
-      data: {
+      const duplicate = await this.isDuplicate(
         startTime,
-        endTime, // endTime is now the actual time of submission
-        projectId,
         userId,
+        projectId,
         rateId,
-        totalElapsedTime, // totalElapsedTime is the total active working time
-      },
-    });
+      );
+
+      if (duplicate) {
+        throw new ConflictException('Duplicate time entry not allowed');
+      }
+
+      return this.prisma.time.create({
+        data: {
+          startTime,
+          endTime, // endTime is now the actual time of submission
+          projectId,
+          userId,
+          rateId,
+          totalElapsedTime, // totalElapsedTime is the total active working time
+        },
+      });
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create time entry');
+    }
   }
 
-  update(
+  async update(
     id: number,
     endTime: Date,
     totalElapsedTime: number, // Directly use the provided totalElapsedTime
   ): Promise<Time> {
-    return this.prisma.time.update({
-      where: { id },
-      data: {
-        endTime, // Set the endTime to the time of submission
-        totalElapsedTime, // Use the provided totalElapsedTime
-      },
-    });
+    try {
+      // First check if the time entry exists
+      const timeEntry = await this.prisma.time.findUnique({
+        where: { id },
+      });
+
+      if (!timeEntry) {
+        throw new NotFoundException(`Time entry with ID ${id} not found`);
+      }
+
+      return this.prisma.time.update({
+        where: { id },
+        data: {
+          endTime, // Set the endTime to the time of submission
+          totalElapsedTime, // Use the provided totalElapsedTime
+        },
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Failed to update time entry ${id}`,
+      );
+    }
   }
 
-  remove(id: number): Promise<Time> {
-    return this.prisma.time.delete({
-      where: {
-        id,
-      },
-    });
+  async remove(id: number): Promise<Time> {
+    try {
+      // First check if the time entry exists
+      const timeEntry = await this.prisma.time.findUnique({
+        where: { id },
+      });
+
+      if (!timeEntry) {
+        throw new NotFoundException(`Time entry with ID ${id} not found`);
+      }
+
+      return this.prisma.time.delete({
+        where: { id },
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Failed to delete time entry ${id}`,
+      );
+    }
   }
 
   async getTotalTimeSpent(
@@ -2621,21 +2914,21 @@ export class TimeService {
     startDate: Date,
     endDate: Date,
   ): Promise<number> {
-    console.log(
-      `getTotalTimeSpent called with userId: ${userId}, projectId: ${projectId}, startDate: ${startDate.toISOString()}, endDate: ${endDate.toISOString()}`,
-    );
-
-    // Adjust startDate to the start of the day
-    const adjustedStartDate = new Date(startDate);
-    adjustedStartDate.setHours(0, 0, 0, 0);
-
-    // Adjust endDate to include the entire day
-    const adjustedEndDate = new Date(endDate);
-    adjustedEndDate.setHours(23, 59, 59, 999);
-
-    console.log('Executing database query to aggregate total time spent...');
-
     try {
+      console.log(
+        `getTotalTimeSpent called with userId: ${userId}, projectId: ${projectId}, startDate: ${startDate.toISOString()}, endDate: ${endDate.toISOString()}`,
+      );
+
+      // Adjust startDate to the start of the day
+      const adjustedStartDate = new Date(startDate);
+      adjustedStartDate.setHours(0, 0, 0, 0);
+
+      // Adjust endDate to include the entire day
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+
+      console.log('Executing database query to aggregate total time spent...');
+
       const aggregatedTime = await this.prisma.time.aggregate({
         where: {
           userId,
@@ -2663,7 +2956,9 @@ export class TimeService {
       return totalTime;
     } catch (error) {
       console.error('Error in getTotalTimeSpent:', error);
-      throw error; // Re-throw the error after logging it
+      throw new InternalServerErrorException(
+        'Failed to calculate total time spent',
+      );
     }
   }
 
@@ -2671,17 +2966,23 @@ export class TimeService {
     userId: number,
     projectId: string,
   ): Promise<number> {
-    const aggregatedTime = await this.prisma.time.aggregate({
-      where: {
-        userId,
-        projectId,
-      },
-      _sum: {
-        totalElapsedTime: true,
-      },
-    });
+    try {
+      const aggregatedTime = await this.prisma.time.aggregate({
+        where: {
+          userId,
+          projectId,
+        },
+        _sum: {
+          totalElapsedTime: true,
+        },
+      });
 
-    return aggregatedTime._sum.totalElapsedTime || 0;
+      return aggregatedTime._sum.totalElapsedTime || 0;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to calculate total time for user project',
+      );
+    }
   }
 }
 
@@ -2754,9 +3055,10 @@ import { UserService } from './user.service';
 import { UserResolver } from './user.resolver';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [forwardRef(() => AuthModule), PrismaModule],
+  imports: [forwardRef(() => AuthModule), PrismaModule, ConfigModule],
   providers: [UserResolver, UserService],
   exports: [UserResolver, UserService],
 })
@@ -2845,7 +3147,7 @@ export class UserResolver {
 // ====== FILE: src\user\user.service.ts ======
 
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
 import { User as QlUser } from '../user/user.model';
@@ -2965,7 +3267,7 @@ export class UserService {
       };
     }
 
-    return user;
+    return undefined;
   }
 
   async create(
@@ -3003,78 +3305,132 @@ export class UserService {
   }
 
   async addUserToTeam(userId: number, teamId: string): Promise<User> {
-    // First, check if the user and team exist
-    const userExists = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-    const teamExists = await this.prisma.team.findUnique({
-      where: { id: teamId },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // First, check if the user and team exist
+      const userExists = await tx.user.findUnique({
+        where: { id: userId },
+      });
+      const teamExists = await tx.team.findUnique({
+        where: { id: teamId },
+      });
 
-    if (!userExists || !teamExists) {
-      throw new Error('User or Team not found');
-    }
+      if (!userExists || !teamExists) {
+        throw new Error('User or Team not found');
+      }
 
-    // Check if the relation already exists
-    const existingRelation = await this.prisma.userTeam.findUnique({
-      where: {
-        userId_teamId: {
-          userId,
-          teamId,
-        },
-      },
-    });
-
-    // If the relation does not exist, create it
-    if (!existingRelation) {
-      await this.prisma.userTeam.create({
-        data: {
-          userId,
-          teamId,
+      // Check if the relation already exists
+      const existingRelation = await tx.userTeam.findUnique({
+        where: {
+          userId_teamId: {
+            userId,
+            teamId,
+          },
         },
       });
-    }
 
-    return this.getUserWithTeams(userId);
+      // If the relation does not exist, create it
+      if (!existingRelation) {
+        await tx.userTeam.create({
+          data: {
+            userId,
+            teamId,
+          },
+        });
+      }
+
+      // Get the updated user with teams within the transaction
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          teams: {
+            include: {
+              team: {
+                include: {
+                  projects: true,
+                  rates: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        throw new Error(
+          `User with ID ${userId} not found after adding to team`,
+        );
+      }
+
+      return user;
+    });
   }
 
   async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
     console.log(`Attempting to remove team ${teamId} from user ${userId}`);
 
-    // Log current state of the user and teams
-    const userBeforeUpdate = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { teams: true },
-    });
-    console.log('User before update:', userBeforeUpdate);
+    return this.prisma.$transaction(async (tx) => {
+      // Log current state of the user and teams
+      const userBeforeUpdate = await tx.user.findUnique({
+        where: { id: userId },
+        include: { teams: true },
+      });
 
-    try {
-      const result = await this.prisma.userTeam.deleteMany({
-        where: {
-          userId: userId,
-          teamId: teamId,
+      if (!userBeforeUpdate) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
+
+      console.log('User before update:', userBeforeUpdate);
+
+      try {
+        const result = await tx.userTeam.deleteMany({
+          where: {
+            userId: userId,
+            teamId: teamId,
+          },
+        });
+
+        if (result.count === 0) {
+          console.warn(
+            `No association found for user ${userId} with team ${teamId}. Nothing to delete.`,
+          );
+        } else {
+          console.log(`Removed team ${teamId} from user ${userId}`);
+        }
+      } catch (error) {
+        console.error(
+          `Error while removing team ${teamId} from user ${userId}:`,
+          error,
+        );
+        throw error;
+      }
+
+      // Fetch updated user info within the transaction
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          teams: {
+            include: {
+              team: {
+                include: {
+                  projects: true,
+                  rates: true,
+                },
+              },
+            },
+          },
         },
       });
 
-      if (result.count === 0) {
-        console.warn(
-          `No association found for user ${userId} with team ${teamId}. Nothing to delete.`,
+      if (!user) {
+        throw new Error(
+          `User with ID ${userId} not found after removing from team`,
         );
-      } else {
-        console.log(`Removed team ${teamId} from user ${userId}`);
       }
-    } catch (error) {
-      console.error(
-        `Error while removing team ${teamId} from user ${userId}:`,
-        error,
-      );
-    }
 
-    // Fetch and log updated user info
-    const updatedUser = await this.getUserWithTeams(userId);
-    console.log('User after update:', updatedUser);
+      console.log('User after update:', user);
 
-    return updatedUser;
+      return user;
+    });
   }
 
   private async getUserWithTeams(userId: number): Promise<User> {
@@ -3117,7 +3473,7 @@ export class UserService {
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
 import { WebhookGuard } from './webhook.guard';
-import { Public } from '../auth/auth.controller';
+import { Public } from '../auth/public.decorator';
 
 @Controller('webhook')
 export class WebhookController {
@@ -3678,4 +4034,128 @@ export class WebhookService {
       await this.webhookIssueService.handleIssue(json);
     }
   }
+}
+
+// ====== FILE: src\auth\dto\auth-response.ts ======
+
+import { Field, ObjectType } from '@nestjs/graphql';
+import { UserProfileDto } from './user-profile.dto';
+
+@ObjectType()
+export class AuthResponse {
+  @Field()
+  access_token: string;
+
+  @Field(() => UserProfileDto, { nullable: true })
+  user?: UserProfileDto;
+}
+
+// ====== FILE: src\auth\dto\sign-in.dto.ts ======
+
+import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+
+export class SignInDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  password: string;
+}
+
+// ====== FILE: src\auth\dto\sign-in.input.ts ======
+
+import { Field, InputType } from '@nestjs/graphql';
+import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+
+@InputType()
+export class SignInInput {
+  @Field()
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @Field()
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  password: string;
+}
+
+// ====== FILE: src\auth\dto\sign-up.dto.ts ======
+
+import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+
+export class SignUpDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  password: string;
+}
+
+// ====== FILE: src\auth\dto\sign-up.input.ts ======
+
+import { Field, InputType } from '@nestjs/graphql';
+import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+
+@InputType()
+export class SignUpInput {
+  @Field()
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @Field()
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  password: string;
+}
+
+// ====== FILE: src\auth\dto\user-profile.dto.ts ======
+
+import { Exclude, Expose } from 'class-transformer';
+import { UserRole } from '../../user/user-role.enum';
+import { Field, ObjectType } from '@nestjs/graphql';
+
+@ObjectType()
+@Exclude()
+export class UserProfileDto {
+  @Field()
+  @Expose()
+  id: number;
+
+  @Field()
+  @Expose()
+  email: string;
+
+  @Field()
+  @Expose()
+  role: UserRole;
+
+  constructor(partial: Partial<UserProfileDto>) {
+    Object.assign(this, partial);
+  }
+}
+
+// ====== FILE: src\dbSynch\dto\sync-response.ts ======
+
+import { Field, ObjectType } from '@nestjs/graphql';
+
+@ObjectType()
+export class SyncResponse {
+  @Field()
+  status: string;
+
+  @Field()
+  message: string;
+
+  @Field()
+  timestamp: string;
 }

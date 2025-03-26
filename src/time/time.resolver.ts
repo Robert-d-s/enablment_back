@@ -2,8 +2,11 @@ import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { TimeService } from './time.service';
 import { Time } from './time.model';
 import { TimeInputCreate, TimeInputUpdate } from './time.input';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver(() => Time)
+@UseGuards(AuthGuard)
 export class TimeResolver {
   constructor(private readonly timeService: TimeService) {}
 

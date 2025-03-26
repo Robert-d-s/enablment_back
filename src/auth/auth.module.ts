@@ -4,11 +4,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 // import { jwtConstants } from './constants';
 import { UserModule } from '../user/user.module';
-import { APP_GUARD } from '@nestjs/core';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AuthResolver } from './auth.resolver';
 import { AuthGuard } from './auth.guard';
 
-import { ConfigModule, ConfigService } from '@nestjs/config';
-
+// Key for metadata to mark routes as public
 export const IS_PUBLIC_KEY = 'isPublic';
 
 @Module({
@@ -26,12 +26,10 @@ export const IS_PUBLIC_KEY = 'isPublic';
   ],
   providers: [
     AuthService,
-    {
-      provide: APP_GUARD,
-      useClass: AuthGuard,
-    },
+    AuthResolver,
+    AuthGuard, // Provide the guard for injection but don't apply it globally
   ],
   controllers: [AuthController],
-  exports: [AuthService, JwtModule],
+  exports: [AuthService, JwtModule, AuthGuard], // Export the guard for use in other modules
 })
 export class AuthModule {}

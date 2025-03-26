@@ -2,6 +2,12 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type UserProfileDto {
+  id: Float!
+  email: String!
+  role: String!
+}
+
 type Project {
   id: String!
   estimatedTime: Int
@@ -46,6 +52,17 @@ enum UserRole {
   ENABLER
   COLLABORATOR
   PENDING
+}
+
+type AuthResponse {
+  access_token: String!
+  user: UserProfileDto
+}
+
+type SyncResponse {
+  status: String!
+  message: String!
+  timestamp: String!
 }
 
 type Issue {
@@ -104,6 +121,7 @@ type RateDetail {
 }
 
 type Query {
+  me: UserProfileDto!
   users: [User!]!
   projects: [Project!]!
   issues: [Issue!]!
@@ -127,15 +145,28 @@ input InvoiceInput {
 }
 
 type Mutation {
+  login(input: SignInInput, email: String, password: String): AuthResponse!
+  signup(input: SignUpInput, email: String, password: String): AuthResponse!
   updateUserRole(userId: Int!, newRole: UserRole!): User!
   addUserToTeam(userId: Int!, teamId: String!): User!
   removeUserFromTeam(userId: Int!, teamId: String!): User!
   createTeam(id: String!, name: String!): Team!
+  synchronizeDatabase: SyncResponse!
   createRate(rateInputCreate: RateInputCreate!): Rate!
   deleteRate(rateId: Int!): Rate!
   createTime(timeInputCreate: TimeInputCreate!): Time!
   updateTime(timeInputUpdate: TimeInputUpdate!): Time!
   deleteTime(id: Float!): Time!
+}
+
+input SignInInput {
+  email: String!
+  password: String!
+}
+
+input SignUpInput {
+  email: String!
+  password: String!
 }
 
 input RateInputCreate {

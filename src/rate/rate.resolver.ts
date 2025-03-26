@@ -2,8 +2,11 @@ import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { RateService } from './rate.service';
 import { Rate } from './rate.model';
 import { RateInputCreate } from './rate.input';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver()
+@UseGuards(AuthGuard)
 export class RateResolver {
   constructor(private rateService: RateService) {}
 
