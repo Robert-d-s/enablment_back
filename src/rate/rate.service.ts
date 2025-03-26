@@ -26,20 +26,23 @@ export class RateService {
 
   async remove(id: number): Promise<Rate> {
     console.log('Removing rate with ID:', id);
-    await this.prisma.time.updateMany({
-      where: { rateId: id },
-      data: { rateId: { set: null } }, // Or assign to a default rate ID
-    });
 
-    return this.prisma.rate
-      .delete({
-        where: {
-          id,
-        },
-      })
-      .catch((err) => {
+    return this.prisma.$transaction(async (tx) => {
+      // First, update all time entries to remove references to this rate
+      await tx.time.updateMany({
+        where: { rateId: id },
+        data: { rateId: { set: null } },
+      });
+
+      // Then delete the rate
+      try {
+        return await tx.rate.delete({
+          where: { id },
+        });
+      } catch (err) {
         console.error('Error in removing rate:', err);
         throw err;
-      });
+      }
+    });
   }
 }

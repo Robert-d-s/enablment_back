@@ -1,12 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-
-const prisma = new PrismaClient({
-  log: ['error'],
-});
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DatabaseSyncService {
@@ -16,8 +12,9 @@ export class DatabaseSyncService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {
-    this.linearApiKey = this.configService.get<string>('LINEAR_KEY');
+    this.linearApiKey = this.configService.get<string>('LINEAR_KEY') || '';
 
     if (!this.linearApiKey) {
       this.logger.error('LINEAR_KEY not found in environment');
@@ -29,7 +26,7 @@ export class DatabaseSyncService {
 
     try {
       // Use a transaction to ensure atomicity
-      await prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async (tx) => {
         // 1. Synchronize teams from Linear
         await this.synchronizeTeams(tx);
 
@@ -85,7 +82,9 @@ export class DatabaseSyncService {
 
       // Check for GraphQL errors
       if (response.data.errors) {
-        const errorMsg = response.data.errors.map((e) => e.message).join(', ');
+        const errorMsg = response.data.errors
+          .map((e: { message: string }) => e.message)
+          .join(', ');
         this.logger.error(`GraphQL errors: ${errorMsg}`);
         throw new Error(`GraphQL errors: ${errorMsg}`);
       }
@@ -142,7 +141,9 @@ export class DatabaseSyncService {
         select: { id: true, name: true },
       });
 
-      const teamsToDelete = new Set(allTeamsInDb.map((team) => team.id));
+      const teamsToDelete = new Set(
+        allTeamsInDb.map((team: { id: string }) => team.id),
+      );
 
       // Update or create teams
       for (const teamData of teams) {
@@ -171,7 +172,7 @@ export class DatabaseSyncService {
     this.logger.log('Starting teams-only synchronization');
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async (tx) => {
         await this.synchronizeTeams(tx);
       });
 
@@ -270,7 +271,9 @@ export class DatabaseSyncService {
             where: { teamId: team.id }, // Filter by team ID
             select: { id: true },
           });
-          const existingProjectIds = new Set(existingProjects.map((p) => p.id));
+          const existingProjectIds = new Set(
+            existingProjects.map((p: { id: string }) => p.id),
+          );
 
           for (const project of projects) {
             const projectData = {
@@ -479,8 +482,12 @@ export class DatabaseSyncService {
 
     const data = await this.fetchFromLinear(query);
 
-    const linearTeamIds = new Set(data.teams.nodes.map((t) => t.id));
-    const linearProjectIds = new Set(data.projects.nodes.map((p) => p.id));
+    const linearTeamIds = new Set(
+      data.teams.nodes.map((t: { id: string }) => t.id),
+    );
+    const linearProjectIds = new Set(
+      data.projects.nodes.map((p: { id: string }) => p.id),
+    );
 
     // 1. Clean up orphaned projects (projects not in Linear)
     const orphanedProjects = await tx.project.findMany({
@@ -523,7 +530,9 @@ export class DatabaseSyncService {
 
     // 3. Clean up orphaned rates (rates with invalid team references)
     const validTeamIds = new Set(
-      (await tx.team.findMany({ select: { id: true } })).map((t) => t.id),
+      (await tx.team.findMany({ select: { id: true } })).map(
+        (t: { id: string }) => t.id,
+      ),
     );
 
     const orphanedRates = await tx.rate.findMany({

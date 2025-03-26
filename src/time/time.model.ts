@@ -18,9 +18,12 @@ export class Time implements TimeClient {
   @Field(() => String)
   projectId: string;
 
-  @Field(() => Int)
-  rateId: number;
-
   @Field(() => Int, { nullable: true })
-  totalElapsedTime: number | null;
+  rateId: number | null;
+
+  // @Field(() => Int, { nullable: true })
+  // totalElapsedTime: number | null;
+
+  @Field(() => Int)
+  totalElapsedTime: number;
 }

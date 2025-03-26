@@ -4,15 +4,15 @@
 
 type Project {
   id: String!
-  estimatedTime: Int!
+  estimatedTime: Int
   name: String!
   teamId: String!
   createdAt: String!
   updatedAt: String!
-  description: String!
+  description: String
   state: String!
-  startDate: String!
-  targetDate: String!
+  startDate: String
+  targetDate: String
 }
 
 type Rate {
@@ -78,8 +78,8 @@ type Time {
   endTime: DateTime
   userId: Int!
   projectId: String!
-  rateId: Int!
-  totalElapsedTime: Int
+  rateId: Int
+  totalElapsedTime: Int!
 }
 
 """

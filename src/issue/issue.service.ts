@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Issue } from '@prisma/client';
 import { IssueWebhookData } from '../webhook/webhook.service';
@@ -16,13 +21,15 @@ export class IssueService {
   }
 
   async create(data: IssueWebhookData): Promise<Issue> {
-    // Make sure we have a valid projectId
-    if (!data.projectId) {
-      console.warn(`Cannot create issue ${data.id}: Missing projectId`);
-      throw new Error('ProjectId is required to create an issue');
-    }
-
     try {
+      // Make sure we have a valid projectId
+      if (!data.projectId) {
+        console.warn(`Cannot create issue ${data.id}: Missing projectId`);
+        throw new BadRequestException(
+          'ProjectId is required to create an issue',
+        );
+      }
+
       const createData: any = {
         id: data.id,
         createdAt: data.createdAt,
@@ -50,7 +57,12 @@ export class IssueService {
       return createdIssue;
     } catch (error) {
       console.error('Error creating issue:', error);
-      throw error;
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Failed to create issue: ${error.message}`,
+      );
     }
   }
 
@@ -103,14 +115,24 @@ export class IssueService {
       }
     } catch (error) {
       console.error(`Error updating issue ${id}:`, error);
-      throw error;
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Failed to update issue ${id}: ${error.message}`,
+      );
     }
   }
 
   async createLabelForIssue(
-    webhookLabel: IssueWebhookData['labels'][number],
+    // webhookLabel: IssueWebhookData['labels'][number],
+    webhookLabel: NonNullable<IssueWebhookData['labels']>[number],
     issueId: string,
   ): Promise<void> {
+    if (!webhookLabel) return;
     await this.prisma.label.create({
       data: {
         id: webhookLabel.id,
@@ -121,6 +143,7 @@ export class IssueService {
       },
     });
   }
+
   async updateLabelsForIssue(
     issueId: string,
     webhookLabels: IssueWebhookData['labels'],
@@ -134,7 +157,7 @@ export class IssueService {
       // Process removed labels
       const currentLabelIds = currentLabels.map((label) => label.id);
       const removedLabelIds = currentLabelIds.filter(
-        (id) => !webhookLabels.some((label) => label.id === id),
+        (id) => !webhookLabels?.some((label) => label.id === id),
       );
 
       await this.prisma.label.deleteMany({
@@ -145,23 +168,25 @@ export class IssueService {
       });
 
       // Process existing and new labels
-      for (const webhookLabel of webhookLabels) {
-        const existingLabel = currentLabels.find(
-          (label) => label.id === webhookLabel.id,
-        );
+      if (webhookLabels) {
+        for (const webhookLabel of webhookLabels) {
+          const existingLabel = currentLabels.find(
+            (label) => label.id === webhookLabel.id,
+          );
 
-        if (existingLabel) {
-          // Update existing label
-          await this.prisma.label.update({
-            where: { internalId: existingLabel.internalId },
-            data: {
-              color: webhookLabel.color,
-              name: webhookLabel.name,
-            },
-          });
-        } else {
-          // Create new label
-          await this.createLabelForIssue(webhookLabel, issueId);
+          if (existingLabel) {
+            // Update existing label
+            await this.prisma.label.update({
+              where: { internalId: existingLabel.internalId },
+              data: {
+                color: webhookLabel.color,
+                name: webhookLabel.name,
+              },
+            });
+          } else {
+            // Create new label
+            await this.createLabelForIssue(webhookLabel, issueId);
+          }
         }
       }
     });

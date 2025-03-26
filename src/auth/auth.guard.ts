@@ -6,10 +6,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { jwtConstants } from './constants';
 import { Request } from 'express';
 import { IS_PUBLIC_KEY } from './auth.module';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 
 import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
@@ -21,6 +21,7 @@ export class AuthGuard implements CanActivate {
     private jwtService: JwtService,
     private reflector: Reflector,
     private userService: UserService,
+    private configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -49,10 +50,15 @@ export class AuthGuard implements CanActivate {
     try {
       // Verify the token
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: jwtConstants.secret,
+        secret: this.configService.get<string>('JWT_SECRET'),
       });
       console.log('auth payload contains', payload);
-      request['user'] = payload;
+
+      interface JwtPayload {
+        email: string;
+        sub: string;
+      }
+      (request as Request & { user: JwtPayload }).user = payload as JwtPayload;
 
       // Check for roles
       return await this.checkUserRoles(context, payload.email);

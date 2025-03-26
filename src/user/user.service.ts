@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
 import { User as QlUser } from '../user/user.model';
@@ -119,7 +119,7 @@ export class UserService {
       };
     }
 
-    return user;
+    return undefined;
   }
 
   async create(
@@ -157,78 +157,132 @@ export class UserService {
   }
 
   async addUserToTeam(userId: number, teamId: string): Promise<User> {
-    // First, check if the user and team exist
-    const userExists = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-    const teamExists = await this.prisma.team.findUnique({
-      where: { id: teamId },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // First, check if the user and team exist
+      const userExists = await tx.user.findUnique({
+        where: { id: userId },
+      });
+      const teamExists = await tx.team.findUnique({
+        where: { id: teamId },
+      });
 
-    if (!userExists || !teamExists) {
-      throw new Error('User or Team not found');
-    }
+      if (!userExists || !teamExists) {
+        throw new Error('User or Team not found');
+      }
 
-    // Check if the relation already exists
-    const existingRelation = await this.prisma.userTeam.findUnique({
-      where: {
-        userId_teamId: {
-          userId,
-          teamId,
-        },
-      },
-    });
-
-    // If the relation does not exist, create it
-    if (!existingRelation) {
-      await this.prisma.userTeam.create({
-        data: {
-          userId,
-          teamId,
+      // Check if the relation already exists
+      const existingRelation = await tx.userTeam.findUnique({
+        where: {
+          userId_teamId: {
+            userId,
+            teamId,
+          },
         },
       });
-    }
 
-    return this.getUserWithTeams(userId);
+      // If the relation does not exist, create it
+      if (!existingRelation) {
+        await tx.userTeam.create({
+          data: {
+            userId,
+            teamId,
+          },
+        });
+      }
+
+      // Get the updated user with teams within the transaction
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          teams: {
+            include: {
+              team: {
+                include: {
+                  projects: true,
+                  rates: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        throw new Error(
+          `User with ID ${userId} not found after adding to team`,
+        );
+      }
+
+      return user;
+    });
   }
 
   async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
     console.log(`Attempting to remove team ${teamId} from user ${userId}`);
 
-    // Log current state of the user and teams
-    const userBeforeUpdate = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { teams: true },
-    });
-    console.log('User before update:', userBeforeUpdate);
+    return this.prisma.$transaction(async (tx) => {
+      // Log current state of the user and teams
+      const userBeforeUpdate = await tx.user.findUnique({
+        where: { id: userId },
+        include: { teams: true },
+      });
 
-    try {
-      const result = await this.prisma.userTeam.deleteMany({
-        where: {
-          userId: userId,
-          teamId: teamId,
+      if (!userBeforeUpdate) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
+
+      console.log('User before update:', userBeforeUpdate);
+
+      try {
+        const result = await tx.userTeam.deleteMany({
+          where: {
+            userId: userId,
+            teamId: teamId,
+          },
+        });
+
+        if (result.count === 0) {
+          console.warn(
+            `No association found for user ${userId} with team ${teamId}. Nothing to delete.`,
+          );
+        } else {
+          console.log(`Removed team ${teamId} from user ${userId}`);
+        }
+      } catch (error) {
+        console.error(
+          `Error while removing team ${teamId} from user ${userId}:`,
+          error,
+        );
+        throw error;
+      }
+
+      // Fetch updated user info within the transaction
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          teams: {
+            include: {
+              team: {
+                include: {
+                  projects: true,
+                  rates: true,
+                },
+              },
+            },
+          },
         },
       });
 
-      if (result.count === 0) {
-        console.warn(
-          `No association found for user ${userId} with team ${teamId}. Nothing to delete.`,
+      if (!user) {
+        throw new Error(
+          `User with ID ${userId} not found after removing from team`,
         );
-      } else {
-        console.log(`Removed team ${teamId} from user ${userId}`);
       }
-    } catch (error) {
-      console.error(
-        `Error while removing team ${teamId} from user ${userId}:`,
-        error,
-      );
-    }
 
-    // Fetch and log updated user info
-    const updatedUser = await this.getUserWithTeams(userId);
-    console.log('User after update:', updatedUser);
+      console.log('User after update:', user);
 
-    return updatedUser;
+      return user;
+    });
   }
 
   private async getUserWithTeams(userId: number): Promise<User> {

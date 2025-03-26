@@ -6,8 +6,8 @@ export class Project implements ProjectClient {
   @Field(() => String)
   id: string;
 
-  @Field(() => Int)
-  estimatedTime: number;
+  @Field(() => Int, { nullable: true })
+  estimatedTime: number | null;
 
   @Field(() => String)
   name: string;
@@ -21,17 +21,17 @@ export class Project implements ProjectClient {
   @Field(() => String)
   updatedAt: string;
 
-  @Field(() => String)
-  description: string;
+  @Field(() => String, { nullable: true })
+  description: string | null;
 
   @Field(() => String)
   state: string;
 
-  @Field(() => String)
-  startDate: string;
+  @Field(() => String, { nullable: true })
+  startDate: string | null;
 
-  @Field(() => String)
-  targetDate: string;
+  @Field(() => String, { nullable: true })
+  targetDate: string | null;
 
   // ---------------------------------
 }

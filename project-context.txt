@@ -74,6 +74,8 @@ module.exports = {
     "@nestjs/websockets": "^9.4.3",
     "@prisma/client": "^4.13.0",
     "bcrypt": "^5.1.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
     "graphql": "^16.6.0",
     "graphql-ws": "^5.14.3",
     "micro": "^10.0.1",
@@ -1313,27 +1315,31 @@ export class DatabaseSyncService {
 
 // ====== FILE: src\invoice\invoice.input.ts ======
 
-import { Field, InputType, Int } from '@nestjs/graphql';
+import { Field, InputType } from '@nestjs/graphql';
+import { IsDate, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 @InputType()
-export class InvoiceQueryInput {
-  @Field(() => Int, {
-    nullable: false,
-    description: 'Month of invoice',
-  })
-  month: number;
-
-  @Field(() => Int, {
-    nullable: false,
-    description: 'Year of invoice',
-  })
-  year: number;
-
+export class InvoiceInput {
   @Field(() => String, {
-    nullable: false,
-    description: 'Team id for invoice',
+    description: 'Project id for invoice',
   })
-  teamId: string;
+  @IsString()
+  projectId: string;
+
+  @Field(() => Date, {
+    description: 'Start date for invoice period',
+  })
+  @IsDate()
+  @Type(() => Date)
+  startDate: Date;
+
+  @Field(() => Date, {
+    description: 'End date for invoice period',
+  })
+  @IsDate()
+  @Type(() => Date)
+  endDate: Date;
 }
 
 // ====== FILE: src\invoice\invoice.model.ts ======
@@ -1395,6 +1401,7 @@ export class InvoiceModule {}
 import { Args, Query, Resolver } from '@nestjs/graphql';
 import { InvoiceService } from './invoice.service';
 import { Invoice } from './invoice.model';
+import { InvoiceInput } from './invoice.input';
 
 @Resolver(() => Invoice)
 export class InvoiceResolver {
@@ -1402,14 +1409,12 @@ export class InvoiceResolver {
 
   @Query(() => Invoice)
   async invoiceForProject(
-    @Args('projectId') projectId: string,
-    @Args('startDate') startDate: Date,
-    @Args('endDate') endDate: Date,
+    @Args('input') input: InvoiceInput,
   ): Promise<Invoice> {
     return this.invoiceService.generateInvoiceForProject(
-      projectId,
-      startDate,
-      endDate,
+      input.projectId,
+      input.startDate,
+      input.endDate,
     );
   }
 }
@@ -2158,7 +2163,7 @@ export class RateService {
     console.log('Removing rate with ID:', id);
     await this.prisma.time.updateMany({
       where: { rateId: id },
-      data: { rateId: { set: null } }, // Or assign to a default rate ID
+      data: { rateId: { set: null } },
     });
 
     return this.prisma.rate

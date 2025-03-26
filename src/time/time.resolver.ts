@@ -47,7 +47,7 @@ export class TimeResolver {
         projectId,
         userId,
         rateId,
-        new Date(endTime),
+        endTime ? new Date(endTime) : new Date(),
         totalElapsedTime,
       );
     }
