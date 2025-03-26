@@ -59,6 +59,10 @@ type AuthResponse {
   user: UserProfileDto
 }
 
+type LogoutResponse {
+  success: Boolean!
+}
+
 type SyncResponse {
   status: String!
   message: String!
@@ -147,6 +151,7 @@ input InvoiceInput {
 type Mutation {
   login(input: SignInInput, email: String, password: String): AuthResponse!
   signup(input: SignUpInput, email: String, password: String): AuthResponse!
+  logout: LogoutResponse!
   updateUserRole(userId: Int!, newRole: UserRole!): User!
   addUserToTeam(userId: Int!, teamId: String!): User!
   removeUserFromTeam(userId: Int!, teamId: String!): User!

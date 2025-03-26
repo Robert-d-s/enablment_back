@@ -17,7 +17,7 @@ import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
 import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 @Module({
   imports: [
@@ -29,7 +29,10 @@ import { Request } from 'express';
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
-      context: ({ req }: { req: Request }) => ({ req }),
+      context: ({ req, res }: { req: Request; res: Response }) => ({
+        req,
+        res,
+      }),
     }),
     WebhookModule,
     TeamModule,

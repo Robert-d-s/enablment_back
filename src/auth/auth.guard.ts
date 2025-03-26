@@ -49,10 +49,12 @@ export class AuthGuard implements CanActivate {
     if (!request) {
       throw new UnauthorizedException('No request found');
     }
-    const token = this.extractTokenFromHeader(request);
+
+    // Extract token from cookie instead of header
+    const token = this.extractTokenFromCookie(request);
 
     if (!token) {
-      throw new UnauthorizedException('No token found in request headers');
+      throw new UnauthorizedException('No auth token found in cookies');
     }
 
     try {
@@ -64,7 +66,7 @@ export class AuthGuard implements CanActivate {
 
       interface JwtPayload {
         email: string;
-        sub: string;
+        id: number;
       }
       (request as Request & { user: JwtPayload }).user = payload as JwtPayload;
 
@@ -115,6 +117,27 @@ export class AuthGuard implements CanActivate {
     return true; // User has the required role
   }
 
+  private extractTokenFromCookie(request: Request): string | undefined {
+    if (!request) {
+      console.log('AuthGuard: Request object is missing');
+      return undefined;
+    }
+
+    console.log('AuthGuard: Cookies object:', request.cookies);
+
+    if (!request.cookies) {
+      console.log('AuthGuard: No cookies found in request');
+      return undefined;
+    }
+
+    // Get the token from the auth_token cookie
+    const token = request.cookies['auth_token'];
+    console.log('AuthGuard: Cookie token found:', !!token);
+
+    return token;
+  }
+
+  // Keep this for backward compatibility during transition
   private extractTokenFromHeader(request: Request): string | undefined {
     if (!request || !request.headers.authorization) {
       return undefined;
