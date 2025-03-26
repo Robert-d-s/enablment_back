@@ -1,6 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseSyncService } from './dbSynch.service';
-import { DatabaseSyncController } from './dbSynch.controller';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -26,7 +25,6 @@ import { AuthModule } from '../auth/auth.module';
     forwardRef(() => AuthModule),
   ],
   providers: [DatabaseSyncService, DatabaseSyncResolver],
-  controllers: [DatabaseSyncController],
   exports: [DatabaseSyncService],
 })
 export class DatabaseSyncModule {}

@@ -2,12 +2,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type UserProfileDto {
-  id: Float!
-  email: String!
-  role: String!
-}
-
 type Project {
   id: String!
   estimatedTime: Int
@@ -52,6 +46,12 @@ enum UserRole {
   ENABLER
   COLLABORATOR
   PENDING
+}
+
+type UserProfileDto {
+  id: Float!
+  email: String!
+  role: String!
 }
 
 type AuthResponse {

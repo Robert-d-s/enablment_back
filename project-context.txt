@@ -76,6 +76,7 @@ module.exports = {
     "bcrypt": "^5.1.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "cookie-parser": "^1.4.7",
     "graphql": "^16.6.0",
     "graphql-ws": "^5.14.3",
     "micro": "^10.0.1",
@@ -88,6 +89,7 @@ module.exports = {
     "@nestjs/schematics": "^9.0.0",
     "@nestjs/testing": "^9.0.0",
     "@types/bcrypt": "^5.0.2",
+    "@types/cookie-parser": "^1.4.8",
     "@types/express": "^4.17.13",
     "@types/jest": "29.2.4",
     "@types/node": "18.11.18",
@@ -318,7 +320,7 @@ import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { HttpModule } from '@nestjs/axios';
 import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 @Module({
   imports: [
@@ -330,7 +332,10 @@ import { Request } from 'express';
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
-      context: ({ req }: { req: Request }) => ({ req }),
+      context: ({ req, res }: { req: Request; res: Response }) => ({
+        req,
+        res,
+      }),
     }),
     WebhookModule,
     TeamModule,
@@ -362,13 +367,24 @@ export class AppService {
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: '*',
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? process.env.FRONTEND_URL
+        : [
+            'http://localhost:3000',
+            'http://localhost:4000',
+            'http://127.0.0.1:3000',
+          ],
+    credentials: true,
   });
+
+  app.use(cookieParser());
 
   await app.listen(process.env.PORT || 8080);
   console.log(`Server is running on http://localhost:8080/graphql`);
@@ -469,14 +485,16 @@ import {
   Get,
   ClassSerializerInterceptor,
   UseInterceptors,
+  UseGuards,
+  Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignInDto } from './dto/sign-in.dto';
 import { SignUpDto } from './dto/sign-up.dto';
 import { UserProfileDto } from './dto/user-profile.dto';
-import { Request as ExpressRequest } from 'express';
+import { Request as ExpressRequest, Response } from 'express';
 import { UserRole } from '../user/user-role.enum';
-import { Public } from './public.decorator';
+import { AuthGuard } from './auth.guard';
 
 // Interface to define our authenticated request type
 interface RequestWithUser extends ExpressRequest {
@@ -494,20 +512,80 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  @Public()
-  signIn(@Body() signInDto: SignInDto) {
-    return this.authService.signIn(signInDto.email, signInDto.password);
+  async signIn(
+    @Body() signInDto: SignInDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.signIn(
+      signInDto.email,
+      signInDto.password,
+    );
+
+    // Set HTTP-only cookie with the JWT token
+    response.cookie('auth_token', result.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    });
+
+    // Return success without exposing the token in the response body
+    return {
+      success: true,
+      user: {
+        email: signInDto.email,
+      },
+    };
   }
 
   @Post('signup')
-  @Public()
-  signUp(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUp(signUpDto.email, signUpDto.password);
+  async signUp(
+    @Body() signUpDto: SignUpDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    await this.authService.signUp(signUpDto.email, signUpDto.password);
+    const result = await this.authService.signIn(
+      signUpDto.email,
+      signUpDto.password,
+    );
+
+    // Set HTTP-only cookie with the JWT token
+    response.cookie('auth_token', result.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    });
+
+    // Return success without exposing the token in the response body
+    return {
+      success: true,
+      user: {
+        email: signUpDto.email,
+      },
+    };
   }
 
   @Get('profile')
+  @UseGuards(AuthGuard)
   getProfile(@Request() req: RequestWithUser) {
     return new UserProfileDto(req.user);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout(@Res({ passthrough: true }) response: Response) {
+    // Clear the auth cookie
+    response.clearCookie('auth_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/',
+    });
+
+    return { success: true };
   }
 }
 
@@ -540,15 +618,23 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check if the route is public
+    const handler = context.getHandler();
+    const controllerClass = context.getClass();
+    console.log(
+      `AuthGuard activated for: ${controllerClass?.name}.${handler?.name}`,
+    );
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
+      handler,
+      controllerClass,
     ]);
+    console.log(
+      `IS_PUBLIC (${controllerClass?.name}.${handler?.name}): ${isPublic}`,
+    );
     if (isPublic) {
+      console.log(`Route is public, skipping auth.`);
       return true;
     }
-
+    console.log(`Route is NOT public, proceeding with auth.`);
     const ctx = context.switchToHttp();
     const graphqlCtx = GqlExecutionContext.create(context);
     const request = ctx.getRequest<Request>() || graphqlCtx.getContext().req;
@@ -556,10 +642,12 @@ export class AuthGuard implements CanActivate {
     if (!request) {
       throw new UnauthorizedException('No request found');
     }
-    const token = this.extractTokenFromHeader(request);
+
+    // Extract token from cookie instead of header
+    const token = this.extractTokenFromCookie(request);
 
     if (!token) {
-      throw new UnauthorizedException('No token found in request headers');
+      throw new UnauthorizedException('No auth token found in cookies');
     }
 
     try {
@@ -571,7 +659,7 @@ export class AuthGuard implements CanActivate {
 
       interface JwtPayload {
         email: string;
-        sub: string;
+        id: number;
       }
       (request as Request & { user: JwtPayload }).user = payload as JwtPayload;
 
@@ -622,6 +710,27 @@ export class AuthGuard implements CanActivate {
     return true; // User has the required role
   }
 
+  private extractTokenFromCookie(request: Request): string | undefined {
+    if (!request) {
+      console.log('AuthGuard: Request object is missing');
+      return undefined;
+    }
+
+    console.log('AuthGuard: Cookies object:', request.cookies);
+
+    if (!request.cookies) {
+      console.log('AuthGuard: No cookies found in request');
+      return undefined;
+    }
+
+    // Get the token from the auth_token cookie
+    const token = request.cookies['auth_token'];
+    console.log('AuthGuard: Cookie token found:', !!token);
+
+    return token;
+  }
+
+  // Keep this for backward compatibility during transition
   private extractTokenFromHeader(request: Request): string | undefined {
     if (!request || !request.headers.authorization) {
       return undefined;
@@ -639,11 +748,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 // import { jwtConstants } from './constants';
 import { UserModule } from '../user/user.module';
-import { APP_GUARD } from '@nestjs/core';
-import { AuthGuard } from './auth.guard';
-
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthResolver } from './auth.resolver';
+import { AuthGuard } from './auth.guard';
 
 // Key for metadata to mark routes as public
 export const IS_PUBLIC_KEY = 'isPublic';
@@ -664,19 +771,16 @@ export const IS_PUBLIC_KEY = 'isPublic';
   providers: [
     AuthService,
     AuthResolver,
-    {
-      provide: APP_GUARD,
-      useClass: AuthGuard,
-    },
+    AuthGuard, // Provide the guard for injection but don't apply it globally
   ],
   controllers: [AuthController],
-  exports: [AuthService, JwtModule],
+  exports: [AuthService, JwtModule, AuthGuard], // Export the guard for use in other modules
 })
 export class AuthModule {}
 
 // ====== FILE: src\auth\auth.resolver.ts ======
 
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Mutation, Query, Resolver, Context } from '@nestjs/graphql';
 import { AuthService } from './auth.service';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { SignInInput } from './dto/sign-in.input';
@@ -685,18 +789,18 @@ import { AuthResponse } from './dto/auth-response';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
-import { Public } from './public.decorator';
+import { LogoutResponse } from './dto/logout-response';
 
 @Resolver()
 export class AuthResolver {
   constructor(private authService: AuthService) {}
 
-  @Public()
   @Mutation(() => AuthResponse)
   async login(
     @Args('input', { nullable: true }) signInInput?: SignInInput,
     @Args('email', { nullable: true }) email?: string,
     @Args('password', { nullable: true }) password?: string,
+    @Context() context?: any,
   ): Promise<AuthResponse> {
     const emailToUse = signInInput?.email || email;
     const passwordToUse = signInInput?.password || password;
@@ -707,6 +811,17 @@ export class AuthResolver {
 
     const result = await this.authService.signIn(emailToUse, passwordToUse);
 
+    // Set HTTP-only cookie with the JWT token
+    if (context && context.req && context.res) {
+      context.res.cookie('auth_token', result.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/',
+      });
+    }
+
     return {
       ...result,
       user: new UserProfileDto({
@@ -715,12 +830,12 @@ export class AuthResolver {
     };
   }
 
-  @Public()
   @Mutation(() => AuthResponse)
   async signup(
     @Args('input', { nullable: true }) signUpInput?: SignUpInput,
     @Args('email', { nullable: true }) email?: string,
     @Args('password', { nullable: true }) password?: string,
+    @Context() context?: any,
   ): Promise<AuthResponse> {
     const emailToUse = signUpInput?.email || email;
     const passwordToUse = signUpInput?.password || password;
@@ -732,12 +847,37 @@ export class AuthResolver {
     await this.authService.signUp(emailToUse, passwordToUse);
     const result = await this.authService.signIn(emailToUse, passwordToUse);
 
+    // Set HTTP-only cookie with the JWT token
+    if (context && context.req && context.res) {
+      context.res.cookie('auth_token', result.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/',
+      });
+    }
+
     return {
       ...result,
       user: new UserProfileDto({
         email: emailToUse,
       }),
     };
+  }
+
+  @Mutation(() => LogoutResponse)
+  async logout(@Context() context: any): Promise<LogoutResponse> {
+    if (context && context.res) {
+      context.res.clearCookie('auth_token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        path: '/',
+      });
+    }
+
+    return { success: true };
   }
 
   @Query(() => UserProfileDto)
@@ -858,7 +998,6 @@ export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);
 
 import { Controller, Get, HttpCode, Logger } from '@nestjs/common';
 import { DatabaseSyncService } from './dbSynch.service';
-import { Public } from '../auth/public.decorator';
 
 @Controller('database-sync')
 export class DatabaseSyncController {
@@ -868,7 +1007,6 @@ export class DatabaseSyncController {
 
   @Get('/full')
   @HttpCode(200)
-  @Public()
   async synchronizeDatabase() {
     this.logger.log('Full database synchronization requested');
     try {
@@ -900,6 +1038,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { DatabaseSyncResolver } from './dbSynch.resolver';
 import { JwtModule } from '@nestjs/jwt';
 import { UserModule } from '../user/user.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -915,6 +1054,7 @@ import { UserModule } from '../user/user.module';
       }),
     }),
     forwardRef(() => UserModule),
+    forwardRef(() => AuthModule),
   ],
   providers: [DatabaseSyncService, DatabaseSyncResolver],
   controllers: [DatabaseSyncController],
@@ -926,17 +1066,13 @@ export class DatabaseSyncModule {}
 
 import { Mutation, Resolver } from '@nestjs/graphql';
 import { DatabaseSyncService } from './dbSynch.service';
-import { UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard';
 import { SyncResponse } from './dto/sync-response';
-import { Public } from '../auth/public.decorator';
 
 @Resolver()
 export class DatabaseSyncResolver {
   constructor(private readonly databaseSyncService: DatabaseSyncService) {}
 
   @Mutation(() => SyncResponse)
-  @Public()
   async synchronizeDatabase(): Promise<SyncResponse> {
     try {
       await this.databaseSyncService.synchronizeDatabase();
@@ -1585,9 +1721,12 @@ import { Module } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
 import { InvoiceResolver } from './invoice.resolver';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
+import { UserModule } from '../user/user.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule, UserModule, ConfigModule],
   providers: [InvoiceService, InvoiceResolver],
   controllers: [],
 })
@@ -1599,8 +1738,11 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 import { InvoiceService } from './invoice.service';
 import { Invoice } from './invoice.model';
 import { InvoiceInput } from './invoice.input';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver(() => Invoice)
+@UseGuards(AuthGuard)
 export class InvoiceResolver {
   constructor(private readonly invoiceService: InvoiceService) {}
 
@@ -1777,9 +1919,12 @@ import { Module } from '@nestjs/common';
 import { IssueService } from './issue.service';
 import { IssueResolver } from './issue.resolver';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
+import { UserModule } from '../user/user.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule, UserModule, ConfigModule],
   providers: [IssueService, IssueResolver],
   exports: [IssueResolver],
 })
@@ -1790,8 +1935,11 @@ export class IssueModule {}
 import { Query, Resolver } from '@nestjs/graphql';
 import { IssueService } from './issue.service';
 import { Issue } from './issue.model';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver(() => Issue)
+@UseGuards(AuthGuard)
 export class IssueResolver {
   constructor(private issueService: IssueService) {}
 
@@ -2161,9 +2309,12 @@ import { Module } from '@nestjs/common';
 import { ProjectService } from './project.service';
 import { ProjectResolver } from './project.resolver';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
+import { UserModule } from '../user/user.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule, UserModule, ConfigModule],
   providers: [ProjectService, ProjectResolver],
   exports: [ProjectResolver],
 })
@@ -2174,8 +2325,11 @@ export class ProjectModule {}
 import { Query, Resolver } from '@nestjs/graphql';
 import { Project } from './project.model';
 import { ProjectService } from './project.service';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver(() => Project)
+@UseGuards(AuthGuard)
 export class ProjectResolver {
   constructor(private projectService: ProjectService) {}
 
@@ -2329,9 +2483,12 @@ import { Module } from '@nestjs/common';
 import { RateService } from './rate.service';
 import { RateResolver } from './rate.resolver';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
+import { UserModule } from '../user/user.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule, UserModule, ConfigModule],
   providers: [RateService, RateResolver],
 })
 export class RateModule {}
@@ -2342,8 +2499,11 @@ import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { RateService } from './rate.service';
 import { Rate } from './rate.model';
 import { RateInputCreate } from './rate.input';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver()
+@UseGuards(AuthGuard)
 export class RateResolver {
   constructor(private rateService: RateService) {}
 
@@ -2462,9 +2622,11 @@ import { TeamService } from './team.service';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
+import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [ConfigModule, HttpModule, PrismaModule],
+  imports: [ConfigModule, HttpModule, PrismaModule, AuthModule, UserModule],
   providers: [TeamResolver, TeamService],
   exports: [TeamService],
 })
@@ -2476,8 +2638,11 @@ import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { Team } from './team.model';
 import { TeamService } from './team.service';
 import { SimpleTeamDTO } from './team.model';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver(() => Team)
+@UseGuards(AuthGuard)
 export class TeamResolver {
   constructor(private teamService: TeamService) {}
 
@@ -2654,9 +2819,12 @@ import { Module } from '@nestjs/common';
 import { TimeService } from './time.service';
 import { TimeResolver } from './time.resolver';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
+import { UserModule } from '../user/user.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule, UserModule, ConfigModule],
   providers: [TimeService, TimeResolver],
 })
 export class TimeModule {}
@@ -2667,8 +2835,11 @@ import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { TimeService } from './time.service';
 import { Time } from './time.model';
 import { TimeInputCreate, TimeInputUpdate } from './time.input';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Resolver(() => Time)
+@UseGuards(AuthGuard)
 export class TimeResolver {
   constructor(private readonly timeService: TimeService) {}
 
@@ -3473,14 +3644,12 @@ export class UserService {
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
 import { WebhookGuard } from './webhook.guard';
-import { Public } from '../auth/public.decorator';
 
 @Controller('webhook')
 export class WebhookController {
   constructor(private webhookService: WebhookService) {}
 
   @Post()
-  @Public()
   @UseGuards(WebhookGuard)
   async handle(@Body() body: any) {
     await this.webhookService.handle(body);
@@ -4048,6 +4217,16 @@ export class AuthResponse {
 
   @Field(() => UserProfileDto, { nullable: true })
   user?: UserProfileDto;
+}
+
+// ====== FILE: src\auth\dto\logout-response.ts ======
+
+import { Field, ObjectType } from '@nestjs/graphql';
+
+@ObjectType()
+export class LogoutResponse {
+  @Field(() => Boolean)
+  success: boolean;
 }
 
 // ====== FILE: src\auth\dto\sign-in.dto.ts ======

@@ -3,26 +3,6 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 
-// describe('AppController (e2e)', () => {
-//   let app: INestApplication;
-
-//   beforeEach(async () => {
-//     const moduleFixture: TestingModule = await Test.createTestingModule({
-//       imports: [AppModule],
-//     }).compile();
-
-//     app = moduleFixture.createNestApplication();
-//     await app.init();
-//   });
-
-//   it('/ (GET)', () => {
-//     return request(app.getHttpServer())
-//       .get('/')
-//       .expect(200)
-//       .expect('Hello World!');
-//   });
-// });
-
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let jwtToken: string;
@@ -35,15 +15,24 @@ describe('AppController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    // Login and get JWT token
-    const response = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({
-        email: 'rs@enablment.com',
-        password: 'Oldschool!',
-      });
+    // Login using GraphQL mutation instead of REST
+    const loginMutation = `
+      mutation {
+        login(email: "rs@enablment.com", password: "Oldschool!") {
+          access_token
+          user {
+            email
+          }
+        }
+      }
+    `;
 
-    jwtToken = response.body.access_token;
+    const response = await request(app.getHttpServer()).post('/graphql').send({
+      query: loginMutation,
+    });
+
+    // Extract token from the GraphQL response
+    jwtToken = response.body.data.login.access_token;
   });
 
   it('/ (GET)', () => {
