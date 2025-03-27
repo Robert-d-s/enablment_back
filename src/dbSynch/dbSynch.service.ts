@@ -4,6 +4,79 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 
+interface PageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+interface ProjectNode {
+  id: string;
+  name: string;
+  description: string | null;
+  state: string | null;
+  startDate: string | null;
+  targetDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TeamProjectsResponse {
+  team?: {
+    projects?: {
+      pageInfo: PageInfo;
+      nodes: ProjectNode[];
+    };
+  };
+}
+
+interface LabelNode {
+  id: string;
+  name: string;
+  color: string;
+  parentId?: string | null;
+}
+
+interface IssueNode {
+  id: string;
+  title: string;
+  description?: string;
+  state?: {
+    id: string;
+    name: string;
+    color: string;
+    type: string;
+  };
+  assignee?: {
+    id: string;
+    name: string;
+  };
+  project?: {
+    id: string;
+    name: string;
+  };
+  team?: {
+    id: string;
+    key: string;
+    name: string;
+  };
+  priority?: number;
+  priorityLabel?: string;
+  identifier: string;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  labels?: {
+    nodes: LabelNode[];
+  };
+}
+
+interface IssuesResponse {
+  issues: {
+    pageInfo: PageInfo;
+    nodes: IssueNode[];
+  };
+}
+
 @Injectable()
 export class DatabaseSyncService {
   private readonly logger = new Logger(DatabaseSyncService.name);
@@ -53,7 +126,7 @@ export class DatabaseSyncService {
   /**
    * Fetch data from Linear GraphQL API
    */
-  private async fetchFromLinear(query: string, variables = {}): Promise<any> {
+  private async fetchFromLinear<T>(query: string, variables = {}): Promise<T> {
     try {
       this.logger.debug(
         `Sending query to Linear API: ${query.substring(0, 100)}...`,
@@ -131,7 +204,9 @@ export class DatabaseSyncService {
     `;
 
     try {
-      const data = await this.fetchFromLinear(query);
+      const data = await this.fetchFromLinear<{
+        teams: { nodes: { id: string; name: string; key: string }[] };
+      }>(query);
       const teams = data.teams.nodes;
 
       this.logger.log(`Processing ${teams.length} teams from Linear`);
@@ -204,7 +279,9 @@ export class DatabaseSyncService {
         }
       }
     `;
-    const teamsData = await this.fetchFromLinear(teamsQuery);
+    const teamsData = await this.fetchFromLinear<{
+      teams: { nodes: { id: string }[] };
+    }>(teamsQuery);
     const teams = teamsData.teams.nodes;
 
     this.logger.log(`Fetched ${teams.length} teams to process projects for.`);
@@ -246,10 +323,11 @@ export class DatabaseSyncService {
           `;
 
         try {
-          const data = await this.fetchFromLinear(query, {
-            teamId: team.id, // <--- Pass team ID as variable
-            cursor: endCursor,
-          });
+          const data: TeamProjectsResponse =
+            await this.fetchFromLinear<TeamProjectsResponse>(query, {
+              teamId: team.id,
+              cursor: endCursor,
+            });
 
           if (!data.team || !data.team.projects) {
             this.logger.warn(
@@ -259,7 +337,7 @@ export class DatabaseSyncService {
             continue;
           }
 
-          const pageInfo = data.team.projects.pageInfo;
+          const pageInfo: PageInfo = data.team.projects.pageInfo;
           const projects = data.team.projects.nodes;
 
           this.logger.log(
@@ -375,8 +453,11 @@ export class DatabaseSyncService {
       `;
 
       try {
-        const data = await this.fetchFromLinear(query, { cursor: endCursor });
-        const pageInfo = data.issues.pageInfo;
+        const data: IssuesResponse = await this.fetchFromLinear<IssuesResponse>(
+          query,
+          { cursor: endCursor },
+        );
+        const pageInfo: PageInfo = data.issues.pageInfo;
         const issues = data.issues.nodes;
 
         processedCount += issues.length;
@@ -480,7 +561,10 @@ export class DatabaseSyncService {
       }
     `;
 
-    const data = await this.fetchFromLinear(query);
+    const data = await this.fetchFromLinear<{
+      teams: { nodes: { id: string }[] };
+      projects: { nodes: { id: string }[] };
+    }>(query);
 
     const linearTeamIds = new Set(
       data.teams.nodes.map((t: { id: string }) => t.id),

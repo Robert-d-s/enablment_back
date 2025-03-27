@@ -35,73 +35,79 @@ export class WebhookIssueService {
             return;
           }
 
-          const createdIssue = await this.createIssue(issueData);
+          await prisma.$transaction(async (tx) => {
+            const createdIssue = await this.createIssue(issueData);
 
-          // Also update labels for newly created issue
-          if (issueData.labels && issueData.labels.length > 0) {
-            await this.issueService.updateLabelsForIssue(
-              issueData.id,
-              issueData.labels,
-            );
-          }
-
-          this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
-
-          break;
-
-        case 'update':
-          console.log(`Processing issue update webhook for: ${issueData.id}`);
-
-          // Check if the issue exists before trying to update
-          const existingIssue = await prisma.issue.findUnique({
-            where: { id: issueData.id },
-            select: { id: true },
-          });
-
-          if (existingIssue) {
-            // If issue exists, we can update it even without a projectId
-            await this.updateExistingIssue(issueData);
-
-            // Then update its labels if present
-            if (issueData.labels) {
-              await this.issueService.updateLabelsForIssue(
-                issueData.id,
-                issueData.labels,
-              );
-            }
-          } else {
-            // Issue doesn't exist, need projectId for creation
-            const hasProjectForUpdate = await this.ensureProjectId(issueData);
-            if (!hasProjectForUpdate) {
-              console.warn(
-                `Cannot create non-existent issue ${issueData.id} via update: Missing projectId and no suitable default found`,
-              );
-              return; // Skip further processing
-            }
-
-            await this.createIssue(issueData);
-
+            // Also update labels for newly created issue
             if (issueData.labels && issueData.labels.length > 0) {
               await this.issueService.updateLabelsForIssue(
                 issueData.id,
                 issueData.labels,
               );
             }
-          }
 
-          const updatedIssue = await this.updateExistingIssue(issueData);
-          this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
+            this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
+          });
+
+          break;
+
+        case 'update':
+          console.log(`Processing issue update webhook for: ${issueData.id}`);
+
+          await prisma.$transaction(async (tx) => {
+            // Check if the issue exists before trying to update
+            const existingIssue = await prisma.issue.findUnique({
+              where: { id: issueData.id },
+              select: { id: true },
+            });
+
+            if (existingIssue) {
+              // If issue exists, we can update it even without a projectId
+              await this.updateExistingIssue(issueData);
+
+              // Then update its labels if present
+              if (issueData.labels) {
+                await this.issueService.updateLabelsForIssue(
+                  issueData.id,
+                  issueData.labels,
+                );
+              }
+            } else {
+              // Issue doesn't exist, need projectId for creation
+              const hasProjectForUpdate = await this.ensureProjectId(issueData);
+              if (!hasProjectForUpdate) {
+                console.warn(
+                  `Cannot create non-existent issue ${issueData.id} via update: Missing projectId and no suitable default found`,
+                );
+                return; // Skip further processing
+              }
+
+              await this.createIssue(issueData);
+
+              if (issueData.labels && issueData.labels.length > 0) {
+                await this.issueService.updateLabelsForIssue(
+                  issueData.id,
+                  issueData.labels,
+                );
+              }
+            }
+
+            const updatedIssue = await this.updateExistingIssue(issueData);
+            this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
+          });
           break;
 
         case 'remove':
           console.log(`Processing issue remove webhook for: ${issueData.id}`);
-          await this.issueService.remove(issueData.id);
 
-          this.issueUpdatesGateway.broadcastIssueUpdate({
-            id: issueData.id,
-            action: 'remove',
-          }); // Broadcast remove event, send minimal info
-          await this.issueService.remove(issueData.id);
+          await prisma.$transaction(async (tx) => {
+            await this.issueService.remove(issueData.id);
+
+            this.issueUpdatesGateway.broadcastIssueUpdate({
+              id: issueData.id,
+              action: 'remove',
+            }); // Broadcast remove event, send minimal info
+          });
           break;
 
         default:
@@ -199,24 +205,26 @@ export class WebhookIssueService {
       }
 
       // Create unassigned project if it doesn't exist
-      // First need to make sure there's at least one team
-      const team = await prisma.team.findFirst();
-      if (!team) {
-        console.error('Cannot create unassigned project: No teams exist');
-        return null;
-      }
+      return await prisma.$transaction(async (tx) => {
+        // First need to make sure there's at least one team
+        const team = await tx.team.findFirst();
+        if (!team) {
+          console.error('Cannot create unassigned project: No teams exist');
+          return null;
+        }
 
-      // Create the project
-      return await prisma.project.create({
-        data: {
-          id: UNASSIGNED_PROJECT_ID,
-          name: 'Unassigned',
-          teamId: team.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          state: 'Unassigned',
-          description: 'Automatically created for issues without projects',
-        },
+        // Create the project
+        return await tx.project.create({
+          data: {
+            id: UNASSIGNED_PROJECT_ID,
+            name: 'Unassigned',
+            teamId: team.id,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            state: 'Unassigned',
+            description: 'Automatically created for issues without projects',
+          },
+        });
       });
     } catch (error) {
       console.error(`Error creating unassigned project: ${error.message}`);

@@ -196,22 +196,22 @@ input TimeInputCreate {
   projectId: String!
 
   """User ID"""
-  userId: Float!
+  userId: Int!
 
   """Rate ID"""
-  rateId: Float!
+  rateId: Int!
 
   """Total Elapsed Time"""
-  totalElapsedTime: Float!
+  totalElapsedTime: Int!
 }
 
 input TimeInputUpdate {
   """Time entry ID"""
-  id: Float!
+  id: Int!
 
   """End time"""
   endTime: DateTime
 
   """Total Elapsed Time"""
-  totalElapsedTime: Float!
+  totalElapsedTime: Int!
 }

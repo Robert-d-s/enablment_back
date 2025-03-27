@@ -6,9 +6,17 @@ import { HttpModule } from '@nestjs/axios';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { UserModule } from '../user/user.module';
+import { DataLoaderModule } from '../loaders/data-loader.module';
 
 @Module({
-  imports: [ConfigModule, HttpModule, PrismaModule, AuthModule, UserModule],
+  imports: [
+    ConfigModule,
+    HttpModule,
+    PrismaModule,
+    AuthModule,
+    UserModule,
+    DataLoaderModule,
+  ],
   providers: [TeamResolver, TeamService],
   exports: [TeamService],
 })

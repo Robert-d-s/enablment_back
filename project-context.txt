@@ -77,6 +77,7 @@ module.exports = {
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
+    "dataloader": "^2.2.3",
     "graphql": "^16.6.0",
     "graphql-ws": "^5.14.3",
     "micro": "^10.0.1",
@@ -368,21 +369,26 @@ export class AppService {
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
+import { ValidationPipe } from '@nestjs/common';
+import { getCorsConfig } from './config/cors.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors({
-    origin:
-      process.env.NODE_ENV === 'production'
-        ? process.env.FRONTEND_URL
-        : [
-            'http://localhost:3000',
-            'http://localhost:4000',
-            'http://127.0.0.1:3000',
-          ],
-    credentials: true,
-  });
+  // Add global validation pipe for DTOs and GraphQL inputs
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  );
+
+  // Apply CORS settings from centralized configuration
+  app.enableCors(getCorsConfig());
 
   app.use(cookieParser());
 
@@ -409,26 +415,6 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 
-// describe('AppController (e2e)', () => {
-//   let app: INestApplication;
-
-//   beforeEach(async () => {
-//     const moduleFixture: TestingModule = await Test.createTestingModule({
-//       imports: [AppModule],
-//     }).compile();
-
-//     app = moduleFixture.createNestApplication();
-//     await app.init();
-//   });
-
-//   it('/ (GET)', () => {
-//     return request(app.getHttpServer())
-//       .get('/')
-//       .expect(200)
-//       .expect('Hello World!');
-//   });
-// });
-
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let jwtToken: string;
@@ -441,15 +427,24 @@ describe('AppController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    // Login and get JWT token
-    const response = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({
-        email: 'rs@enablment.com',
-        password: 'Oldschool!',
-      });
+    // Login using GraphQL mutation instead of REST
+    const loginMutation = `
+      mutation {
+        login(email: "rs@enablment.com", password: "Oldschool!") {
+          access_token
+          user {
+            email
+          }
+        }
+      }
+    `;
 
-    jwtToken = response.body.access_token;
+    const response = await request(app.getHttpServer()).post('/graphql').send({
+      query: loginMutation,
+    });
+
+    // Extract token from the GraphQL response
+    jwtToken = response.body.data.login.access_token;
   });
 
   it('/ (GET)', () => {
@@ -470,122 +465,6 @@ describe('AppController (e2e)', () => {
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
-  }
-}
-
-// ====== FILE: src\auth\auth.controller.ts ======
-
-import {
-  Body,
-  Controller,
-  Post,
-  HttpCode,
-  HttpStatus,
-  Request,
-  Get,
-  ClassSerializerInterceptor,
-  UseInterceptors,
-  UseGuards,
-  Res,
-} from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { SignInDto } from './dto/sign-in.dto';
-import { SignUpDto } from './dto/sign-up.dto';
-import { UserProfileDto } from './dto/user-profile.dto';
-import { Request as ExpressRequest, Response } from 'express';
-import { UserRole } from '../user/user-role.enum';
-import { AuthGuard } from './auth.guard';
-
-// Interface to define our authenticated request type
-interface RequestWithUser extends ExpressRequest {
-  user: {
-    id: number;
-    email: string;
-    role: UserRole;
-  };
-}
-
-@Controller('auth')
-@UseInterceptors(ClassSerializerInterceptor)
-export class AuthController {
-  constructor(private authService: AuthService) {}
-
-  @HttpCode(HttpStatus.OK)
-  @Post('login')
-  async signIn(
-    @Body() signInDto: SignInDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const result = await this.authService.signIn(
-      signInDto.email,
-      signInDto.password,
-    );
-
-    // Set HTTP-only cookie with the JWT token
-    response.cookie('auth_token', result.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/',
-    });
-
-    // Return success without exposing the token in the response body
-    return {
-      success: true,
-      user: {
-        email: signInDto.email,
-      },
-    };
-  }
-
-  @Post('signup')
-  async signUp(
-    @Body() signUpDto: SignUpDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    await this.authService.signUp(signUpDto.email, signUpDto.password);
-    const result = await this.authService.signIn(
-      signUpDto.email,
-      signUpDto.password,
-    );
-
-    // Set HTTP-only cookie with the JWT token
-    response.cookie('auth_token', result.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/',
-    });
-
-    // Return success without exposing the token in the response body
-    return {
-      success: true,
-      user: {
-        email: signUpDto.email,
-      },
-    };
-  }
-
-  @Get('profile')
-  @UseGuards(AuthGuard)
-  getProfile(@Request() req: RequestWithUser) {
-    return new UserProfileDto(req.user);
-  }
-
-  @Post('logout')
-  @HttpCode(HttpStatus.OK)
-  logout(@Res({ passthrough: true }) response: Response) {
-    // Clear the auth cookie
-    response.clearCookie('auth_token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/',
-    });
-
-    return { success: true };
   }
 }
 
@@ -729,15 +608,6 @@ export class AuthGuard implements CanActivate {
 
     return token;
   }
-
-  // Keep this for backward compatibility during transition
-  private extractTokenFromHeader(request: Request): string | undefined {
-    if (!request || !request.headers.authorization) {
-      return undefined;
-    }
-    const [type, token] = request.headers.authorization.split(' ');
-    return type === 'Bearer' ? token : undefined;
-  }
 }
 
 // ====== FILE: src\auth\auth.module.ts ======
@@ -745,14 +615,12 @@ export class AuthGuard implements CanActivate {
 import { Module, forwardRef } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
-import { AuthController } from './auth.controller';
-// import { jwtConstants } from './constants';
+
 import { UserModule } from '../user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthResolver } from './auth.resolver';
 import { AuthGuard } from './auth.guard';
 
-// Key for metadata to mark routes as public
 export const IS_PUBLIC_KEY = 'isPublic';
 
 @Module({
@@ -763,18 +631,13 @@ export const IS_PUBLIC_KEY = 'isPublic';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'), // ✅ Load from env correctly
+        secret: configService.get<string>('JWT_SECRET'),
         signOptions: { expiresIn: '43200s' },
       }),
     }),
   ],
-  providers: [
-    AuthService,
-    AuthResolver,
-    AuthGuard, // Provide the guard for injection but don't apply it globally
-  ],
-  controllers: [AuthController],
-  exports: [AuthService, JwtModule, AuthGuard], // Export the guard for use in other modules
+  providers: [AuthService, AuthResolver, AuthGuard],
+  exports: [AuthService, JwtModule, AuthGuard],
 })
 export class AuthModule {}
 
@@ -894,6 +757,7 @@ import {
   UnauthorizedException,
   ConflictException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
@@ -941,6 +805,10 @@ export class AuthService {
 
   async signUp(email: string, password: string): Promise<User> {
     try {
+      // Additional validation at the service level
+      this.validateEmail(email);
+      this.validatePassword(password);
+
       const userCount = await this.userService.count();
       const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
 
@@ -954,11 +822,46 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, 10);
       return this.userService.create(email, hashedPassword, role);
     } catch (error) {
-      if (error instanceof ConflictException) {
+      if (
+        error instanceof ConflictException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException(
         'An error occurred during sign up',
+      );
+    }
+  }
+
+  // Helper methods for validation
+  private validateEmail(email: string): void {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      throw new BadRequestException('Invalid email format');
+    }
+  }
+
+  private validatePassword(password: string): void {
+    if (!password) {
+      throw new BadRequestException('Password is required');
+    }
+
+    if (password.length < 6) {
+      throw new BadRequestException(
+        'Password must be at least 6 characters long',
+      );
+    }
+
+    // Additional password complexity requirements
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    if (!(hasUpperCase && hasLowerCase && (hasNumbers || hasSpecialChar))) {
+      throw new BadRequestException(
+        'Password must contain at least one uppercase letter, one lowercase letter, and either a number or special character',
       );
     }
   }
@@ -981,10 +884,6 @@ export const CurrentUser = createParamDecorator(
 import { SetMetadata } from '@nestjs/common';
 import { IS_PUBLIC_KEY } from './auth.module';
 
-/**
- * Decorator that marks a route or resolver method as public
- * Public routes/methods don't require authentication
- */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 // ====== FILE: src\auth\roles.decorator.ts ======
@@ -994,44 +893,36 @@ import { UserRole } from '@prisma/client';
 
 export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);
 
-// ====== FILE: src\dbSynch\dbSynch.controller.ts ======
+// ====== FILE: src\config\cors.config.ts ======
 
-import { Controller, Get, HttpCode, Logger } from '@nestjs/common';
-import { DatabaseSyncService } from './dbSynch.service';
+/**
+ * Centralized CORS configuration for both HTTP and WebSocket connections
+ */
+export const getCorsConfig = () => {
+  // Get frontend URL from environment variables or use a default for local development
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-@Controller('database-sync')
-export class DatabaseSyncController {
-  private readonly logger = new Logger(DatabaseSyncController.name);
+  // For production, use the configured frontend URL
+  // For development, allow multiple local origins
+  const origins =
+    process.env.NODE_ENV === 'production'
+      ? frontendUrl
+      : [
+          'http://localhost:3000',
+          'http://localhost:4000',
+          'http://127.0.0.1:3000',
+        ];
 
-  constructor(private readonly databaseSyncService: DatabaseSyncService) {}
-
-  @Get('/full')
-  @HttpCode(200)
-  async synchronizeDatabase() {
-    this.logger.log('Full database synchronization requested');
-    try {
-      await this.databaseSyncService.synchronizeDatabase();
-      return {
-        status: 'success',
-        message: 'Database synchronization completed successfully',
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      this.logger.error(`Synchronization failed: ${error.message}`);
-      return {
-        status: 'error',
-        message: `Synchronization failed: ${error.message}`,
-        timestamp: new Date().toISOString(),
-      };
-    }
-  }
-}
+  return {
+    origin: origins,
+    credentials: true,
+  };
+};
 
 // ====== FILE: src\dbSynch\dbSynch.module.ts ======
 
 import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseSyncService } from './dbSynch.service';
-import { DatabaseSyncController } from './dbSynch.controller';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -1057,7 +948,6 @@ import { AuthModule } from '../auth/auth.module';
     forwardRef(() => AuthModule),
   ],
   providers: [DatabaseSyncService, DatabaseSyncResolver],
-  controllers: [DatabaseSyncController],
   exports: [DatabaseSyncService],
 })
 export class DatabaseSyncModule {}
@@ -1067,12 +957,18 @@ export class DatabaseSyncModule {}
 import { Mutation, Resolver } from '@nestjs/graphql';
 import { DatabaseSyncService } from './dbSynch.service';
 import { SyncResponse } from './dto/sync-response';
+import { UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @Resolver()
 export class DatabaseSyncResolver {
   constructor(private readonly databaseSyncService: DatabaseSyncService) {}
 
   @Mutation(() => SyncResponse)
+  @UseGuards(AuthGuard)
+  @Roles(UserRole.ADMIN)
   async synchronizeDatabase(): Promise<SyncResponse> {
     try {
       await this.databaseSyncService.synchronizeDatabase();
@@ -1098,6 +994,79 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
+
+interface PageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+interface ProjectNode {
+  id: string;
+  name: string;
+  description: string | null;
+  state: string | null;
+  startDate: string | null;
+  targetDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TeamProjectsResponse {
+  team?: {
+    projects?: {
+      pageInfo: PageInfo;
+      nodes: ProjectNode[];
+    };
+  };
+}
+
+interface LabelNode {
+  id: string;
+  name: string;
+  color: string;
+  parentId?: string | null;
+}
+
+interface IssueNode {
+  id: string;
+  title: string;
+  description?: string;
+  state?: {
+    id: string;
+    name: string;
+    color: string;
+    type: string;
+  };
+  assignee?: {
+    id: string;
+    name: string;
+  };
+  project?: {
+    id: string;
+    name: string;
+  };
+  team?: {
+    id: string;
+    key: string;
+    name: string;
+  };
+  priority?: number;
+  priorityLabel?: string;
+  identifier: string;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  labels?: {
+    nodes: LabelNode[];
+  };
+}
+
+interface IssuesResponse {
+  issues: {
+    pageInfo: PageInfo;
+    nodes: IssueNode[];
+  };
+}
 
 @Injectable()
 export class DatabaseSyncService {
@@ -1148,7 +1117,7 @@ export class DatabaseSyncService {
   /**
    * Fetch data from Linear GraphQL API
    */
-  private async fetchFromLinear(query: string, variables = {}): Promise<any> {
+  private async fetchFromLinear<T>(query: string, variables = {}): Promise<T> {
     try {
       this.logger.debug(
         `Sending query to Linear API: ${query.substring(0, 100)}...`,
@@ -1226,7 +1195,9 @@ export class DatabaseSyncService {
     `;
 
     try {
-      const data = await this.fetchFromLinear(query);
+      const data = await this.fetchFromLinear<{
+        teams: { nodes: { id: string; name: string; key: string }[] };
+      }>(query);
       const teams = data.teams.nodes;
 
       this.logger.log(`Processing ${teams.length} teams from Linear`);
@@ -1299,7 +1270,9 @@ export class DatabaseSyncService {
         }
       }
     `;
-    const teamsData = await this.fetchFromLinear(teamsQuery);
+    const teamsData = await this.fetchFromLinear<{
+      teams: { nodes: { id: string }[] };
+    }>(teamsQuery);
     const teams = teamsData.teams.nodes;
 
     this.logger.log(`Fetched ${teams.length} teams to process projects for.`);
@@ -1341,10 +1314,11 @@ export class DatabaseSyncService {
           `;
 
         try {
-          const data = await this.fetchFromLinear(query, {
-            teamId: team.id, // <--- Pass team ID as variable
-            cursor: endCursor,
-          });
+          const data: TeamProjectsResponse =
+            await this.fetchFromLinear<TeamProjectsResponse>(query, {
+              teamId: team.id,
+              cursor: endCursor,
+            });
 
           if (!data.team || !data.team.projects) {
             this.logger.warn(
@@ -1354,7 +1328,7 @@ export class DatabaseSyncService {
             continue;
           }
 
-          const pageInfo = data.team.projects.pageInfo;
+          const pageInfo: PageInfo = data.team.projects.pageInfo;
           const projects = data.team.projects.nodes;
 
           this.logger.log(
@@ -1470,8 +1444,11 @@ export class DatabaseSyncService {
       `;
 
       try {
-        const data = await this.fetchFromLinear(query, { cursor: endCursor });
-        const pageInfo = data.issues.pageInfo;
+        const data: IssuesResponse = await this.fetchFromLinear<IssuesResponse>(
+          query,
+          { cursor: endCursor },
+        );
+        const pageInfo: PageInfo = data.issues.pageInfo;
         const issues = data.issues.nodes;
 
         processedCount += issues.length;
@@ -1575,7 +1552,10 @@ export class DatabaseSyncService {
       }
     `;
 
-    const data = await this.fetchFromLinear(query);
+    const data = await this.fetchFromLinear<{
+      teams: { nodes: { id: string }[] };
+      projects: { nodes: { id: string }[] };
+    }>(query);
 
     const linearTeamIds = new Set(
       data.teams.nodes.map((t: { id: string }) => t.id),
@@ -2183,8 +2163,11 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { getCorsConfig } from '../config/cors.config';
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+  cors: getCorsConfig(),
+})
 export class IssueUpdatesGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -2215,6 +2198,163 @@ import { IssueUpdatesGateway } from './issue-updates.gateway';
   exports: [IssueUpdatesGateway],
 })
 export class IssueUpdatesModule {}
+
+// ====== FILE: src\loaders\data-loader.module.ts ======
+
+import { Module, Scope } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module';
+import { TeamLoader } from './team.loader';
+import { ProjectLoader } from './project.loader';
+import { RateLoader } from './rate.loader';
+
+@Module({
+  imports: [PrismaModule],
+  providers: [TeamLoader, ProjectLoader, RateLoader],
+  exports: [TeamLoader, ProjectLoader, RateLoader],
+})
+export class DataLoaderModule {}
+
+// ====== FILE: src\loaders\project.loader.ts ======
+
+import { Injectable, Scope } from '@nestjs/common';
+import * as DataLoader from 'dataloader';
+import { PrismaService } from '../prisma/prisma.service';
+import { Project } from '@prisma/client';
+
+@Injectable({ scope: Scope.REQUEST })
+export class ProjectLoader {
+  constructor(private prisma: PrismaService) {}
+
+  readonly byId = new DataLoader<string, Project | null>(async (ids) => {
+    const projects = await this.prisma.project.findMany({
+      where: {
+        id: { in: [...ids] },
+      },
+    });
+
+    const projectMap = new Map(
+      projects.map((project) => [project.id, project]),
+    );
+
+    // Return null instead of undefined for missing values
+    return ids.map((id) => projectMap.get(id) || null);
+  });
+
+  readonly byTeamId = new DataLoader<string, Project[]>(async (teamIds) => {
+    const projects = await this.prisma.project.findMany({
+      where: {
+        teamId: { in: [...teamIds] },
+      },
+    });
+
+    const teamProjectsMap = new Map<string, Project[]>();
+
+    teamIds.forEach((id) => {
+      teamProjectsMap.set(id, []);
+    });
+
+    projects.forEach((project) => {
+      const teamProjects = teamProjectsMap.get(project.teamId) || [];
+      teamProjects.push(project);
+      teamProjectsMap.set(project.teamId, teamProjects);
+    });
+
+    return teamIds.map((id) => teamProjectsMap.get(id) || []);
+  });
+}
+
+// ====== FILE: src\loaders\rate.loader.ts ======
+
+import { Injectable, Scope } from '@nestjs/common';
+import * as DataLoader from 'dataloader';
+import { PrismaService } from '../prisma/prisma.service';
+import { Rate } from '@prisma/client';
+
+@Injectable({ scope: Scope.REQUEST })
+export class RateLoader {
+  constructor(private prisma: PrismaService) {}
+
+  readonly byId = new DataLoader<number, Rate | null>(async (ids) => {
+    const rates = await this.prisma.rate.findMany({
+      where: {
+        id: { in: [...ids] },
+      },
+    });
+
+    const rateMap = new Map(rates.map((rate) => [rate.id, rate]));
+    return ids.map((id) => rateMap.get(id) || null);
+  });
+
+  readonly byTeamId = new DataLoader<string, Rate[]>(async (teamIds) => {
+    const rates = await this.prisma.rate.findMany({
+      where: {
+        teamId: { in: [...teamIds] },
+      },
+    });
+
+    const teamRatesMap = new Map<string, Rate[]>();
+
+    teamIds.forEach((id) => {
+      teamRatesMap.set(id, []);
+    });
+
+    rates.forEach((rate) => {
+      const teamRates = teamRatesMap.get(rate.teamId) || [];
+      teamRates.push(rate);
+      teamRatesMap.set(rate.teamId, teamRates);
+    });
+
+    return teamIds.map((id) => teamRatesMap.get(id) || []);
+  });
+}
+
+// ====== FILE: src\loaders\team.loader.ts ======
+
+import { Injectable, Scope } from '@nestjs/common';
+import * as DataLoader from 'dataloader';
+import { PrismaService } from '../prisma/prisma.service';
+import { Team } from '@prisma/client';
+
+@Injectable({ scope: Scope.REQUEST })
+export class TeamLoader {
+  constructor(private prisma: PrismaService) {}
+
+  readonly byId = new DataLoader<string, Team | null>(async (ids) => {
+    const teams = await this.prisma.team.findMany({
+      where: {
+        id: { in: [...ids] },
+      },
+    });
+
+    const teamMap = new Map(teams.map((team) => [team.id, team]));
+    return ids.map((id) => teamMap.get(id) || null);
+  });
+
+  readonly byUserId = new DataLoader<number, Team[]>(async (userIds) => {
+    const userTeams = await this.prisma.userTeam.findMany({
+      where: {
+        userId: { in: [...userIds] },
+      },
+      include: {
+        team: true,
+      },
+    });
+
+    const userTeamMap = new Map<number, Team[]>();
+
+    userIds.forEach((id) => {
+      userTeamMap.set(id, []);
+    });
+
+    userTeams.forEach((ut) => {
+      const teams = userTeamMap.get(ut.userId) || [];
+      teams.push(ut.team);
+      userTeamMap.set(ut.userId, teams);
+    });
+
+    return userIds.map((id) => userTeamMap.get(id) || []);
+  });
+}
 
 // ====== FILE: src\prisma\prisma.module.ts ======
 
@@ -2624,9 +2764,17 @@ import { HttpModule } from '@nestjs/axios';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { UserModule } from '../user/user.module';
+import { DataLoaderModule } from '../loaders/data-loader.module';
 
 @Module({
-  imports: [ConfigModule, HttpModule, PrismaModule, AuthModule, UserModule],
+  imports: [
+    ConfigModule,
+    HttpModule,
+    PrismaModule,
+    AuthModule,
+    UserModule,
+    DataLoaderModule,
+  ],
   providers: [TeamResolver, TeamService],
   exports: [TeamService],
 })
@@ -2634,17 +2782,32 @@ export class TeamModule {}
 
 // ====== FILE: src\team\team.resolver.ts ======
 
-import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
+import {
+  Args,
+  Mutation,
+  Resolver,
+  Query,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { Team } from './team.model';
 import { TeamService } from './team.service';
 import { SimpleTeamDTO } from './team.model';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { ProjectLoader } from '../loaders/project.loader';
+import { RateLoader } from '../loaders/rate.loader';
+import { Project } from '../project/project.model';
+import { Rate } from '../rate/rate.model';
 
 @Resolver(() => Team)
 @UseGuards(AuthGuard)
 export class TeamResolver {
-  constructor(private teamService: TeamService) {}
+  constructor(
+    private teamService: TeamService,
+    private projectLoader: ProjectLoader,
+    private rateLoader: RateLoader,
+  ) {}
 
   @Mutation(() => Team)
   async createTeam(
@@ -2662,6 +2825,20 @@ export class TeamResolver {
   @Query(() => [SimpleTeamDTO])
   async getAllSimpleTeams(): Promise<SimpleTeamDTO[]> {
     return this.teamService.getAllSimpleTeams();
+  }
+
+  @ResolveField(() => [Project])
+  async projects(@Parent() team: Team): Promise<Project[]> {
+    // This will be called only when projects field is requested
+    // Uses DataLoader to batch and cache the requests
+    return this.projectLoader.byTeamId.load(team.id);
+  }
+
+  @ResolveField(() => [Rate])
+  async rates(@Parent() team: Team): Promise<Rate[]> {
+    // This will be called only when rates field is requested
+    // Uses DataLoader to batch and cache the requests
+    return this.rateLoader.byTeamId.load(team.id);
   }
 }
 
@@ -3227,9 +3404,15 @@ import { UserResolver } from './user.resolver';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
+import { DataLoaderModule } from '../loaders/data-loader.module';
 
 @Module({
-  imports: [forwardRef(() => AuthModule), PrismaModule, ConfigModule],
+  imports: [
+    forwardRef(() => AuthModule),
+    PrismaModule,
+    ConfigModule,
+    DataLoaderModule,
+  ],
   providers: [UserResolver, UserService],
   exports: [UserResolver, UserService],
 })
@@ -3237,27 +3420,64 @@ export class UserModule {}
 
 // ====== FILE: src\user\user.resolver.ts ======
 
-import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
+import {
+  Args,
+  Mutation,
+  Query,
+  Resolver,
+  Int,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
 import { UserRole } from './user-role.enum';
+import { TeamLoader } from '../loaders/team.loader';
+import { Team } from '../team/team.model';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Resolver(() => User)
 export class UserResolver {
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private teamLoader: TeamLoader,
+    private prisma: PrismaService,
+  ) {}
 
   @Query(() => [User])
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
   @UseGuards(AuthGuard)
   async users(): Promise<User[]> {
-    const users = await this.userService.all();
-    console.log('Fetched users:', JSON.stringify(users, null, 2));
+    // Only fetch the basic user data without nested relationships
+    const users = await this.prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      },
+    });
+
     return users.map((user) => ({
       ...user,
       role: UserRole[user.role as keyof typeof UserRole],
+    }));
+  }
+
+  @ResolveField(() => [Team])
+  async teams(@Parent() user: User): Promise<Team[]> {
+    // This will be called only when teams field is requested
+    // Uses DataLoader to batch and cache the requests
+    const teams = await this.teamLoader.byUserId.load(user.id);
+
+    // Map to proper Team model objects with empty projects and rates
+    // These will be populated by their own field resolvers if needed
+    return teams.map((team) => ({
+      ...team,
+      projects: [],
+      rates: [],
     }));
   }
 
@@ -3269,10 +3489,6 @@ export class UserResolver {
     @Args('newRole', { type: () => UserRole }) newRole: UserRole,
   ): Promise<User> {
     const updatedUser = await this.userService.updateUserRole(userId, newRole);
-    console.log(
-      'User after role update:',
-      JSON.stringify(updatedUser, null, 2),
-    );
     return {
       ...updatedUser,
       role: UserRole[updatedUser.role as keyof typeof UserRole],
@@ -3287,7 +3503,6 @@ export class UserResolver {
     @Args('teamId') teamId: string,
   ): Promise<User> {
     const user = await this.userService.addUserToTeam(userId, teamId);
-    console.log('User add:', JSON.stringify(user, null, 2));
     return {
       ...user,
       role: UserRole[user.role as keyof typeof UserRole],
@@ -3303,7 +3518,6 @@ export class UserResolver {
   ): Promise<User> {
     try {
       const user = await this.userService.removeUserFromTeam(userId, teamId);
-      console.log('User removed from team:', JSON.stringify(user, null, 2));
       return {
         ...user,
         role: UserRole[user.role as keyof typeof UserRole],
@@ -3317,18 +3531,19 @@ export class UserResolver {
 
 // ====== FILE: src\user\user.service.ts ======
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
 import { User as QlUser } from '../user/user.model';
 
+// Local type definitions that don't conflict with Prisma types
 type TeamBasic = {
   id: string;
   name: string;
 };
 
-type UserTeam = {
+type UserTeamDTO = {
   userId: number;
   teamId: string;
   user: {
@@ -3342,8 +3557,10 @@ type UserTeam = {
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(private prisma: PrismaService) {}
-  async getUserTeams(): Promise<UserTeam[]> {
+  async getUserTeams(): Promise<UserTeamDTO[]> {
     const userTeams = await this.prisma.userTeam.findMany({
       include: {
         user: true,
@@ -3536,76 +3753,8 @@ export class UserService {
     });
   }
 
-  async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
-    console.log(`Attempting to remove team ${teamId} from user ${userId}`);
-
-    return this.prisma.$transaction(async (tx) => {
-      // Log current state of the user and teams
-      const userBeforeUpdate = await tx.user.findUnique({
-        where: { id: userId },
-        include: { teams: true },
-      });
-
-      if (!userBeforeUpdate) {
-        throw new Error(`User with ID ${userId} not found`);
-      }
-
-      console.log('User before update:', userBeforeUpdate);
-
-      try {
-        const result = await tx.userTeam.deleteMany({
-          where: {
-            userId: userId,
-            teamId: teamId,
-          },
-        });
-
-        if (result.count === 0) {
-          console.warn(
-            `No association found for user ${userId} with team ${teamId}. Nothing to delete.`,
-          );
-        } else {
-          console.log(`Removed team ${teamId} from user ${userId}`);
-        }
-      } catch (error) {
-        console.error(
-          `Error while removing team ${teamId} from user ${userId}:`,
-          error,
-        );
-        throw error;
-      }
-
-      // Fetch updated user info within the transaction
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        include: {
-          teams: {
-            include: {
-              team: {
-                include: {
-                  projects: true,
-                  rates: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!user) {
-        throw new Error(
-          `User with ID ${userId} not found after removing from team`,
-        );
-      }
-
-      console.log('User after update:', user);
-
-      return user;
-    });
-  }
-
-  private async getUserWithTeams(userId: number): Promise<User> {
-    const user = await this.prisma.user.findUnique({
+  private async getUserWithTeams(userId: number): Promise<any> {
+    return this.prisma.user.findUnique({
       where: { id: userId },
       include: {
         teams: {
@@ -3620,22 +3769,49 @@ export class UserService {
         },
       },
     });
+  }
 
-    if (!user) {
-      throw new Error(`User with ID ${userId} not found`);
+  async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
+    this.logger.debug(
+      `Removing user ${userId} from team ${teamId}. First, logging current state.`,
+    );
+
+    try {
+      // Get current state
+      const userBefore = await this.getUserWithTeams(userId);
+      this.logger.debug(
+        `Current state - User ${userId} has ${
+          userBefore?.teams?.length || 0
+        } teams`,
+      );
+
+      // Use a transaction to ensure the operation is atomic
+      return await this.prisma.$transaction(async (tx) => {
+        // Perform the disconnection
+        await tx.userTeam.deleteMany({
+          where: {
+            userId: userId,
+            teamId: teamId,
+          },
+        });
+
+        // Get the updated user data
+        const updatedUser = await this.getUserWithTeams(userId);
+        this.logger.debug(
+          `After removal - User ${userId} now has ${
+            updatedUser?.teams?.length || 0
+          } teams`,
+        );
+
+        return updatedUser;
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove user ${userId} from team ${teamId}:`,
+        error,
+      );
+      throw error;
     }
-
-    // Handling non-nullable fields
-    user.teams = user.teams.map((ut) => ({
-      ...ut,
-      team: {
-        ...ut.team,
-        projects: ut.team.projects || [],
-        rates: ut.team.rates || [],
-      },
-    }));
-
-    return user;
   }
 }
 
@@ -3755,73 +3931,79 @@ export class WebhookIssueService {
             return;
           }
 
-          const createdIssue = await this.createIssue(issueData);
+          await prisma.$transaction(async (tx) => {
+            const createdIssue = await this.createIssue(issueData);
 
-          // Also update labels for newly created issue
-          if (issueData.labels && issueData.labels.length > 0) {
-            await this.issueService.updateLabelsForIssue(
-              issueData.id,
-              issueData.labels,
-            );
-          }
-
-          this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
-
-          break;
-
-        case 'update':
-          console.log(`Processing issue update webhook for: ${issueData.id}`);
-
-          // Check if the issue exists before trying to update
-          const existingIssue = await prisma.issue.findUnique({
-            where: { id: issueData.id },
-            select: { id: true },
-          });
-
-          if (existingIssue) {
-            // If issue exists, we can update it even without a projectId
-            await this.updateExistingIssue(issueData);
-
-            // Then update its labels if present
-            if (issueData.labels) {
-              await this.issueService.updateLabelsForIssue(
-                issueData.id,
-                issueData.labels,
-              );
-            }
-          } else {
-            // Issue doesn't exist, need projectId for creation
-            const hasProjectForUpdate = await this.ensureProjectId(issueData);
-            if (!hasProjectForUpdate) {
-              console.warn(
-                `Cannot create non-existent issue ${issueData.id} via update: Missing projectId and no suitable default found`,
-              );
-              return; // Skip further processing
-            }
-
-            await this.createIssue(issueData);
-
+            // Also update labels for newly created issue
             if (issueData.labels && issueData.labels.length > 0) {
               await this.issueService.updateLabelsForIssue(
                 issueData.id,
                 issueData.labels,
               );
             }
-          }
 
-          const updatedIssue = await this.updateExistingIssue(issueData);
-          this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
+            this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
+          });
+
+          break;
+
+        case 'update':
+          console.log(`Processing issue update webhook for: ${issueData.id}`);
+
+          await prisma.$transaction(async (tx) => {
+            // Check if the issue exists before trying to update
+            const existingIssue = await prisma.issue.findUnique({
+              where: { id: issueData.id },
+              select: { id: true },
+            });
+
+            if (existingIssue) {
+              // If issue exists, we can update it even without a projectId
+              await this.updateExistingIssue(issueData);
+
+              // Then update its labels if present
+              if (issueData.labels) {
+                await this.issueService.updateLabelsForIssue(
+                  issueData.id,
+                  issueData.labels,
+                );
+              }
+            } else {
+              // Issue doesn't exist, need projectId for creation
+              const hasProjectForUpdate = await this.ensureProjectId(issueData);
+              if (!hasProjectForUpdate) {
+                console.warn(
+                  `Cannot create non-existent issue ${issueData.id} via update: Missing projectId and no suitable default found`,
+                );
+                return; // Skip further processing
+              }
+
+              await this.createIssue(issueData);
+
+              if (issueData.labels && issueData.labels.length > 0) {
+                await this.issueService.updateLabelsForIssue(
+                  issueData.id,
+                  issueData.labels,
+                );
+              }
+            }
+
+            const updatedIssue = await this.updateExistingIssue(issueData);
+            this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
+          });
           break;
 
         case 'remove':
           console.log(`Processing issue remove webhook for: ${issueData.id}`);
-          await this.issueService.remove(issueData.id);
 
-          this.issueUpdatesGateway.broadcastIssueUpdate({
-            id: issueData.id,
-            action: 'remove',
-          }); // Broadcast remove event, send minimal info
-          await this.issueService.remove(issueData.id);
+          await prisma.$transaction(async (tx) => {
+            await this.issueService.remove(issueData.id);
+
+            this.issueUpdatesGateway.broadcastIssueUpdate({
+              id: issueData.id,
+              action: 'remove',
+            }); // Broadcast remove event, send minimal info
+          });
           break;
 
         default:
@@ -3919,24 +4101,26 @@ export class WebhookIssueService {
       }
 
       // Create unassigned project if it doesn't exist
-      // First need to make sure there's at least one team
-      const team = await prisma.team.findFirst();
-      if (!team) {
-        console.error('Cannot create unassigned project: No teams exist');
-        return null;
-      }
+      return await prisma.$transaction(async (tx) => {
+        // First need to make sure there's at least one team
+        const team = await tx.team.findFirst();
+        if (!team) {
+          console.error('Cannot create unassigned project: No teams exist');
+          return null;
+        }
 
-      // Create the project
-      return await prisma.project.create({
-        data: {
-          id: UNASSIGNED_PROJECT_ID,
-          name: 'Unassigned',
-          teamId: team.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          state: 'Unassigned',
-          description: 'Automatically created for issues without projects',
-        },
+        // Create the project
+        return await tx.project.create({
+          data: {
+            id: UNASSIGNED_PROJECT_ID,
+            name: 'Unassigned',
+            teamId: team.id,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            state: 'Unassigned',
+            description: 'Automatically created for issues without projects',
+          },
+        });
       });
     } catch (error) {
       console.error(`Error creating unassigned project: ${error.message}`);
@@ -4229,21 +4413,6 @@ export class LogoutResponse {
   success: boolean;
 }
 
-// ====== FILE: src\auth\dto\sign-in.dto.ts ======
-
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
-
-export class SignInDto {
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
-  password: string;
-}
-
 // ====== FILE: src\auth\dto\sign-in.input.ts ======
 
 import { Field, InputType } from '@nestjs/graphql';
@@ -4257,21 +4426,6 @@ export class SignInInput {
   email: string;
 
   @Field()
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
-  password: string;
-}
-
-// ====== FILE: src\auth\dto\sign-up.dto.ts ======
-
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
-
-export class SignUpDto {
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
   @IsString()
   @IsNotEmpty()
   @MinLength(6)

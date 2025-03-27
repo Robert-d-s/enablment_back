@@ -1,15 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
 import { User as QlUser } from '../user/user.model';
 
+// Local type definitions that don't conflict with Prisma types
 type TeamBasic = {
   id: string;
   name: string;
 };
 
-type UserTeam = {
+type UserTeamDTO = {
   userId: number;
   teamId: string;
   user: {
@@ -23,8 +24,10 @@ type UserTeam = {
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(private prisma: PrismaService) {}
-  async getUserTeams(): Promise<UserTeam[]> {
+  async getUserTeams(): Promise<UserTeamDTO[]> {
     const userTeams = await this.prisma.userTeam.findMany({
       include: {
         user: true,
@@ -217,76 +220,8 @@ export class UserService {
     });
   }
 
-  async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
-    console.log(`Attempting to remove team ${teamId} from user ${userId}`);
-
-    return this.prisma.$transaction(async (tx) => {
-      // Log current state of the user and teams
-      const userBeforeUpdate = await tx.user.findUnique({
-        where: { id: userId },
-        include: { teams: true },
-      });
-
-      if (!userBeforeUpdate) {
-        throw new Error(`User with ID ${userId} not found`);
-      }
-
-      console.log('User before update:', userBeforeUpdate);
-
-      try {
-        const result = await tx.userTeam.deleteMany({
-          where: {
-            userId: userId,
-            teamId: teamId,
-          },
-        });
-
-        if (result.count === 0) {
-          console.warn(
-            `No association found for user ${userId} with team ${teamId}. Nothing to delete.`,
-          );
-        } else {
-          console.log(`Removed team ${teamId} from user ${userId}`);
-        }
-      } catch (error) {
-        console.error(
-          `Error while removing team ${teamId} from user ${userId}:`,
-          error,
-        );
-        throw error;
-      }
-
-      // Fetch updated user info within the transaction
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        include: {
-          teams: {
-            include: {
-              team: {
-                include: {
-                  projects: true,
-                  rates: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!user) {
-        throw new Error(
-          `User with ID ${userId} not found after removing from team`,
-        );
-      }
-
-      console.log('User after update:', user);
-
-      return user;
-    });
-  }
-
-  private async getUserWithTeams(userId: number): Promise<User> {
-    const user = await this.prisma.user.findUnique({
+  private async getUserWithTeams(userId: number): Promise<any> {
+    return this.prisma.user.findUnique({
       where: { id: userId },
       include: {
         teams: {
@@ -301,21 +236,48 @@ export class UserService {
         },
       },
     });
+  }
 
-    if (!user) {
-      throw new Error(`User with ID ${userId} not found`);
+  async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
+    this.logger.debug(
+      `Removing user ${userId} from team ${teamId}. First, logging current state.`,
+    );
+
+    try {
+      // Get current state
+      const userBefore = await this.getUserWithTeams(userId);
+      this.logger.debug(
+        `Current state - User ${userId} has ${
+          userBefore?.teams?.length || 0
+        } teams`,
+      );
+
+      // Use a transaction to ensure the operation is atomic
+      return await this.prisma.$transaction(async (tx) => {
+        // Perform the disconnection
+        await tx.userTeam.deleteMany({
+          where: {
+            userId: userId,
+            teamId: teamId,
+          },
+        });
+
+        // Get the updated user data
+        const updatedUser = await this.getUserWithTeams(userId);
+        this.logger.debug(
+          `After removal - User ${userId} now has ${
+            updatedUser?.teams?.length || 0
+          } teams`,
+        );
+
+        return updatedUser;
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove user ${userId} from team ${teamId}:`,
+        error,
+      );
+      throw error;
     }
-
-    // Handling non-nullable fields
-    user.teams = user.teams.map((ut) => ({
-      ...ut,
-      team: {
-        ...ut.team,
-        projects: ut.team.projects || [],
-        rates: ut.team.rates || [],
-      },
-    }));
-
-    return user;
   }
 }

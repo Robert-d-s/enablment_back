@@ -6,8 +6,11 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { getCorsConfig } from '../config/cors.config';
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+  cors: getCorsConfig(),
+})
 export class IssueUpdatesGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
