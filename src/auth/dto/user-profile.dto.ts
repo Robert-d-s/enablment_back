@@ -1,11 +1,11 @@
 import { Exclude, Expose } from 'class-transformer';
 import { UserRole } from '../../user/user-role.enum';
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, ObjectType, Int } from '@nestjs/graphql';
 
 @ObjectType()
 @Exclude()
 export class UserProfileDto {
-  @Field()
+  @Field(() => Int)
   @Expose()
   id: number;
 
@@ -13,11 +13,11 @@ export class UserProfileDto {
   @Expose()
   email: string;
 
-  @Field()
+  @Field(() => UserRole)
   @Expose()
   role: UserRole;
 
-  constructor(partial: Partial<UserProfileDto>) {
+  constructor(partial: UserProfileDto) {
     Object.assign(this, partial);
   }
 }

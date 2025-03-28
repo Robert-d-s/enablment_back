@@ -18,6 +18,12 @@ import { HttpModule } from '@nestjs/axios';
 import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { Request, Response } from 'express';
+import { User } from './user/user.model';
+
+export interface GqlContext {
+  req: Request & { user?: User }; // User property from AuthGuard
+  res: Response;
+}
 
 @Module({
   imports: [
@@ -29,8 +35,8 @@ import { Request, Response } from 'express';
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
-      context: ({ req, res }: { req: Request; res: Response }) => ({
-        req,
+      context: ({ req, res }: { req: Request; res: Response }): GqlContext => ({
+        req: req as GqlContext['req'],
         res,
       }),
     }),

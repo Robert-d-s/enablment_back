@@ -49,9 +49,9 @@ enum UserRole {
 }
 
 type UserProfileDto {
-  id: Float!
+  id: Int!
   email: String!
-  role: String!
+  role: UserRole!
 }
 
 type AuthResponse {
@@ -61,6 +61,10 @@ type AuthResponse {
 
 type LogoutResponse {
   success: Boolean!
+}
+
+type RefreshTokenResponse {
+  access_token: String!
 }
 
 type SyncResponse {
@@ -150,8 +154,9 @@ input InvoiceInput {
 
 type Mutation {
   login(input: SignInInput, email: String, password: String): AuthResponse!
-  signup(input: SignUpInput, email: String, password: String): AuthResponse!
+  refreshToken: RefreshTokenResponse!
   logout: LogoutResponse!
+  signup(input: SignUpInput, email: String, password: String): AuthResponse!
   updateUserRole(userId: Int!, newRole: UserRole!): User!
   addUserToTeam(userId: Int!, teamId: String!): User!
   removeUserFromTeam(userId: Int!, teamId: String!): User!

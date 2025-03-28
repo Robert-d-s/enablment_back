@@ -182,6 +182,8 @@ model User {
 
   times Time[]
   teams UserTeam[]
+
+  hashedRefreshToken String?
 }
 
 enum UserRole {
@@ -322,6 +324,12 @@ import { HttpModule } from '@nestjs/axios';
 import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { Request, Response } from 'express';
+import { User } from './user/user.model';
+
+export interface GqlContext {
+  req: Request & { user?: User }; // User property from AuthGuard
+  res: Response;
+}
 
 @Module({
   imports: [
@@ -333,8 +341,8 @@ import { Request, Response } from 'express';
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
-      context: ({ req, res }: { req: Request; res: Response }) => ({
-        req,
+      context: ({ req, res }: { req: Request; res: Response }): GqlContext => ({
+        req: req as GqlContext['req'],
         res,
       }),
     }),
@@ -615,24 +623,25 @@ export class AuthGuard implements CanActivate {
 import { Module, forwardRef } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
-
 import { UserModule } from '../user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthResolver } from './auth.resolver';
 import { AuthGuard } from './auth.guard';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
 export const IS_PUBLIC_KEY = 'isPublic';
 
 @Module({
   imports: [
     ConfigModule,
+    PrismaModule,
     forwardRef(() => UserModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '43200s' },
+        // signOptions: { expiresIn: '43200s' },
       }),
     }),
   ],
@@ -643,28 +652,85 @@ export class AuthModule {}
 
 // ====== FILE: src\auth\auth.resolver.ts ======
 
+// src/auth/auth.resolver.ts
+
 import { Args, Mutation, Query, Resolver, Context } from '@nestjs/graphql';
 import { AuthService } from './auth.service';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { SignInInput } from './dto/sign-in.input';
 import { SignUpInput } from './dto/sign-up.input';
-import { AuthResponse } from './dto/auth-response';
-import { UseGuards } from '@nestjs/common';
+import { AuthResponse } from './dto/auth-response'; // Ensure this ONLY returns access_token and user
+import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import { LogoutResponse } from './dto/logout-response';
+import { GqlContext } from '../app.module'; // Import context type
+import { Public } from './public.decorator'; // Import Public decorator
+import { JwtService } from '@nestjs/jwt'; // Import JwtService
+import { ConfigService } from '@nestjs/config'; // Import ConfigService
+import { RefreshTokenResponse } from './dto/refresh-token-response'; // Import response type
+import { UserRole } from '../user/user-role.enum'; // Import UserRole enum
 
 @Resolver()
 export class AuthResolver {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private jwtService: JwtService, // Inject JwtService
+    private configService: ConfigService, // Inject ConfigService
+  ) {}
 
+  // --- Helper: Set Refresh Token Cookie ---
+  private setRefreshTokenCookie(context: GqlContext, token: string) {
+    if (!context?.res) {
+      console.error(
+        'Response object not found in context, cannot set refresh token cookie.',
+      );
+      return;
+    }
+    const refreshExpirationDays = parseInt(
+      this.configService
+        .get<string>('JWT_REFRESH_EXPIRATION')
+        ?.replace('d', '') || '7',
+      10,
+    );
+    const maxAgeMs = refreshExpirationDays * 24 * 60 * 60 * 1000;
+
+    context.res.cookie('refresh_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/auth/refresh', // Specific path for refresh endpoint
+      maxAge: maxAgeMs,
+    });
+    console.log('Refresh token cookie set on path /auth/refresh.');
+  }
+
+  // --- Helper: Clear Refresh Token Cookie ---
+  private clearRefreshTokenCookie(context: GqlContext) {
+    if (!context?.res) {
+      console.error(
+        'Response object not found in context, cannot clear refresh token cookie.',
+      );
+      return;
+    }
+    context.res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/auth/refresh', // MUST match the path used when setting
+    });
+    console.log('Refresh token cookie cleared.');
+  }
+
+  // --- Login Mutation ---
   @Mutation(() => AuthResponse)
   async login(
+    @Context() context: GqlContext,
     @Args('input', { nullable: true }) signInInput?: SignInInput,
     @Args('email', { nullable: true }) email?: string,
     @Args('password', { nullable: true }) password?: string,
-    @Context() context?: any,
-  ): Promise<AuthResponse> {
+  ): Promise<Omit<AuthResponse, 'refresh_token'>> {
+    // Return type excludes refresh_token
     const emailToUse = signInInput?.email || email;
     const passwordToUse = signInInput?.password || password;
 
@@ -672,34 +738,101 @@ export class AuthResolver {
       throw new Error('Email and password are required');
     }
 
-    const result = await this.authService.signIn(emailToUse, passwordToUse);
+    const { user, accessToken, refreshToken } = await this.authService.signIn(
+      emailToUse,
+      passwordToUse,
+    );
 
-    // Set HTTP-only cookie with the JWT token
-    if (context && context.req && context.res) {
-      context.res.cookie('auth_token', result.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: '/',
-      });
-    }
+    // Set HttpOnly cookie for the refresh token
+    this.setRefreshTokenCookie(context, refreshToken);
 
+    // Return ONLY access token and user profile in body
     return {
-      ...result,
+      access_token: accessToken,
       user: new UserProfileDto({
-        email: emailToUse,
+        id: user.id,
+        email: user.email,
+        role: user.role as UserRole,
       }),
     };
   }
 
-  @Mutation(() => AuthResponse)
+  // --- Refresh Token Mutation ---
+  @Public() // No valid access token needed to call this
+  @Mutation(() => RefreshTokenResponse) // Returns only the new access token
+  async refreshToken(
+    @Context() context: GqlContext,
+  ): Promise<RefreshTokenResponse> {
+    // Return type matches DTO
+    const oldRefreshToken = context.req?.cookies?.['refresh_token'];
+    console.log(
+      'Refresh endpoint called. Cookie received:',
+      oldRefreshToken ? 'Yes' : 'No',
+    );
+
+    if (!oldRefreshToken) {
+      throw new UnauthorizedException('Refresh token not found.');
+    }
+
+    try {
+      // 1. Verify the incoming refresh token's signature and expiry
+      const decoded = await this.jwtService.verifyAsync<{ sub: number }>(
+        oldRefreshToken,
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        },
+      );
+      const userId = decoded.sub;
+
+      // 2. Call service to validate against DB hash and get new tokens (includes rotation)
+      const { accessToken, refreshToken: newRefreshToken } =
+        await this.authService.refreshToken(userId, oldRefreshToken);
+
+      // 3. Set the NEW refresh token in the HttpOnly cookie
+      this.setRefreshTokenCookie(context, newRefreshToken);
+
+      // 4. Return the NEW access token in the response body
+      return { access_token: accessToken };
+    } catch (err) {
+      console.error(
+        'Refresh token validation or rotation failed:',
+        err.message,
+      );
+      // If any step fails (verification, DB check, rotation), clear cookie and deny access
+      this.clearRefreshTokenCookie(context);
+      throw new UnauthorizedException('Invalid or expired refresh token.');
+    }
+  }
+
+  // --- Logout Mutation ---
+  @Mutation(() => LogoutResponse)
+  @UseGuards(AuthGuard) // Require a valid ACCESS token to logout
+  async logout(
+    @CurrentUser() user: UserProfileDto, // Get user ID from validated access token
+    @Context() context: GqlContext,
+  ): Promise<LogoutResponse> {
+    try {
+      // Call service to revoke token hash in DB
+      await this.authService.logout(user.id);
+    } catch (error) {
+      // Log error but proceed with cookie clearing
+      console.error('Error during server-side logout:', error);
+    }
+
+    // Always clear the cookie on the client side
+    this.clearRefreshTokenCookie(context);
+
+    return { success: true };
+  }
+
+  @Mutation(() => AuthResponse) // Return type includes access_token and user
   async signup(
+    @Context() context: GqlContext,
     @Args('input', { nullable: true }) signUpInput?: SignUpInput,
     @Args('email', { nullable: true }) email?: string,
     @Args('password', { nullable: true }) password?: string,
-    @Context() context?: any,
-  ): Promise<AuthResponse> {
+  ): Promise<Omit<AuthResponse, 'refresh_token'>> {
+    // Return type excludes refresh_token field
     const emailToUse = signUpInput?.email || email;
     const passwordToUse = signUpInput?.password || password;
 
@@ -707,46 +840,36 @@ export class AuthResolver {
       throw new Error('Email and password are required');
     }
 
-    await this.authService.signUp(emailToUse, passwordToUse);
-    const result = await this.authService.signIn(emailToUse, passwordToUse);
+    // Assuming signUp doesn't throw for existing user but signIn might handle it,
+    // or relying on signUp to throw ConflictException which should be caught
+    const createdUser = await this.authService.signUp(
+      emailToUse,
+      passwordToUse,
+    ); // Assuming this returns the created User
 
-    // Set HTTP-only cookie with the JWT token
-    if (context && context.req && context.res) {
-      context.res.cookie('auth_token', result.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: '/',
-      });
-    }
-
+    // --- Log user in immediately after signup ---
+    const { accessToken, refreshToken } = await this.authService.signIn(
+      emailToUse,
+      passwordToUse,
+    );
+    this.setRefreshTokenCookie(context, refreshToken); // Set refresh token cookie
     return {
-      ...result,
+      access_token: accessToken,
+      // Create UserProfileDto using data from the createdUser or signIn result if needed
       user: new UserProfileDto({
-        email: emailToUse,
-      }),
+        email: createdUser.email,
+        id: createdUser.id,
+        role: createdUser.role as UserRole,
+      }), // Use data from createdUser
     };
   }
 
-  @Mutation(() => LogoutResponse)
-  async logout(@Context() context: any): Promise<LogoutResponse> {
-    if (context && context.res) {
-      context.res.clearCookie('auth_token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-        path: '/',
-      });
-    }
-
-    return { success: true };
-  }
-
+  // --- Me Query (remains the same) ---
   @Query(() => UserProfileDto)
-  @UseGuards(AuthGuard)
-  async me(@CurrentUser() user: any): Promise<UserProfileDto> {
-    return new UserProfileDto(user);
+  @UseGuards(AuthGuard) // Requires valid access token
+  async me(@CurrentUser() user: UserProfileDto): Promise<UserProfileDto> {
+    // AuthGuard ensures 'user' is populated from a valid ACCESS token
+    return user; // Return the user profile derived from the access token
   }
 }
 
@@ -761,20 +884,78 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
-
 import { User } from '@prisma/client';
 import { UserRole } from '../user/user-role.enum';
-
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private userService: UserService,
-    private jwtService: JwtService,
+    private readonly userService: UserService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
-  async signIn(username: string, pass: string) {
+  // --- Helper: Generate Access and Refresh Tokens ---
+  private async generateTokens(
+    user: User,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const accessTokenPayload = { email: user.email, sub: user.id }; // Use 'sub' standard claim
+    const refreshTokenPayload = { sub: user.id }; // Minimal payload for refresh
+
+    const [accessToken, refreshToken] = await Promise.all([
+      // Access Token
+      this.jwtService.signAsync(accessTokenPayload, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        expiresIn:
+          this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? '15m',
+      }),
+      // Refresh Token
+      this.jwtService.signAsync(refreshTokenPayload, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn:
+          this.configService.get<string>('JWT_REFRESH_EXPIRATION') ?? '7d',
+      }),
+    ]);
+
+    return { accessToken, refreshToken };
+  }
+
+  // --- Helper: Hash Data ---
+  private async hashData(data: string): Promise<string> {
+    return bcrypt.hash(data, 10);
+  }
+
+  // --- Helper: Update Stored Hashed Refresh Token ---
+  private async updateRefreshTokenHash(
+    userId: number,
+    refreshToken: string | null,
+  ) {
+    const hashedRefreshToken = refreshToken
+      ? await this.hashData(refreshToken)
+      : null;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        hashedRefreshToken: hashedRefreshToken,
+        // refreshTokenExpiry could be added/updated here if needed
+      },
+    });
+    console.log(`Updated refresh token hash for user ${userId}.`);
+  }
+
+  async signIn(
+    username: string,
+    pass: string,
+  ): Promise<{
+    user: Pick<User, 'id' | 'email' | 'role'>;
+    accessToken: string;
+    refreshToken: string;
+  }> {
     try {
       const user = await this.userService.findOne(username);
 
@@ -789,18 +970,78 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      const payload = { email: user.email, id: user.id };
+      const { accessToken, refreshToken } = await this.generateTokens(user);
+
+      await this.updateRefreshTokenHash(user.id, refreshToken);
+
       return {
-        access_token: await this.jwtService.signAsync(payload),
+        user: { id: user.id, email: user.email, role: user.role },
+        accessToken,
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
+      console.error('Sign in error:', error);
       throw new InternalServerErrorException(
         'An error occurred during sign in',
       );
     }
+  }
+
+  // --- Refresh Tokens ---
+  async refreshToken(
+    userId: number,
+    rt: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    console.log(`Attempting refresh for user ${userId}`);
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    // Check if user exists and has a stored token hash
+    if (!user || !user.hashedRefreshToken) {
+      console.warn(
+        `Refresh Denied: User ${userId} not found or no stored hash.`,
+      );
+      throw new UnauthorizedException('Access Denied');
+    }
+
+    // Compare the provided token (rt) with the stored hash
+    const rtMatches = await bcrypt.compare(rt, user.hashedRefreshToken);
+    if (!rtMatches) {
+      console.warn(
+        `Refresh Denied: Provided token does not match stored hash for user ${userId}.`,
+      );
+      throw new UnauthorizedException('Access Denied');
+    }
+    console.log(`Refresh Granted: Token match successful for user ${userId}.`);
+
+    // Generate NEW tokens (rotation)
+    const { accessToken, refreshToken: newRefreshToken } =
+      await this.generateTokens(user);
+
+    // Update the stored hash with the NEW refresh token's hash
+    await this.updateRefreshTokenHash(user.id, newRefreshToken);
+    console.log(`Refresh Rotation: Stored new token hash for user ${userId}.`);
+
+    // Return the NEW access and refresh tokens
+    return { accessToken, refreshToken: newRefreshToken };
+  }
+
+  // --- Logout ---
+  async logout(userId: number): Promise<boolean> {
+    console.log(`Logging out user ${userId}. Clearing token hash.`);
+    // Clear the stored hash by setting it to null
+    await this.prisma.user.updateMany({
+      where: {
+        id: userId,
+        hashedRefreshToken: { not: null }, // Optimization: only update if not already null
+      },
+      data: {
+        hashedRefreshToken: null,
+      },
+    });
+    return true; // Indicate success
   }
 
   async signUp(email: string, password: string): Promise<User> {
@@ -812,11 +1053,16 @@ export class AuthService {
       const userCount = await this.userService.count();
       const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
 
-      if (userCount > 0) {
-        const existingUser = await this.userService.findOne(email);
-        if (existingUser) {
-          throw new ConflictException('Email already exists');
-        }
+      // if (userCount > 0) {
+      //   const existingUser = await this.userService.findOne(email);
+      //   if (existingUser) {
+      //     throw new ConflictException('Email already exists');
+      //   }
+      // }
+
+      const existingUser = await this.userService.findOne(email);
+      if (existingUser) {
+        throw new ConflictException('Email already exists');
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -828,6 +1074,7 @@ export class AuthService {
       ) {
         throw error;
       }
+      console.error('Sign up error:', error);
       throw new InternalServerErrorException(
         'An error occurred during sign up',
       );
@@ -2896,65 +3143,104 @@ export class TeamService {
 
 // ====== FILE: src\time\time.input.ts ======
 
-import { Field, InputType } from '@nestjs/graphql';
+// src/time/time.input.ts
+import { Field, InputType, Int } from '@nestjs/graphql'; // Use Int for GraphQL
+import {
+  IsDate,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator'; // <--- Import these
+import { Type } from 'class-transformer'; // <--- Import this
 
 @InputType()
 export class TimeInputCreate {
   @Field(() => Date, {
+    // For GraphQL
     nullable: false,
     description: 'Start time',
   })
+  @IsDate() // For ValidationPipe
+  @IsNotEmpty() // For ValidationPipe
+  @Type(() => Date) // For ValidationPipe (transform)
   startTime: Date;
 
   @Field(() => Date, {
+    // For GraphQL
     nullable: true,
     description: 'End time',
   })
+  @IsOptional() // For ValidationPipe
+  @IsDate() // For ValidationPipe
+  @Type(() => Date) // For ValidationPipe (transform)
   endTime?: Date;
 
   @Field(() => String, {
+    // For GraphQL
     nullable: false,
     description: 'Project ID',
   })
+  @IsString() // For ValidationPipe
+  @IsNotEmpty() // For ValidationPipe
   projectId: string;
 
-  @Field(() => Number, {
+  @Field(() => Int, {
+    // For GraphQL (Use Int)
     nullable: false,
     description: 'User ID',
   })
+  @IsNumber() // For ValidationPipe
+  @IsNotEmpty() // For ValidationPipe
   userId: number;
 
-  @Field(() => Number, {
+  @Field(() => Int, {
+    // For GraphQL (Use Int)
     nullable: false,
     description: 'Rate ID',
   })
+  @IsNumber() // For ValidationPipe
+  @IsNotEmpty() // For ValidationPipe
   rateId: number;
 
-  @Field(() => Number, {
+  @Field(() => Int, {
+    // For GraphQL (Use Int)
     nullable: false,
     description: 'Total Elapsed Time',
   })
+  @IsNumber() // For ValidationPipe
+  @IsNotEmpty() // For ValidationPipe
   totalElapsedTime: number;
 }
 
+// Add relevant validators to TimeInputUpdate as well
 @InputType()
 export class TimeInputUpdate {
-  @Field(() => Number, {
+  @Field(() => Int, {
+    // Use Int
     nullable: false,
     description: 'Time entry ID',
   })
+  @IsNumber()
+  @IsNotEmpty()
   id: number;
 
   @Field(() => Date, {
     nullable: true,
     description: 'End time',
   })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
   endTime?: Date;
 
-  @Field(() => Number, {
+  @Field(() => Int, {
+    // Use Int
     nullable: false,
     description: 'Total Elapsed Time',
   })
+  @IsNumber()
+  @IsNotEmpty()
   totalElapsedTime: number;
 }
 
@@ -4413,6 +4699,17 @@ export class LogoutResponse {
   success: boolean;
 }
 
+// ====== FILE: src\auth\dto\refresh-token-response.ts ======
+
+// src/auth/dto/refresh-token-response.ts
+import { Field, ObjectType } from '@nestjs/graphql';
+
+@ObjectType()
+export class RefreshTokenResponse {
+  @Field(() => String) // Specify String type for GraphQL
+  access_token: string;
+}
+
 // ====== FILE: src\auth\dto\sign-in.input.ts ======
 
 import { Field, InputType } from '@nestjs/graphql';
@@ -4455,12 +4752,12 @@ export class SignUpInput {
 
 import { Exclude, Expose } from 'class-transformer';
 import { UserRole } from '../../user/user-role.enum';
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, ObjectType, Int } from '@nestjs/graphql';
 
 @ObjectType()
 @Exclude()
 export class UserProfileDto {
-  @Field()
+  @Field(() => Int)
   @Expose()
   id: number;
 
@@ -4468,11 +4765,11 @@ export class UserProfileDto {
   @Expose()
   email: string;
 
-  @Field()
+  @Field(() => UserRole)
   @Expose()
   role: UserRole;
 
-  constructor(partial: Partial<UserProfileDto>) {
+  constructor(partial: UserProfileDto) {
     Object.assign(this, partial);
   }
 }

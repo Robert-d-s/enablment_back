@@ -3,7 +3,7 @@ import { UserProfileDto } from './user-profile.dto';
 
 @ObjectType()
 export class AuthResponse {
-  @Field()
+  @Field(() => String)
   access_token: string;
 
   @Field(() => UserProfileDto, { nullable: true })

@@ -16,6 +16,8 @@ model User {
 
   times Time[]
   teams UserTeam[]
+
+  hashedRefreshToken String?
 }
 
 enum UserRole {
