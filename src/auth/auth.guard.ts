@@ -10,7 +10,6 @@ import { Request } from 'express';
 import { IS_PUBLIC_KEY } from './auth.module';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-
 import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';

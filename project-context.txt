@@ -659,27 +659,26 @@ import { AuthService } from './auth.service';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { SignInInput } from './dto/sign-in.input';
 import { SignUpInput } from './dto/sign-up.input';
-import { AuthResponse } from './dto/auth-response'; // Ensure this ONLY returns access_token and user
+import { AuthResponse } from './dto/auth-response';
 import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import { LogoutResponse } from './dto/logout-response';
-import { GqlContext } from '../app.module'; // Import context type
-import { Public } from './public.decorator'; // Import Public decorator
-import { JwtService } from '@nestjs/jwt'; // Import JwtService
-import { ConfigService } from '@nestjs/config'; // Import ConfigService
-import { RefreshTokenResponse } from './dto/refresh-token-response'; // Import response type
-import { UserRole } from '../user/user-role.enum'; // Import UserRole enum
+import { GqlContext } from '../app.module';
+import { Public } from './public.decorator';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { RefreshTokenResponse } from './dto/refresh-token-response';
+import { UserRole } from '../user/user-role.enum';
 
 @Resolver()
 export class AuthResolver {
   constructor(
     private authService: AuthService,
-    private jwtService: JwtService, // Inject JwtService
-    private configService: ConfigService, // Inject ConfigService
+    private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
-  // --- Helper: Set Refresh Token Cookie ---
   private setRefreshTokenCookie(context: GqlContext, token: string) {
     if (!context?.res) {
       console.error(
@@ -699,13 +698,12 @@ export class AuthResolver {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/auth/refresh', // Specific path for refresh endpoint
+      path: '/auth/refresh',
       maxAge: maxAgeMs,
     });
     console.log('Refresh token cookie set on path /auth/refresh.');
   }
 
-  // --- Helper: Clear Refresh Token Cookie ---
   private clearRefreshTokenCookie(context: GqlContext) {
     if (!context?.res) {
       console.error(
@@ -717,12 +715,11 @@ export class AuthResolver {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/auth/refresh', // MUST match the path used when setting
+      path: '/auth/refresh',
     });
     console.log('Refresh token cookie cleared.');
   }
 
-  // --- Login Mutation ---
   @Mutation(() => AuthResponse)
   async login(
     @Context() context: GqlContext,
@@ -730,7 +727,6 @@ export class AuthResolver {
     @Args('email', { nullable: true }) email?: string,
     @Args('password', { nullable: true }) password?: string,
   ): Promise<Omit<AuthResponse, 'refresh_token'>> {
-    // Return type excludes refresh_token
     const emailToUse = signInInput?.email || email;
     const passwordToUse = signInInput?.password || password;
 
@@ -743,11 +739,9 @@ export class AuthResolver {
       passwordToUse,
     );
 
-    // Set HttpOnly cookie for the refresh token
     this.setRefreshTokenCookie(context, refreshToken);
 
-    // Return ONLY access token and user profile in body
-    return {
+    const result = {
       access_token: accessToken,
       user: new UserProfileDto({
         id: user.id,
@@ -755,15 +749,18 @@ export class AuthResolver {
         role: user.role as UserRole,
       }),
     };
+    console.log(
+      'AuthResolver.login returning:',
+      JSON.stringify(result, null, 2),
+    );
+    return result;
   }
 
-  // --- Refresh Token Mutation ---
-  @Public() // No valid access token needed to call this
-  @Mutation(() => RefreshTokenResponse) // Returns only the new access token
+  @Public()
+  @Mutation(() => RefreshTokenResponse)
   async refreshToken(
     @Context() context: GqlContext,
   ): Promise<RefreshTokenResponse> {
-    // Return type matches DTO
     const oldRefreshToken = context.req?.cookies?.['refresh_token'];
     console.log(
       'Refresh endpoint called. Cookie received:',
@@ -775,7 +772,6 @@ export class AuthResolver {
     }
 
     try {
-      // 1. Verify the incoming refresh token's signature and expiry
       const decoded = await this.jwtService.verifyAsync<{ sub: number }>(
         oldRefreshToken,
         {
@@ -784,55 +780,47 @@ export class AuthResolver {
       );
       const userId = decoded.sub;
 
-      // 2. Call service to validate against DB hash and get new tokens (includes rotation)
       const { accessToken, refreshToken: newRefreshToken } =
         await this.authService.refreshToken(userId, oldRefreshToken);
 
-      // 3. Set the NEW refresh token in the HttpOnly cookie
       this.setRefreshTokenCookie(context, newRefreshToken);
 
-      // 4. Return the NEW access token in the response body
       return { access_token: accessToken };
     } catch (err) {
       console.error(
         'Refresh token validation or rotation failed:',
         err.message,
       );
-      // If any step fails (verification, DB check, rotation), clear cookie and deny access
+
       this.clearRefreshTokenCookie(context);
       throw new UnauthorizedException('Invalid or expired refresh token.');
     }
   }
 
-  // --- Logout Mutation ---
   @Mutation(() => LogoutResponse)
-  @UseGuards(AuthGuard) // Require a valid ACCESS token to logout
+  @UseGuards(AuthGuard)
   async logout(
-    @CurrentUser() user: UserProfileDto, // Get user ID from validated access token
+    @CurrentUser() user: UserProfileDto,
     @Context() context: GqlContext,
   ): Promise<LogoutResponse> {
     try {
-      // Call service to revoke token hash in DB
       await this.authService.logout(user.id);
     } catch (error) {
-      // Log error but proceed with cookie clearing
       console.error('Error during server-side logout:', error);
     }
 
-    // Always clear the cookie on the client side
     this.clearRefreshTokenCookie(context);
 
     return { success: true };
   }
 
-  @Mutation(() => AuthResponse) // Return type includes access_token and user
+  @Mutation(() => AuthResponse)
   async signup(
     @Context() context: GqlContext,
     @Args('input', { nullable: true }) signUpInput?: SignUpInput,
     @Args('email', { nullable: true }) email?: string,
     @Args('password', { nullable: true }) password?: string,
   ): Promise<Omit<AuthResponse, 'refresh_token'>> {
-    // Return type excludes refresh_token field
     const emailToUse = signUpInput?.email || email;
     const passwordToUse = signUpInput?.password || password;
 
@@ -840,36 +828,30 @@ export class AuthResolver {
       throw new Error('Email and password are required');
     }
 
-    // Assuming signUp doesn't throw for existing user but signIn might handle it,
-    // or relying on signUp to throw ConflictException which should be caught
     const createdUser = await this.authService.signUp(
       emailToUse,
       passwordToUse,
-    ); // Assuming this returns the created User
+    );
 
-    // --- Log user in immediately after signup ---
     const { accessToken, refreshToken } = await this.authService.signIn(
       emailToUse,
       passwordToUse,
     );
-    this.setRefreshTokenCookie(context, refreshToken); // Set refresh token cookie
+    this.setRefreshTokenCookie(context, refreshToken);
     return {
       access_token: accessToken,
-      // Create UserProfileDto using data from the createdUser or signIn result if needed
       user: new UserProfileDto({
         email: createdUser.email,
         id: createdUser.id,
         role: createdUser.role as UserRole,
-      }), // Use data from createdUser
+      }),
     };
   }
 
-  // --- Me Query (remains the same) ---
   @Query(() => UserProfileDto)
-  @UseGuards(AuthGuard) // Requires valid access token
+  @UseGuards(AuthGuard)
   async me(@CurrentUser() user: UserProfileDto): Promise<UserProfileDto> {
-    // AuthGuard ensures 'user' is populated from a valid ACCESS token
-    return user; // Return the user profile derived from the access token
+    return user;
   }
 }
 
@@ -899,21 +881,18 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
 
-  // --- Helper: Generate Access and Refresh Tokens ---
   private async generateTokens(
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const accessTokenPayload = { email: user.email, sub: user.id }; // Use 'sub' standard claim
-    const refreshTokenPayload = { sub: user.id }; // Minimal payload for refresh
+    const accessTokenPayload = { email: user.email, sub: user.id };
+    const refreshTokenPayload = { sub: user.id };
 
     const [accessToken, refreshToken] = await Promise.all([
-      // Access Token
       this.jwtService.signAsync(accessTokenPayload, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
         expiresIn:
           this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? '15m',
       }),
-      // Refresh Token
       this.jwtService.signAsync(refreshTokenPayload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
         expiresIn:
@@ -924,12 +903,10 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  // --- Helper: Hash Data ---
   private async hashData(data: string): Promise<string> {
     return bcrypt.hash(data, 10);
   }
 
-  // --- Helper: Update Stored Hashed Refresh Token ---
   private async updateRefreshTokenHash(
     userId: number,
     refreshToken: string | null,
@@ -942,7 +919,6 @@ export class AuthService {
       where: { id: userId },
       data: {
         hashedRefreshToken: hashedRefreshToken,
-        // refreshTokenExpiry could be added/updated here if needed
       },
     });
     console.log(`Updated refresh token hash for user ${userId}.`);
@@ -959,12 +935,10 @@ export class AuthService {
     try {
       const user = await this.userService.findOne(username);
 
-      // Check if the user exists
       if (!user) {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      // Check if the password is correct
       const isMatch = await bcrypt.compare(pass, user.password);
       if (!isMatch) {
         throw new UnauthorizedException('Invalid email or password');
@@ -974,11 +948,16 @@ export class AuthService {
 
       await this.updateRefreshTokenHash(user.id, refreshToken);
 
-      return {
+      const result = {
         user: { id: user.id, email: user.email, role: user.role },
         accessToken,
         refreshToken,
       };
+      console.log(
+        'AuthService.signIn returning:',
+        JSON.stringify(result, null, 2),
+      );
+      return result;
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
@@ -990,7 +969,6 @@ export class AuthService {
     }
   }
 
-  // --- Refresh Tokens ---
   async refreshToken(
     userId: number,
     rt: string,
@@ -998,7 +976,6 @@ export class AuthService {
     console.log(`Attempting refresh for user ${userId}`);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
-    // Check if user exists and has a stored token hash
     if (!user || !user.hashedRefreshToken) {
       console.warn(
         `Refresh Denied: User ${userId} not found or no stored hash.`,
@@ -1016,49 +993,36 @@ export class AuthService {
     }
     console.log(`Refresh Granted: Token match successful for user ${userId}.`);
 
-    // Generate NEW tokens (rotation)
     const { accessToken, refreshToken: newRefreshToken } =
       await this.generateTokens(user);
 
-    // Update the stored hash with the NEW refresh token's hash
     await this.updateRefreshTokenHash(user.id, newRefreshToken);
     console.log(`Refresh Rotation: Stored new token hash for user ${userId}.`);
 
-    // Return the NEW access and refresh tokens
     return { accessToken, refreshToken: newRefreshToken };
   }
 
-  // --- Logout ---
   async logout(userId: number): Promise<boolean> {
     console.log(`Logging out user ${userId}. Clearing token hash.`);
-    // Clear the stored hash by setting it to null
     await this.prisma.user.updateMany({
       where: {
         id: userId,
-        hashedRefreshToken: { not: null }, // Optimization: only update if not already null
+        hashedRefreshToken: { not: null },
       },
       data: {
         hashedRefreshToken: null,
       },
     });
-    return true; // Indicate success
+    return true;
   }
 
   async signUp(email: string, password: string): Promise<User> {
     try {
-      // Additional validation at the service level
       this.validateEmail(email);
       this.validatePassword(password);
 
       const userCount = await this.userService.count();
       const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
-
-      // if (userCount > 0) {
-      //   const existingUser = await this.userService.findOne(email);
-      //   if (existingUser) {
-      //     throw new ConflictException('Email already exists');
-      //   }
-      // }
 
       const existingUser = await this.userService.findOne(email);
       if (existingUser) {
@@ -1081,7 +1045,6 @@ export class AuthService {
     }
   }
 
-  // Helper methods for validation
   private validateEmail(email: string): void {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
@@ -1100,7 +1063,6 @@ export class AuthService {
       );
     }
 
-    // Additional password complexity requirements
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
@@ -2822,6 +2784,7 @@ export class ProjectService {
 // ====== FILE: src\rate\rate.input.ts ======
 
 import { Field, InputType, Int } from '@nestjs/graphql';
+import { IsNotEmpty, IsInt, IsString, Min } from 'class-validator';
 
 @InputType()
 export class RateInputCreate {
@@ -2829,18 +2792,25 @@ export class RateInputCreate {
     nullable: false,
     description: 'Rate name',
   })
+  @IsString()
+  @IsNotEmpty()
   name: string;
 
   @Field(() => Int, {
     nullable: false,
     description: 'Rate',
   })
+  @IsInt()
+  @IsNotEmpty()
+  @Min(0)
   rate: number;
 
   @Field(() => String, {
     nullable: false,
     description: 'Rates team id',
   })
+  @IsString()
+  @IsNotEmpty()
   teamId: string;
 }
 
@@ -4682,7 +4652,7 @@ import { UserProfileDto } from './user-profile.dto';
 
 @ObjectType()
 export class AuthResponse {
-  @Field()
+  @Field(() => String)
   access_token: string;
 
   @Field(() => UserProfileDto, { nullable: true })

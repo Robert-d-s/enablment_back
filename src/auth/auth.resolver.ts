@@ -25,7 +25,7 @@ export class AuthResolver {
     private configService: ConfigService,
   ) {}
 
-  private setRefreshTokenCookie(context: GqlContext, token: string) {
+  private setRefreshTokenCookie(context: GqlContext, token: string): void {
     if (!context?.res) {
       console.error(
         'Response object not found in context, cannot set refresh token cookie.',
@@ -44,13 +44,13 @@ export class AuthResolver {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/auth/refresh',
+      path: '/',
       maxAge: maxAgeMs,
     });
-    console.log('Refresh token cookie set on path /auth/refresh.');
+    console.log('Refresh token cookie set on path /.');
   }
 
-  private clearRefreshTokenCookie(context: GqlContext) {
+  private clearRefreshTokenCookie(context: GqlContext): void {
     if (!context?.res) {
       console.error(
         'Response object not found in context, cannot clear refresh token cookie.',
