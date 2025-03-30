@@ -61,7 +61,7 @@ export class AuthResolver {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/auth/refresh',
+      path: '/',
     });
     console.log('Refresh token cookie cleared.');
   }
