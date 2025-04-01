@@ -25,7 +25,15 @@ export class AuthService {
   private async generateTokens(
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const accessTokenPayload = { email: user.email, sub: user.id };
+    // const accessTokenPayload = { email: user.email, sub: user.id };
+    // const refreshTokenPayload = { sub: user.id };
+
+    const accessTokenPayload = {
+      email: user.email,
+      sub: user.id,
+      id: user.id,
+      role: user.role,
+    };
     const refreshTokenPayload = { sub: user.id };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -51,7 +59,7 @@ export class AuthService {
   private async updateRefreshTokenHash(
     userId: number,
     refreshToken: string | null,
-  ) {
+  ): Promise<void> {
     const hashedRefreshToken = refreshToken
       ? await this.hashData(refreshToken)
       : null;

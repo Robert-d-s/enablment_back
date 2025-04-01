@@ -1,3 +1,5 @@
+// src/auth/auth.guard.ts
+
 import {
   CanActivate,
   ExecutionContext,
@@ -7,7 +9,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Request } from 'express';
+import { Request } from 'express'; // Import Request from express
 import { IS_PUBLIC_KEY } from './auth.module';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -15,8 +17,25 @@ import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 
+// Define the structure of your JWT payload
+export interface JwtPayload {
+  email: string;
+  sub: number;
+  id: number;
+  role: UserRole;
+  [key: string]: unknown;
+}
+
+// Extend the Express Request interface globally or locally
+// Locally: Define an interface extending Request
+interface RequestWithUser extends Request {
+  user?: JwtPayload; // Make user optional initially
+}
+
 @Injectable()
 export class AuthGuard implements CanActivate {
+  private readonly logger = new Logger(AuthGuard.name);
+
   constructor(
     private jwtService: JwtService,
     private reflector: Reflector,
@@ -25,72 +44,129 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const handler = context.getHandler();
-    const controllerClass = context.getClass();
-    console.log(
-      `AuthGuard activated for: ${controllerClass?.name}.${handler?.name}`,
-    );
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      handler,
-      controllerClass,
+      context.getHandler(),
+      context.getClass(),
     ]);
-    console.log(
-      `IS_PUBLIC (${controllerClass?.name}.${handler?.name}): ${isPublic}`,
-    );
     if (isPublic) {
-      console.log(`Route is public, skipping auth.`);
+      this.logger.log(`Route is public, skipping auth.`);
       return true;
     }
-    console.log(`Route is NOT public, proceeding with auth.`);
-    const ctx = context.switchToHttp();
-    const graphqlCtx = GqlExecutionContext.create(context);
-    const request = ctx.getRequest<Request>() || graphqlCtx.getContext().req;
+    this.logger.log(`Route is NOT public, proceeding with auth.`);
+
+    // Get the request object, correctly typed
+    const request = this.getRequest(context);
 
     if (!request) {
+      this.logger.error('No request object found in context.');
       throw new UnauthorizedException('No request found');
     }
 
-    // Extract token from cookie instead of header
-    const token = this.extractTokenFromCookie(request);
+    const token = this.extractToken(request);
 
     if (!token) {
-      throw new UnauthorizedException('No auth token found in cookies');
+      this.logger.warn('No authentication token found.');
+      throw new UnauthorizedException('No authentication token found');
     }
 
     try {
-      // Verify the token
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+      // Verify the token and strongly type the payload
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'), // Use the correct access token secret
       });
-      console.log('auth payload contains', payload);
+      this.logger.log(
+        `Token verified successfully. Payload: ${JSON.stringify(payload)}`,
+      );
 
-      interface JwtPayload {
-        email: string;
-        id: number;
-      }
-      (request as Request & { user: JwtPayload }).user = payload as JwtPayload;
+      // Attach payload to request - TypeScript now understands 'user' exists
+      // due to the RequestWithUser interface or global declaration merging.
+      request.user = payload;
 
-      // Check for roles
+      // Pass the email from the verified payload
       return await this.checkUserRoles(context, payload.email);
     } catch (error) {
-      // Enhance and rethrow the error with custom error information
-      if (error instanceof UnauthorizedException) {
-        throw new UnauthorizedException({
-          message: error.message,
-          code: 'UNAUTHORIZED', // Custom error code
-        });
+      // Improved error logging and handling
+      this.logger.error(
+        `Token verification failed: ${error.message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+
+      if (error instanceof Error) {
+        // Type guard for Error
+        if (error.name === 'TokenExpiredError') {
+          throw new UnauthorizedException({
+            message: 'Access token expired',
+            code: 'TOKEN_EXPIRED',
+          });
+        }
+        if (error.name === 'JsonWebTokenError') {
+          throw new UnauthorizedException({
+            message: 'Invalid access token',
+            code: 'INVALID_TOKEN',
+          });
+        }
       }
-      if (error instanceof ForbiddenException) {
-        throw new ForbiddenException({
-          message: error.message,
-          code: 'FORBIDDEN', // Custom error code
-        });
-      }
-      // If it's not one of the above exceptions, rethrow the original error
-      throw error;
+      // Fallback for unexpected errors or non-Error types thrown
+      throw new UnauthorizedException({
+        message: `Authentication failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+        code: 'AUTH_FAILED',
+      });
     }
   }
 
+  // Helper to get the request object, now returning the extended type
+  private getRequest(context: ExecutionContext): RequestWithUser | undefined {
+    if (context.getType() === 'http') {
+      return context.switchToHttp().getRequest<RequestWithUser>();
+    } else if (context.getType<string>() === 'graphql') {
+      try {
+        const gqlCtx = GqlExecutionContext.create(context);
+        // Explicitly cast the context's request object
+        const req = gqlCtx.getContext().req as RequestWithUser | undefined;
+        if (!req) {
+          this.logger.error(
+            'Request object missing within GqlExecutionContext context.',
+          );
+        }
+        return req;
+      } catch (err) {
+        this.logger.error(
+          'Failed to get request from GqlExecutionContext',
+          err,
+        );
+        return undefined;
+      }
+    }
+    this.logger.warn(
+      `Unsupported execution context type: ${context.getType()}`,
+    );
+    return undefined;
+  }
+
+  // Extract token logic remains the same, uses the base Request type is fine
+  private extractToken(request: Request): string | undefined {
+    const authHeader = request.headers?.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const headerToken = authHeader.substring(7);
+      if (headerToken) {
+        this.logger.log('Token extracted from Authorization header.');
+        return headerToken;
+      }
+    }
+
+    // Fallback to Cookie (Consider removing if header is reliable)
+    if (request.cookies && request.cookies['auth_token']) {
+      this.logger.warn('Token extracted from "auth_token" cookie (fallback).');
+      return request.cookies['auth_token'];
+    }
+
+    this.logger.log('No token found in header or cookies.');
+    return undefined;
+  }
+
+  // checkUserRoles remains the same
   private async checkUserRoles(
     context: ExecutionContext,
     userEmail: string,
@@ -100,7 +176,7 @@ export class AuthGuard implements CanActivate {
       context.getHandler(),
     );
     if (!requiredRoles) {
-      return true; // No specific roles required
+      return true;
     }
 
     const user = await this.userService.findOne(userEmail);
@@ -109,31 +185,18 @@ export class AuthGuard implements CanActivate {
     }
 
     if (!requiredRoles.includes(user.role)) {
+      this.logger.warn(
+        `User ${userEmail} with role ${
+          user.role
+        } denied access to resource requiring roles: ${requiredRoles.join(
+          ', ',
+        )}`,
+      );
       throw new ForbiddenException(
         'Insufficient permissions to access this resource',
       );
     }
-
-    return true; // User has the required role
-  }
-
-  private extractTokenFromCookie(request: Request): string | undefined {
-    if (!request) {
-      console.log('AuthGuard: Request object is missing');
-      return undefined;
-    }
-
-    console.log('AuthGuard: Cookies object:', request.cookies);
-
-    if (!request.cookies) {
-      console.log('AuthGuard: No cookies found in request');
-      return undefined;
-    }
-
-    // Get the token from the auth_token cookie
-    const token = request.cookies['auth_token'];
-    console.log('AuthGuard: Cookie token found:', !!token);
-
-    return token;
+    this.logger.log(`User ${userEmail} granted access with role ${user.role}.`);
+    return true;
   }
 }

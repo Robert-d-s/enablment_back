@@ -1,5 +1,5 @@
 import { Exclude, Expose } from 'class-transformer';
-import { UserRole } from '../../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 import { Field, ObjectType, Int } from '@nestjs/graphql';
 
 @ObjectType()
@@ -17,7 +17,9 @@ export class UserProfileDto {
   @Expose()
   role: UserRole;
 
-  constructor(partial: UserProfileDto) {
-    Object.assign(this, partial);
+  constructor(partial: { id: number; email: string; role: UserRole }) {
+    this.id = partial.id;
+    this.email = partial.email;
+    this.role = partial.role;
   }
 }

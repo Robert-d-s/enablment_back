@@ -1,5 +1,5 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
-import { UserRole } from './user-role.enum';
+import { UserRole } from '@prisma/client';
 import { Team } from '../team/team.model';
 
 @ObjectType()

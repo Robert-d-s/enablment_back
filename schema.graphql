@@ -41,6 +41,7 @@ type User {
   teams: [Team!]!
 }
 
+"""Defines the roles a user can have"""
 enum UserRole {
   ADMIN
   ENABLER

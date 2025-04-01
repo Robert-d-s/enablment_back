@@ -12,7 +12,7 @@ import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { UserRole } from './user-role.enum';
+import { UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
 import { PrismaService } from '../prisma/prisma.service';

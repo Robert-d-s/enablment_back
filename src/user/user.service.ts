@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
-import { UserRole } from '../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 import { User as QlUser } from '../user/user.model';
 
 // Local type definitions that don't conflict with Prisma types
