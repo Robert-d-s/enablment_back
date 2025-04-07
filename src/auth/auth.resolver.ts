@@ -15,7 +15,7 @@ import { Public } from './public.decorator';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenResponse } from './dto/refresh-token-response';
-import { UserRole } from '../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 
 @Resolver()
 export class AuthResolver {

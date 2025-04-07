@@ -1,5 +1,3 @@
-// src/auth/auth.guard.ts
-
 import {
   CanActivate,
   ExecutionContext,
@@ -9,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Request } from 'express'; // Import Request from express
+import { Request } from 'express';
 import { IS_PUBLIC_KEY } from './auth.module';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -72,14 +70,11 @@ export class AuthGuard implements CanActivate {
     try {
       // Verify the token and strongly type the payload
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'), // Use the correct access token secret
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       });
       this.logger.log(
         `Token verified successfully. Payload: ${JSON.stringify(payload)}`,
       );
-
-      // Attach payload to request - TypeScript now understands 'user' exists
-      // due to the RequestWithUser interface or global declaration merging.
       request.user = payload;
 
       // Pass the email from the verified payload
@@ -116,7 +111,6 @@ export class AuthGuard implements CanActivate {
     }
   }
 
-  // Helper to get the request object, now returning the extended type
   private getRequest(context: ExecutionContext): RequestWithUser | undefined {
     if (context.getType() === 'http') {
       return context.switchToHttp().getRequest<RequestWithUser>();

@@ -128,7 +128,6 @@ export class IssueService {
   }
 
   async createLabelForIssue(
-    // webhookLabel: IssueWebhookData['labels'][number],
     webhookLabel: NonNullable<IssueWebhookData['labels']>[number],
     issueId: string,
   ): Promise<void> {

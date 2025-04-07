@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import { User } from '@prisma/client';
-import { UserRole } from '../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -25,9 +25,6 @@ export class AuthService {
   private async generateTokens(
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    // const accessTokenPayload = { email: user.email, sub: user.id };
-    // const refreshTokenPayload = { sub: user.id };
-
     const accessTokenPayload = {
       email: user.email,
       sub: user.id,

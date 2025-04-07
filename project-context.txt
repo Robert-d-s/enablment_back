@@ -61,56 +61,56 @@ module.exports = {
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@apollo/server": "^4.7.1",
-    "@nestjs/apollo": "^11.0.5",
-    "@nestjs/axios": "^3.0.1",
-    "@nestjs/common": "^9.0.0",
-    "@nestjs/config": "^2.3.1",
-    "@nestjs/core": "^9.0.0",
-    "@nestjs/graphql": "^11.0.5",
-    "@nestjs/jwt": "^10.0.3",
-    "@nestjs/platform-express": "^9.0.0",
-    "@nestjs/platform-socket.io": "^9.4.3",
-    "@nestjs/websockets": "^9.4.3",
-    "@prisma/client": "^4.13.0",
-    "bcrypt": "^5.1.0",
+    "@apollo/server": "^4.11.3",
+    "@nestjs/apollo": "^13.0.4",
+    "@nestjs/axios": "^4.0.0",
+    "@nestjs/common": "^11.0.13",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.0.13",
+    "@nestjs/graphql": "^13.0.4",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.13",
+    "@nestjs/platform-socket.io": "^11.0.13",
+    "@nestjs/websockets": "^11.0.13",
+    "@prisma/client": "^6.5.0",
+    "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
     "dataloader": "^2.2.3",
-    "graphql": "^16.6.0",
-    "graphql-ws": "^5.14.3",
+    "graphql": "^16.10.0",
+    "graphql-ws": "^6.0.4",
     "micro": "^10.0.1",
-    "reflect-metadata": "^0.1.13",
-    "rxjs": "^7.2.0",
-    "uuid": "^9.0.0"
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@nestjs/cli": "^9.0.0",
-    "@nestjs/schematics": "^9.0.0",
-    "@nestjs/testing": "^9.0.0",
+    "@nestjs/cli": "^11.0.6",
+    "@nestjs/schematics": "^11.0.3",
+    "@nestjs/testing": "^11.0.13",
     "@types/bcrypt": "^5.0.2",
     "@types/cookie-parser": "^1.4.8",
-    "@types/express": "^4.17.13",
-    "@types/jest": "29.2.4",
-    "@types/node": "18.11.18",
-    "@types/supertest": "^2.0.11",
-    "@typescript-eslint/eslint-plugin": "^5.0.0",
-    "@typescript-eslint/parser": "^5.0.0",
-    "eslint": "^8.0.1",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-prettier": "^4.0.0",
-    "jest": "29.3.1",
-    "prettier": "^2.3.2",
-    "prisma": "^4.13.0",
-    "source-map-support": "^0.5.20",
-    "supertest": "^6.1.3",
-    "ts-jest": "29.0.3",
-    "ts-loader": "^9.2.3",
-    "ts-node": "^10.9.1",
-    "tsconfig-paths": "4.1.1",
-    "typescript": "^4.7.4",
-    "webpack": "^5.88.2"
+    "@types/express": "^5.0.1",
+    "@types/jest": "29.5.14",
+    "@types/node": "22.14.0",
+    "@types/supertest": "^6.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.29.0",
+    "@typescript-eslint/parser": "^8.29.0",
+    "eslint": "^9.24.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-prettier": "^5.2.6",
+    "jest": "29.7.0",
+    "prettier": "^3.5.3",
+    "prisma": "^6.5.0",
+    "source-map-support": "^0.5.21",
+    "supertest": "^7.1.0",
+    "ts-jest": "29.3.1",
+    "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "4.2.0",
+    "typescript": "^5.8.3",
+    "webpack": "^5.98.0"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -307,6 +307,8 @@ export class AppController {
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { registerEnumType } from '@nestjs/graphql';
+import { UserRole } from '@prisma/client';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
@@ -330,6 +332,11 @@ export interface GqlContext {
   req: Request & { user?: User }; // User property from AuthGuard
   res: Response;
 }
+
+registerEnumType(UserRole, {
+  name: 'UserRole',
+  description: 'Defines the roles a user can have',
+});
 
 @Module({
   imports: [
@@ -495,8 +502,25 @@ import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 
+// Define the structure of your JWT payload
+export interface JwtPayload {
+  email: string;
+  sub: number;
+  id: number;
+  role: UserRole;
+  [key: string]: unknown;
+}
+
+// Extend the Express Request interface globally or locally
+// Locally: Define an interface extending Request
+interface RequestWithUser extends Request {
+  user?: JwtPayload; // Make user optional initially
+}
+
 @Injectable()
 export class AuthGuard implements CanActivate {
+  private readonly logger = new Logger(AuthGuard.name);
+
   constructor(
     private jwtService: JwtService,
     private reflector: Reflector,
@@ -505,72 +529,125 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const handler = context.getHandler();
-    const controllerClass = context.getClass();
-    console.log(
-      `AuthGuard activated for: ${controllerClass?.name}.${handler?.name}`,
-    );
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      handler,
-      controllerClass,
+      context.getHandler(),
+      context.getClass(),
     ]);
-    console.log(
-      `IS_PUBLIC (${controllerClass?.name}.${handler?.name}): ${isPublic}`,
-    );
     if (isPublic) {
-      console.log(`Route is public, skipping auth.`);
+      this.logger.log(`Route is public, skipping auth.`);
       return true;
     }
-    console.log(`Route is NOT public, proceeding with auth.`);
-    const ctx = context.switchToHttp();
-    const graphqlCtx = GqlExecutionContext.create(context);
-    const request = ctx.getRequest<Request>() || graphqlCtx.getContext().req;
+    this.logger.log(`Route is NOT public, proceeding with auth.`);
+
+    // Get the request object, correctly typed
+    const request = this.getRequest(context);
 
     if (!request) {
+      this.logger.error('No request object found in context.');
       throw new UnauthorizedException('No request found');
     }
 
-    // Extract token from cookie instead of header
-    const token = this.extractTokenFromCookie(request);
+    const token = this.extractToken(request);
 
     if (!token) {
-      throw new UnauthorizedException('No auth token found in cookies');
+      this.logger.warn('No authentication token found.');
+      throw new UnauthorizedException('No authentication token found');
     }
 
     try {
-      // Verify the token
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+      // Verify the token and strongly type the payload
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       });
-      console.log('auth payload contains', payload);
+      this.logger.log(
+        `Token verified successfully. Payload: ${JSON.stringify(payload)}`,
+      );
+      request.user = payload;
 
-      interface JwtPayload {
-        email: string;
-        id: number;
-      }
-      (request as Request & { user: JwtPayload }).user = payload as JwtPayload;
-
-      // Check for roles
+      // Pass the email from the verified payload
       return await this.checkUserRoles(context, payload.email);
     } catch (error) {
-      // Enhance and rethrow the error with custom error information
-      if (error instanceof UnauthorizedException) {
-        throw new UnauthorizedException({
-          message: error.message,
-          code: 'UNAUTHORIZED', // Custom error code
-        });
+      // Improved error logging and handling
+      this.logger.error(
+        `Token verification failed: ${error.message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+
+      if (error instanceof Error) {
+        // Type guard for Error
+        if (error.name === 'TokenExpiredError') {
+          throw new UnauthorizedException({
+            message: 'Access token expired',
+            code: 'TOKEN_EXPIRED',
+          });
+        }
+        if (error.name === 'JsonWebTokenError') {
+          throw new UnauthorizedException({
+            message: 'Invalid access token',
+            code: 'INVALID_TOKEN',
+          });
+        }
       }
-      if (error instanceof ForbiddenException) {
-        throw new ForbiddenException({
-          message: error.message,
-          code: 'FORBIDDEN', // Custom error code
-        });
-      }
-      // If it's not one of the above exceptions, rethrow the original error
-      throw error;
+      // Fallback for unexpected errors or non-Error types thrown
+      throw new UnauthorizedException({
+        message: `Authentication failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+        code: 'AUTH_FAILED',
+      });
     }
   }
 
+  private getRequest(context: ExecutionContext): RequestWithUser | undefined {
+    if (context.getType() === 'http') {
+      return context.switchToHttp().getRequest<RequestWithUser>();
+    } else if (context.getType<string>() === 'graphql') {
+      try {
+        const gqlCtx = GqlExecutionContext.create(context);
+        // Explicitly cast the context's request object
+        const req = gqlCtx.getContext().req as RequestWithUser | undefined;
+        if (!req) {
+          this.logger.error(
+            'Request object missing within GqlExecutionContext context.',
+          );
+        }
+        return req;
+      } catch (err) {
+        this.logger.error(
+          'Failed to get request from GqlExecutionContext',
+          err,
+        );
+        return undefined;
+      }
+    }
+    this.logger.warn(
+      `Unsupported execution context type: ${context.getType()}`,
+    );
+    return undefined;
+  }
+
+  // Extract token logic remains the same, uses the base Request type is fine
+  private extractToken(request: Request): string | undefined {
+    const authHeader = request.headers?.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const headerToken = authHeader.substring(7);
+      if (headerToken) {
+        this.logger.log('Token extracted from Authorization header.');
+        return headerToken;
+      }
+    }
+
+    // Fallback to Cookie (Consider removing if header is reliable)
+    if (request.cookies && request.cookies['auth_token']) {
+      this.logger.warn('Token extracted from "auth_token" cookie (fallback).');
+      return request.cookies['auth_token'];
+    }
+
+    this.logger.log('No token found in header or cookies.');
+    return undefined;
+  }
+
+  // checkUserRoles remains the same
   private async checkUserRoles(
     context: ExecutionContext,
     userEmail: string,
@@ -580,7 +657,7 @@ export class AuthGuard implements CanActivate {
       context.getHandler(),
     );
     if (!requiredRoles) {
-      return true; // No specific roles required
+      return true;
     }
 
     const user = await this.userService.findOne(userEmail);
@@ -589,32 +666,19 @@ export class AuthGuard implements CanActivate {
     }
 
     if (!requiredRoles.includes(user.role)) {
+      this.logger.warn(
+        `User ${userEmail} with role ${
+          user.role
+        } denied access to resource requiring roles: ${requiredRoles.join(
+          ', ',
+        )}`,
+      );
       throw new ForbiddenException(
         'Insufficient permissions to access this resource',
       );
     }
-
-    return true; // User has the required role
-  }
-
-  private extractTokenFromCookie(request: Request): string | undefined {
-    if (!request) {
-      console.log('AuthGuard: Request object is missing');
-      return undefined;
-    }
-
-    console.log('AuthGuard: Cookies object:', request.cookies);
-
-    if (!request.cookies) {
-      console.log('AuthGuard: No cookies found in request');
-      return undefined;
-    }
-
-    // Get the token from the auth_token cookie
-    const token = request.cookies['auth_token'];
-    console.log('AuthGuard: Cookie token found:', !!token);
-
-    return token;
+    this.logger.log(`User ${userEmail} granted access with role ${user.role}.`);
+    return true;
   }
 }
 
@@ -641,7 +705,6 @@ export const IS_PUBLIC_KEY = 'isPublic';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        // signOptions: { expiresIn: '43200s' },
       }),
     }),
   ],
@@ -715,7 +778,7 @@ export class AuthResolver {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/auth/refresh',
+      path: '/',
     });
     console.log('Refresh token cookie cleared.');
   }
@@ -884,7 +947,12 @@ export class AuthService {
   private async generateTokens(
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const accessTokenPayload = { email: user.email, sub: user.id };
+    const accessTokenPayload = {
+      email: user.email,
+      sub: user.id,
+      id: user.id,
+      role: user.role,
+    };
     const refreshTokenPayload = { sub: user.id };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -910,7 +978,7 @@ export class AuthService {
   private async updateRefreshTokenHash(
     userId: number,
     refreshToken: string | null,
-  ) {
+  ): Promise<void> {
     const hashedRefreshToken = refreshToken
       ? await this.hashData(refreshToken)
       : null;
@@ -1078,13 +1146,25 @@ export class AuthService {
 
 // ====== FILE: src\auth\current-user.decorator.ts ======
 
+// src/auth/current-user.decorator.ts
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
+import { UserProfileDto } from './dto/user-profile.dto';
+import { JwtPayload } from './auth.guard';
 
 export const CurrentUser = createParamDecorator(
-  (data: unknown, context: ExecutionContext) => {
+  (data: unknown, context: ExecutionContext): UserProfileDto | undefined => {
     const ctx = GqlExecutionContext.create(context);
-    return ctx.getContext().req.user;
+    const payload = ctx.getContext().req.user as JwtPayload | undefined;
+
+    if (!payload) {
+      return undefined; // Or handle as needed, maybe throw?
+    }
+    return new UserProfileDto({
+      id: payload.id,
+      email: payload.email,
+      role: payload.role,
+    });
   },
 );
 
@@ -1100,7 +1180,8 @@ export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 import { SetMetadata } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
-export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);
+export const Roles = (...roles: UserRole[]): ReturnType<typeof SetMetadata> =>
+  SetMetadata('roles', roles);
 
 // ====== FILE: src\config\cors.config.ts ======
 
@@ -2135,7 +2216,6 @@ export class IssueResolver {
   @Query(() => [Issue])
   async issues(): Promise<Issue[]> {
     const issues = await this.issueService.all();
-    // Transform or assert the type as necessary
     return issues as Issue[];
   }
 }
@@ -2272,7 +2352,6 @@ export class IssueService {
   }
 
   async createLabelForIssue(
-    // webhookLabel: IssueWebhookData['labels'][number],
     webhookLabel: NonNullable<IssueWebhookData['labels']>[number],
     issueId: string,
   ): Promise<void> {
@@ -3114,15 +3193,15 @@ export class TeamService {
 // ====== FILE: src\time\time.input.ts ======
 
 // src/time/time.input.ts
-import { Field, InputType, Int } from '@nestjs/graphql'; // Use Int for GraphQL
+import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   IsDate,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
-} from 'class-validator'; // <--- Import these
-import { Type } from 'class-transformer'; // <--- Import this
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 @InputType()
 export class TimeInputCreate {
@@ -3238,9 +3317,6 @@ export class Time implements TimeClient {
 
   @Field(() => Int, { nullable: true })
   rateId: number | null;
-
-  // @Field(() => Int, { nullable: true })
-  // totalElapsedTime: number | null;
 
   @Field(() => Int)
   totalElapsedTime: number;
@@ -3590,25 +3666,10 @@ export class TimeService {
   }
 }
 
-// ====== FILE: src\user\user-role.enum.ts ======
-
-import { registerEnumType } from '@nestjs/graphql';
-
-export enum UserRole {
-  ADMIN = 'ADMIN',
-  ENABLER = 'ENABLER',
-  COLLABORATOR = 'COLLABORATOR',
-  PENDING = 'PENDING',
-}
-
-registerEnumType(UserRole, {
-  name: 'UserRole',
-});
-
 // ====== FILE: src\user\user.input.ts ======
 
 import { Field, InputType } from '@nestjs/graphql';
-import { UserRole } from './user-role.enum';
+import { UserRole } from '@prisma/client';
 
 @InputType()
 export class UserInputCreate {
@@ -3634,7 +3695,7 @@ export class UserInputCreate {
 // ====== FILE: src\user\user.model.ts ======
 
 import { Field, Int, ObjectType } from '@nestjs/graphql';
-import { UserRole } from './user-role.enum';
+import { UserRole } from '@prisma/client';
 import { Team } from '../team/team.model';
 
 @ObjectType()
@@ -3690,7 +3751,7 @@ import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { UserRole } from './user-role.enum';
+import { UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
 import { PrismaService } from '../prisma/prisma.service';
@@ -3790,7 +3851,7 @@ export class UserResolver {
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
-import { UserRole } from '../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 import { User as QlUser } from '../user/user.model';
 
 // Local type definitions that don't conflict with Prisma types
@@ -3836,7 +3897,6 @@ export class UserService {
       team: {
         id: ut.team.id,
         name: ut.team.name,
-        // other fields as needed
       },
     }));
   }
@@ -3865,7 +3925,6 @@ export class UserService {
                     state: true,
                     startDate: true,
                     targetDate: true,
-                    // Add any other necessary fields here
                   },
                 },
                 rates: {
@@ -3874,7 +3933,6 @@ export class UserService {
                     name: true,
                     teamId: true,
                     rate: true,
-                    // Add any other necessary fields here
                   },
                 },
               },
@@ -4671,12 +4729,11 @@ export class LogoutResponse {
 
 // ====== FILE: src\auth\dto\refresh-token-response.ts ======
 
-// src/auth/dto/refresh-token-response.ts
 import { Field, ObjectType } from '@nestjs/graphql';
 
 @ObjectType()
 export class RefreshTokenResponse {
-  @Field(() => String) // Specify String type for GraphQL
+  @Field(() => String)
   access_token: string;
 }
 
@@ -4721,7 +4778,7 @@ export class SignUpInput {
 // ====== FILE: src\auth\dto\user-profile.dto.ts ======
 
 import { Exclude, Expose } from 'class-transformer';
-import { UserRole } from '../../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 import { Field, ObjectType, Int } from '@nestjs/graphql';
 
 @ObjectType()
@@ -4739,8 +4796,10 @@ export class UserProfileDto {
   @Expose()
   role: UserRole;
 
-  constructor(partial: UserProfileDto) {
-    Object.assign(this, partial);
+  constructor(partial: { id: number; email: string; role: UserRole }) {
+    this.id = partial.id;
+    this.email = partial.email;
+    this.role = partial.role;
   }
 }
 

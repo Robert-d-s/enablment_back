@@ -47,7 +47,6 @@ export class UserService {
       team: {
         id: ut.team.id,
         name: ut.team.name,
-        // other fields as needed
       },
     }));
   }
@@ -76,7 +75,6 @@ export class UserService {
                     state: true,
                     startDate: true,
                     targetDate: true,
-                    // Add any other necessary fields here
                   },
                 },
                 rates: {
@@ -85,7 +83,6 @@ export class UserService {
                     name: true,
                     teamId: true,
                     rate: true,
-                    // Add any other necessary fields here
                   },
                 },
               },
