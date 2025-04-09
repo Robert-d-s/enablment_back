@@ -196,23 +196,4 @@ export class IssueService {
       where: { id },
     });
   }
-
-  // This method will check if an issue exists and create it if not
-  async ensureIssueExists(
-    issueId: string,
-    data: IssueWebhookData,
-  ): Promise<Issue> {
-    let issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
-    });
-
-    if (!issue) {
-      // If the issue does not exist, create it using the existing 'create' method
-      issue = await this.create(data);
-    } else {
-      await this.update(issueId, data);
-    }
-
-    return issue;
-  }
 }

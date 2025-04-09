@@ -133,7 +133,8 @@ type RateDetail {
 type Query {
   me: UserProfileDto!
   myProjects: [Project!]!
-  users: [User!]!
+  usersCount(search: String, role: UserRole): Int!
+  users(args: UserQueryArgs!): [User!]!
   projects: [Project!]!
   issues: [Issue!]!
   getAllSimpleTeams: [SimpleTeamDTO!]!
@@ -142,6 +143,13 @@ type Query {
   getTotalTimeSpent(userId: Float!, projectId: String!, startDate: String!, endDate: String!): Float!
   getTotalTimeForUserProject(userId: Float!, projectId: String!): Float!
   invoiceForProject(input: InvoiceInput!): Invoice!
+}
+
+input UserQueryArgs {
+  page: Int = 1
+  pageSize: Int = 10
+  search: String
+  role: UserRole
 }
 
 input InvoiceInput {

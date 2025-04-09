@@ -290,16 +290,4 @@ export class WebhookIssueService {
       throw error;
     }
   }
-
-  private async updateIssue(data: IssueWebhookData) {
-    try {
-      // Try to get projectId from project.id if projectId is missing
-      this.ensureProjectId(data);
-
-      return await this.issueService.update(data.id, data);
-    } catch (error) {
-      console.error(`Failed to update issue ${data.id}:`, error.message);
-      throw error;
-    }
-  }
 }

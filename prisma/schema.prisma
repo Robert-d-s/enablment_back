@@ -9,7 +9,7 @@ datasource db {
 
 model User {
   id       Int    @id @default(autoincrement())
-  email    String @unique
+  email    String @unique @db.VarChar(191) 
   password String
 
   role UserRole @default(PENDING)
@@ -18,6 +18,8 @@ model User {
   teams UserTeam[]
 
   hashedRefreshToken String?
+
+  @@map("User")
 }
 
 enum UserRole {

@@ -1,9 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, UserRole } from '@prisma/client';
-import { User as QlUser } from '../user/user.model';
 
-// Local type definitions that don't conflict with Prisma types
 type TeamBasic = {
   id: string;
   name: string;
@@ -26,83 +24,6 @@ export class UserService {
   private readonly logger = new Logger(UserService.name);
 
   constructor(private prisma: PrismaService) {}
-  async getUserTeams(): Promise<UserTeamDTO[]> {
-    const userTeams = await this.prisma.userTeam.findMany({
-      include: {
-        user: true,
-        team: true,
-      },
-    });
-
-    return userTeams.map((ut) => ({
-      userId: ut.userId,
-      teamId: ut.teamId,
-      user: {
-        id: ut.user.id,
-        email: ut.user.email,
-        role: UserRole[ut.user.role as keyof typeof UserRole],
-        password: null,
-      },
-      team: {
-        id: ut.team.id,
-        name: ut.team.name,
-      },
-    }));
-  }
-
-  async all(): Promise<QlUser[]> {
-    const users = await this.prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        teams: {
-          select: {
-            team: {
-              select: {
-                id: true,
-                name: true,
-                projects: {
-                  select: {
-                    id: true,
-                    estimatedTime: true,
-                    name: true,
-                    teamId: true,
-                    createdAt: true,
-                    updatedAt: true,
-                    description: true,
-                    state: true,
-                    startDate: true,
-                    targetDate: true,
-                  },
-                },
-                rates: {
-                  select: {
-                    id: true,
-                    name: true,
-                    teamId: true,
-                    rate: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return users.map((user) => ({
-      id: user.id,
-      email: user.email,
-      role: UserRole[user.role as keyof typeof UserRole],
-      teams: user.teams.map((ut) => ({
-        id: ut.team.id,
-        name: ut.team.name,
-        projects: ut.team.projects, // Now fully populated
-        rates: ut.team.rates, // Now fully populated
-      })),
-    }));
-  }
 
   async findOne(email: string): Promise<User | undefined> {
     const user = await this.prisma.user.findFirst({
@@ -157,7 +78,6 @@ export class UserService {
 
   async addUserToTeam(userId: number, teamId: string): Promise<User> {
     return this.prisma.$transaction(async (tx) => {
-      // First, check if the user and team exist
       const userExists = await tx.user.findUnique({
         where: { id: userId },
       });
@@ -169,7 +89,6 @@ export class UserService {
         throw new Error('User or Team not found');
       }
 
-      // Check if the relation already exists
       const existingRelation = await tx.userTeam.findUnique({
         where: {
           userId_teamId: {
@@ -179,7 +98,6 @@ export class UserService {
         },
       });
 
-      // If the relation does not exist, create it
       if (!existingRelation) {
         await tx.userTeam.create({
           data: {
@@ -240,7 +158,6 @@ export class UserService {
     );
 
     try {
-      // Get current state
       const userBefore = await this.getUserWithTeams(userId);
       this.logger.debug(
         `Current state - User ${userId} has ${
@@ -248,9 +165,7 @@ export class UserService {
         } teams`,
       );
 
-      // Use a transaction to ensure the operation is atomic
       return await this.prisma.$transaction(async (tx) => {
-        // Perform the disconnection
         await tx.userTeam.deleteMany({
           where: {
             userId: userId,
@@ -258,7 +173,6 @@ export class UserService {
           },
         });
 
-        // Get the updated user data
         const updatedUser = await this.getUserWithTeams(userId);
         this.logger.debug(
           `After removal - User ${userId} now has ${

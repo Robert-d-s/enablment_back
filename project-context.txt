@@ -72,7 +72,7 @@ module.exports = {
     "@nestjs/platform-express": "^11.0.13",
     "@nestjs/platform-socket.io": "^11.0.13",
     "@nestjs/websockets": "^11.0.13",
-    "@prisma/client": "^6.5.0",
+    "@prisma/client": "^6.6.0",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
@@ -102,7 +102,7 @@ module.exports = {
     "eslint-plugin-prettier": "^5.2.6",
     "jest": "29.7.0",
     "prettier": "^3.5.3",
-    "prisma": "^6.5.0",
+    "prisma": "^6.6.0",
     "source-map-support": "^0.5.21",
     "supertest": "^7.1.0",
     "ts-jest": "29.3.1",
@@ -175,7 +175,7 @@ datasource db {
 
 model User {
   id       Int    @id @default(autoincrement())
-  email    String @unique
+  email    String @unique @db.VarChar(191)
   password String
 
   role UserRole @default(PENDING)
@@ -184,6 +184,8 @@ model User {
   teams UserTeam[]
 
   hashedRefreshToken String?
+
+  @@map("User")
 }
 
 enum UserRole {
@@ -386,6 +388,7 @@ import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { getCorsConfig } from './config/cors.config';
+import { BadRequestException } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -395,9 +398,14 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+
       transformOptions: {
         enableImplicitConversion: true,
+      },
+      forbidNonWhitelisted: false,
+      exceptionFactory: (errors) => {
+        console.log('Validation errors:', JSON.stringify(errors, null, 2));
+        return new BadRequestException(errors);
       },
     }),
   );
@@ -2709,7 +2717,10 @@ export class Project implements ProjectClient {
 
   @Field(() => String)
   teamId: string;
-  // ---------------------------------
+
+  @Field(() => String, { nullable: true })
+  teamName?: string;
+
   @Field(() => String)
   createdAt: string;
 
@@ -2727,8 +2738,6 @@ export class Project implements ProjectClient {
 
   @Field(() => String, { nullable: true })
   targetDate: string | null;
-
-  // ---------------------------------
 }
 
 // ====== FILE: src\project\project.module.ts ======
@@ -3737,6 +3746,7 @@ export class UserModule {}
 
 // ====== FILE: src\user\user.resolver.ts ======
 
+// src/user/user.resolver.ts
 import {
   Args,
   Mutation,
@@ -3745,52 +3755,142 @@ import {
   Int,
   ResolveField,
   Parent,
+  Field,
+  InputType,
 } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectLoader } from '../loaders/project.loader';
+import { Project } from '../project/project.model';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { UserProfileDto } from '../auth/dto/user-profile.dto';
+import { IsOptional, IsInt, IsString, IsEnum } from 'class-validator';
+
+@InputType()
+export class UserQueryArgs {
+  @Field(() => Int, { defaultValue: 1, nullable: true })
+  @IsOptional()
+  @IsInt()
+  page?: number;
+
+  @Field(() => Int, { defaultValue: 10, nullable: true })
+  @IsOptional()
+  @IsInt()
+  pageSize?: number;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @Field(() => UserRole, { nullable: true })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+}
 
 @Resolver(() => User)
 export class UserResolver {
   constructor(
     private userService: UserService,
     private teamLoader: TeamLoader,
+    private projectLoader: ProjectLoader,
     private prisma: PrismaService,
   ) {}
+
+  @Query(() => [Project])
+  @UseGuards(AuthGuard)
+  async myProjects(
+    @CurrentUser() currentUser: UserProfileDto,
+  ): Promise<Project[]> {
+    if (!currentUser) {
+      throw new UnauthorizedException();
+    }
+    const teams = await this.teamLoader.byUserId.load(currentUser.id);
+    if (!teams || teams.length === 0) {
+      return [];
+    }
+    const teamIds = teams.map((team) => team.id);
+    const projectsPerTeam = await this.projectLoader.byTeamId.loadMany(teamIds);
+    const allProjects = (
+      projectsPerTeam.flat() as Array<Project | Error | null>
+    ).filter((p): p is Project => p instanceof Error === false && p !== null);
+    // Removed teamName mapping here, assuming it's added in Project model or resolved separately if needed
+    return allProjects;
+  }
+
+  @Query(() => Int)
+  @Roles(UserRole.ADMIN, UserRole.ENABLER)
+  @UseGuards(AuthGuard)
+  async usersCount(
+    @Args('search', { type: () => String, nullable: true }) search?: string,
+    @Args('role', { type: () => UserRole, nullable: true }) role?: UserRole,
+  ): Promise<number> {
+    const where: Prisma.UserWhereInput = {};
+    if (search) {
+      // CORRECTED: Removed mode: 'insensitive'
+      where.email = { contains: search };
+    }
+    if (role) {
+      where.role = role;
+    }
+    return this.prisma.user.count({ where });
+  }
 
   @Query(() => [User])
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
   @UseGuards(AuthGuard)
-  async users(): Promise<User[]> {
-    // Only fetch the basic user data without nested relationships
+  // CORRECTED: Use the args input object
+  async users(@Args('args') args: UserQueryArgs): Promise<User[]> {
+    console.log('Received args:', JSON.stringify(args));
+    const currentPage = args.page ?? 1;
+    const currentPageSize = args.pageSize ?? 10;
+
+    const skip = (currentPage - 1) * currentPageSize;
+    const take = currentPageSize;
+
+    const where: Prisma.UserWhereInput = {};
+    // CORRECTED: Access search via args.search
+    if (args.search) {
+      where.email = { contains: args.search }; // Assuming case-insensitivity via DB collation
+    }
+    // CORRECTED: Access role via args.role
+    if (args.role) {
+      where.role = args.role;
+    }
+
     const users = await this.prisma.user.findMany({
+      where,
+      skip,
+      take,
       select: {
         id: true,
         email: true,
         role: true,
       },
+      orderBy: {
+        email: 'asc',
+      },
     });
 
+    // CORRECTED: Use correct enum mapping syntax
     return users.map((user) => ({
       ...user,
-      role: UserRole[user.role as keyof typeof UserRole],
+      role: user.role as UserRole, // Cast the string from DB to the GraphQL enum type
     }));
   }
 
   @ResolveField(() => [Team])
   async teams(@Parent() user: User): Promise<Team[]> {
-    // This will be called only when teams field is requested
-    // Uses DataLoader to batch and cache the requests
+    // This logic remains correct
     const teams = await this.teamLoader.byUserId.load(user.id);
-
-    // Map to proper Team model objects with empty projects and rates
-    // These will be populated by their own field resolvers if needed
     return teams.map((team) => ({
       ...team,
       projects: [],
@@ -3798,6 +3898,7 @@ export class UserResolver {
     }));
   }
 
+  // --- Mutations remain unchanged ---
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
   @UseGuards(AuthGuard)
@@ -3808,7 +3909,7 @@ export class UserResolver {
     const updatedUser = await this.userService.updateUserRole(userId, newRole);
     return {
       ...updatedUser,
-      role: UserRole[updatedUser.role as keyof typeof UserRole],
+      role: updatedUser.role as UserRole, // Cast necessary if service returns Prisma type
     };
   }
 
@@ -3822,7 +3923,8 @@ export class UserResolver {
     const user = await this.userService.addUserToTeam(userId, teamId);
     return {
       ...user,
-      role: UserRole[user.role as keyof typeof UserRole],
+      role: user.role as UserRole, // Cast necessary if service returns Prisma type
+      // teams field will be resolved by @ResolveField if requested
     };
   }
 
@@ -3837,11 +3939,12 @@ export class UserResolver {
       const user = await this.userService.removeUserFromTeam(userId, teamId);
       return {
         ...user,
-        role: UserRole[user.role as keyof typeof UserRole],
+        role: user.role as UserRole, // Cast necessary if service returns Prisma type
+        // teams field will be resolved by @ResolveField if requested
       };
     } catch (error) {
       console.error('Error occurred while removing user from team:', error);
-      throw new Error('Error removing user from team');
+      throw new Error('Error removing user from team'); // Re-throw for GraphQL error handling
     }
   }
 }

@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { getCorsConfig } from './config/cors.config';
+import { BadRequestException } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,14 +13,18 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+
       transformOptions: {
         enableImplicitConversion: true,
+      },
+      forbidNonWhitelisted: false,
+      exceptionFactory: (errors) => {
+        console.log('Validation errors:', JSON.stringify(errors, null, 2));
+        return new BadRequestException(errors);
       },
     }),
   );
 
-  // Apply CORS settings from centralized configuration
   app.enableCors(getCorsConfig());
 
   app.use(cookieParser());

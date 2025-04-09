@@ -6,13 +6,15 @@ import {
   Int,
   ResolveField,
   Parent,
+  Field,
+  InputType,
 } from '@nestjs/graphql';
 import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,6 +22,30 @@ import { ProjectLoader } from '../loaders/project.loader';
 import { Project } from '../project/project.model';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserProfileDto } from '../auth/dto/user-profile.dto';
+import { IsOptional, IsInt, IsString, IsEnum } from 'class-validator';
+
+@InputType()
+export class UserQueryArgs {
+  @Field(() => Int, { defaultValue: 1, nullable: true })
+  @IsOptional()
+  @IsInt()
+  page?: number;
+
+  @Field(() => Int, { defaultValue: 10, nullable: true })
+  @IsOptional()
+  @IsInt()
+  pageSize?: number;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @Field(() => UserRole, { nullable: true })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+}
 
 @Resolver(() => User)
 export class UserResolver {
@@ -38,40 +64,71 @@ export class UserResolver {
     if (!currentUser) {
       throw new UnauthorizedException();
     }
-
     const teams = await this.teamLoader.byUserId.load(currentUser.id);
-
     if (!teams || teams.length === 0) {
       return [];
     }
-
     const teamIds = teams.map((team) => team.id);
     const projectsPerTeam = await this.projectLoader.byTeamId.loadMany(teamIds);
     const allProjects = (
       projectsPerTeam.flat() as Array<Project | Error | null>
     ).filter((p): p is Project => p instanceof Error === false && p !== null);
-    const teamIdToNameMap = new Map(teams.map((t) => [t.id, t.name]));
-    return allProjects.map((p) => ({
-      ...p,
-      // teamName: teamIdToNameMap.get(p.teamId) || 'Unknown',
-    }));
+    return allProjects;
+  }
+
+  @Query(() => Int)
+  @Roles(UserRole.ADMIN, UserRole.ENABLER)
+  @UseGuards(AuthGuard)
+  async usersCount(
+    @Args('search', { type: () => String, nullable: true }) search?: string,
+    @Args('role', { type: () => UserRole, nullable: true }) role?: UserRole,
+  ): Promise<number> {
+    const where: Prisma.UserWhereInput = {};
+    if (search) {
+      where.email = { contains: search };
+    }
+    if (role) {
+      where.role = role;
+    }
+    return this.prisma.user.count({ where });
   }
 
   @Query(() => [User])
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
   @UseGuards(AuthGuard)
-  async users(): Promise<User[]> {
+  async users(@Args('args') args: UserQueryArgs): Promise<User[]> {
+    console.log('Received args:', JSON.stringify(args));
+    const currentPage = args.page ?? 1;
+    const currentPageSize = args.pageSize ?? 10;
+
+    const skip = (currentPage - 1) * currentPageSize;
+    const take = currentPageSize;
+
+    const where: Prisma.UserWhereInput = {};
+    if (args.search) {
+      where.email = { contains: args.search };
+    }
+    if (args.role) {
+      where.role = args.role;
+    }
+
     const users = await this.prisma.user.findMany({
+      where,
+      skip,
+      take,
       select: {
         id: true,
         email: true,
         role: true,
       },
+      orderBy: {
+        email: 'asc',
+      },
     });
 
     return users.map((user) => ({
       ...user,
-      role: UserRole[user.role as keyof typeof UserRole],
+      role: user.role as UserRole,
     }));
   }
 
@@ -95,7 +152,7 @@ export class UserResolver {
     const updatedUser = await this.userService.updateUserRole(userId, newRole);
     return {
       ...updatedUser,
-      role: UserRole[updatedUser.role as keyof typeof UserRole],
+      role: updatedUser.role as UserRole,
     };
   }
 
@@ -109,7 +166,7 @@ export class UserResolver {
     const user = await this.userService.addUserToTeam(userId, teamId);
     return {
       ...user,
-      role: UserRole[user.role as keyof typeof UserRole],
+      role: user.role as UserRole,
     };
   }
 
@@ -124,7 +181,7 @@ export class UserResolver {
       const user = await this.userService.removeUserFromTeam(userId, teamId);
       return {
         ...user,
-        role: UserRole[user.role as keyof typeof UserRole],
+        role: user.role as UserRole,
       };
     } catch (error) {
       console.error('Error occurred while removing user from team:', error);
