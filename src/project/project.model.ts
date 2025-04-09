@@ -14,7 +14,10 @@ export class Project implements ProjectClient {
 
   @Field(() => String)
   teamId: string;
-  // ---------------------------------
+
+  @Field(() => String, { nullable: true })
+  teamName?: string;
+
   @Field(() => String)
   createdAt: string;
 
@@ -32,6 +35,4 @@ export class Project implements ProjectClient {
 
   @Field(() => String, { nullable: true })
   targetDate: string | null;
-
-  // ---------------------------------
 }

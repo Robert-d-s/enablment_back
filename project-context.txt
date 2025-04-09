@@ -732,7 +732,7 @@ import { Public } from './public.decorator';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenResponse } from './dto/refresh-token-response';
-import { UserRole } from '../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 
 @Resolver()
 export class AuthResolver {
@@ -930,7 +930,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import { User } from '@prisma/client';
-import { UserRole } from '../user/user-role.enum';
+import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -3850,8 +3850,7 @@ export class UserResolver {
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { User } from '@prisma/client';
-import { UserRole } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 import { User as QlUser } from '../user/user.model';
 
 // Local type definitions that don't conflict with Prisma types
