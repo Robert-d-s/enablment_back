@@ -70,10 +70,27 @@ export class UserResolver {
     }
     const teamIds = teams.map((team) => team.id);
     const projectsPerTeam = await this.projectLoader.byTeamId.loadMany(teamIds);
-    const allProjects = (
+    const allProjectsRaw = (
       projectsPerTeam.flat() as Array<Project | Error | null>
     ).filter((p): p is Project => p instanceof Error === false && p !== null);
-    return allProjects;
+    if (allProjectsRaw.length === 0) {
+      return [];
+    }
+
+    const projectTeamIds = [...new Set(allProjectsRaw.map((p) => p.teamId))];
+    const correspondingTeams =
+      await this.teamLoader.byId.loadMany(projectTeamIds);
+    const teamNameMap = new Map<string, string>();
+    correspondingTeams.forEach((team) => {
+      if (team && !(team instanceof Error)) {
+        teamNameMap.set(team.id, team.name);
+      }
+    });
+    const allProjectsWithTeamName = allProjectsRaw.map((project) => ({
+      ...project,
+      teamName: teamNameMap.get(project.teamId) || 'Unknown Team',
+    }));
+    return allProjectsWithTeamName;
   }
 
   @Query(() => Int)
