@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { TimeService } from './time.service';
 import { Time } from './time.model';
 import { TimeInputCreate, TimeInputUpdate } from './time.input';
@@ -19,41 +19,14 @@ export class TimeResolver {
   async createTime(
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
-    console.log(
-      'Backend Resolver - Received Start Time:',
+    console.log('Backend Resolver - createTime called with:', timeInputCreate);
+    return this.timeService.create(
       timeInputCreate.startTime,
+      timeInputCreate.projectId,
+      timeInputCreate.userId,
+      timeInputCreate.rateId,
+      timeInputCreate.totalElapsedTime,
     );
-    console.log(
-      'Backend Resolver - Received End Time:',
-      timeInputCreate.endTime,
-    );
-    const { startTime, projectId, userId, rateId, totalElapsedTime, endTime } =
-      timeInputCreate;
-
-    // Find an existing entry
-    const existingEntry = await this.timeService.findExistingEntry(
-      startTime,
-      userId,
-      projectId,
-      rateId,
-    );
-
-    if (existingEntry) {
-      return this.timeService.update(
-        existingEntry.id,
-        new Date(),
-        totalElapsedTime,
-      );
-    } else {
-      return this.timeService.create(
-        startTime,
-        projectId,
-        userId,
-        rateId,
-        endTime ? new Date(endTime) : new Date(),
-        totalElapsedTime,
-      );
-    }
   }
 
   @Mutation(() => Time)

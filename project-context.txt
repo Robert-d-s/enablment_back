@@ -410,7 +410,6 @@ async function bootstrap() {
     }),
   );
 
-  // Apply CORS settings from centralized configuration
   app.enableCors(getCorsConfig());
 
   app.use(cookieParser());
@@ -1197,11 +1196,7 @@ export const Roles = (...roles: UserRole[]): ReturnType<typeof SetMetadata> =>
  * Centralized CORS configuration for both HTTP and WebSocket connections
  */
 export const getCorsConfig = () => {
-  // Get frontend URL from environment variables or use a default for local development
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-
-  // For production, use the configured frontend URL
-  // For development, allow multiple local origins
   const origins =
     process.env.NODE_ENV === 'production'
       ? frontendUrl
@@ -2252,6 +2247,15 @@ export class IssueService {
     });
   }
 
+  async findById(id: string): Promise<Issue | null> {
+    return this.prisma.issue.findUnique({
+      where: { id },
+      include: {
+        labels: true,
+      },
+    });
+  }
+
   async create(data: IssueWebhookData): Promise<Issue> {
     try {
       // Make sure we have a valid projectId
@@ -2428,25 +2432,6 @@ export class IssueService {
       where: { id },
     });
   }
-
-  // This method will check if an issue exists and create it if not
-  async ensureIssueExists(
-    issueId: string,
-    data: IssueWebhookData,
-  ): Promise<Issue> {
-    let issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
-    });
-
-    if (!issue) {
-      // If the issue does not exist, create it using the existing 'create' method
-      issue = await this.create(data);
-    } else {
-      await this.update(issueId, data);
-    }
-
-    return issue;
-  }
 }
 
 // ====== FILE: src\issue-updates\issue-updates.gateway.ts ======
@@ -2479,7 +2464,9 @@ export class IssueUpdatesGateway
   }
 
   broadcastIssueUpdate(issueUpdate: any) {
+    this.logger.log(`Broadcasting issue update for ID: ${issueUpdate.id}`);
     this.server.emit('issueUpdate', issueUpdate);
+    this.logger.log(`Broadcast completed for issue: ${issueUpdate.id}`);
     this.logger.debug(`Broadcasted issue update: ${issueUpdate.id}`);
   }
 }
@@ -3746,7 +3733,6 @@ export class UserModule {}
 
 // ====== FILE: src\user\user.resolver.ts ======
 
-// src/user/user.resolver.ts
 import {
   Args,
   Mutation,
@@ -3819,11 +3805,27 @@ export class UserResolver {
     }
     const teamIds = teams.map((team) => team.id);
     const projectsPerTeam = await this.projectLoader.byTeamId.loadMany(teamIds);
-    const allProjects = (
+    const allProjectsRaw = (
       projectsPerTeam.flat() as Array<Project | Error | null>
     ).filter((p): p is Project => p instanceof Error === false && p !== null);
-    // Removed teamName mapping here, assuming it's added in Project model or resolved separately if needed
-    return allProjects;
+    if (allProjectsRaw.length === 0) {
+      return [];
+    }
+
+    const projectTeamIds = [...new Set(allProjectsRaw.map((p) => p.teamId))];
+    const correspondingTeams =
+      await this.teamLoader.byId.loadMany(projectTeamIds);
+    const teamNameMap = new Map<string, string>();
+    correspondingTeams.forEach((team) => {
+      if (team && !(team instanceof Error)) {
+        teamNameMap.set(team.id, team.name);
+      }
+    });
+    const allProjectsWithTeamName = allProjectsRaw.map((project) => ({
+      ...project,
+      teamName: teamNameMap.get(project.teamId) || 'Unknown Team',
+    }));
+    return allProjectsWithTeamName;
   }
 
   @Query(() => Int)
@@ -3835,7 +3837,6 @@ export class UserResolver {
   ): Promise<number> {
     const where: Prisma.UserWhereInput = {};
     if (search) {
-      // CORRECTED: Removed mode: 'insensitive'
       where.email = { contains: search };
     }
     if (role) {
@@ -3847,7 +3848,6 @@ export class UserResolver {
   @Query(() => [User])
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
   @UseGuards(AuthGuard)
-  // CORRECTED: Use the args input object
   async users(@Args('args') args: UserQueryArgs): Promise<User[]> {
     console.log('Received args:', JSON.stringify(args));
     const currentPage = args.page ?? 1;
@@ -3857,11 +3857,9 @@ export class UserResolver {
     const take = currentPageSize;
 
     const where: Prisma.UserWhereInput = {};
-    // CORRECTED: Access search via args.search
     if (args.search) {
-      where.email = { contains: args.search }; // Assuming case-insensitivity via DB collation
+      where.email = { contains: args.search };
     }
-    // CORRECTED: Access role via args.role
     if (args.role) {
       where.role = args.role;
     }
@@ -3880,16 +3878,14 @@ export class UserResolver {
       },
     });
 
-    // CORRECTED: Use correct enum mapping syntax
     return users.map((user) => ({
       ...user,
-      role: user.role as UserRole, // Cast the string from DB to the GraphQL enum type
+      role: user.role as UserRole,
     }));
   }
 
   @ResolveField(() => [Team])
   async teams(@Parent() user: User): Promise<Team[]> {
-    // This logic remains correct
     const teams = await this.teamLoader.byUserId.load(user.id);
     return teams.map((team) => ({
       ...team,
@@ -3898,7 +3894,6 @@ export class UserResolver {
     }));
   }
 
-  // --- Mutations remain unchanged ---
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
   @UseGuards(AuthGuard)
@@ -3909,7 +3904,7 @@ export class UserResolver {
     const updatedUser = await this.userService.updateUserRole(userId, newRole);
     return {
       ...updatedUser,
-      role: updatedUser.role as UserRole, // Cast necessary if service returns Prisma type
+      role: updatedUser.role as UserRole,
     };
   }
 
@@ -3923,8 +3918,7 @@ export class UserResolver {
     const user = await this.userService.addUserToTeam(userId, teamId);
     return {
       ...user,
-      role: user.role as UserRole, // Cast necessary if service returns Prisma type
-      // teams field will be resolved by @ResolveField if requested
+      role: user.role as UserRole,
     };
   }
 
@@ -3939,12 +3933,11 @@ export class UserResolver {
       const user = await this.userService.removeUserFromTeam(userId, teamId);
       return {
         ...user,
-        role: user.role as UserRole, // Cast necessary if service returns Prisma type
-        // teams field will be resolved by @ResolveField if requested
+        role: user.role as UserRole,
       };
     } catch (error) {
       console.error('Error occurred while removing user from team:', error);
-      throw new Error('Error removing user from team'); // Re-throw for GraphQL error handling
+      throw new Error('Error removing user from team');
     }
   }
 }
@@ -3954,9 +3947,7 @@ export class UserResolver {
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, UserRole } from '@prisma/client';
-import { User as QlUser } from '../user/user.model';
 
-// Local type definitions that don't conflict with Prisma types
 type TeamBasic = {
   id: string;
   name: string;
@@ -3979,83 +3970,6 @@ export class UserService {
   private readonly logger = new Logger(UserService.name);
 
   constructor(private prisma: PrismaService) {}
-  async getUserTeams(): Promise<UserTeamDTO[]> {
-    const userTeams = await this.prisma.userTeam.findMany({
-      include: {
-        user: true,
-        team: true,
-      },
-    });
-
-    return userTeams.map((ut) => ({
-      userId: ut.userId,
-      teamId: ut.teamId,
-      user: {
-        id: ut.user.id,
-        email: ut.user.email,
-        role: UserRole[ut.user.role as keyof typeof UserRole],
-        password: null,
-      },
-      team: {
-        id: ut.team.id,
-        name: ut.team.name,
-      },
-    }));
-  }
-
-  async all(): Promise<QlUser[]> {
-    const users = await this.prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        teams: {
-          select: {
-            team: {
-              select: {
-                id: true,
-                name: true,
-                projects: {
-                  select: {
-                    id: true,
-                    estimatedTime: true,
-                    name: true,
-                    teamId: true,
-                    createdAt: true,
-                    updatedAt: true,
-                    description: true,
-                    state: true,
-                    startDate: true,
-                    targetDate: true,
-                  },
-                },
-                rates: {
-                  select: {
-                    id: true,
-                    name: true,
-                    teamId: true,
-                    rate: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return users.map((user) => ({
-      id: user.id,
-      email: user.email,
-      role: UserRole[user.role as keyof typeof UserRole],
-      teams: user.teams.map((ut) => ({
-        id: ut.team.id,
-        name: ut.team.name,
-        projects: ut.team.projects, // Now fully populated
-        rates: ut.team.rates, // Now fully populated
-      })),
-    }));
-  }
 
   async findOne(email: string): Promise<User | undefined> {
     const user = await this.prisma.user.findFirst({
@@ -4110,7 +4024,6 @@ export class UserService {
 
   async addUserToTeam(userId: number, teamId: string): Promise<User> {
     return this.prisma.$transaction(async (tx) => {
-      // First, check if the user and team exist
       const userExists = await tx.user.findUnique({
         where: { id: userId },
       });
@@ -4122,7 +4035,6 @@ export class UserService {
         throw new Error('User or Team not found');
       }
 
-      // Check if the relation already exists
       const existingRelation = await tx.userTeam.findUnique({
         where: {
           userId_teamId: {
@@ -4132,7 +4044,6 @@ export class UserService {
         },
       });
 
-      // If the relation does not exist, create it
       if (!existingRelation) {
         await tx.userTeam.create({
           data: {
@@ -4193,7 +4104,6 @@ export class UserService {
     );
 
     try {
-      // Get current state
       const userBefore = await this.getUserWithTeams(userId);
       this.logger.debug(
         `Current state - User ${userId} has ${
@@ -4201,9 +4111,7 @@ export class UserService {
         } teams`,
       );
 
-      // Use a transaction to ensure the operation is atomic
       return await this.prisma.$transaction(async (tx) => {
-        // Perform the disconnection
         await tx.userTeam.deleteMany({
           where: {
             userId: userId,
@@ -4211,7 +4119,6 @@ export class UserService {
           },
         });
 
-        // Get the updated user data
         const updatedUser = await this.getUserWithTeams(userId);
         this.logger.debug(
           `After removal - User ${userId} now has ${
@@ -4348,9 +4255,10 @@ export class WebhookIssueService {
           }
 
           await prisma.$transaction(async (tx) => {
+            // Create the issue first
             const createdIssue = await this.createIssue(issueData);
 
-            // Also update labels for newly created issue
+            // Then update labels if present
             if (issueData.labels && issueData.labels.length > 0) {
               await this.issueService.updateLabelsForIssue(
                 issueData.id,
@@ -4358,9 +4266,25 @@ export class WebhookIssueService {
               );
             }
 
-            this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
+            // Fetch the complete issue with labels
+            const completeIssue = await this.issueService.findById(
+              issueData.id,
+            );
+            if (completeIssue) {
+              // Broadcast the complete issue with the action field
+              this.issueUpdatesGateway.broadcastIssueUpdate({
+                ...completeIssue,
+                action: 'create',
+              });
+            } else {
+              // Fallback if complete issue can't be fetched
+              this.issueUpdatesGateway.broadcastIssueUpdate({
+                ...createdIssue,
+                labels: issueData.labels || [],
+                action: 'create',
+              });
+            }
           });
-
           break;
 
         case 'update':
@@ -4374,7 +4298,7 @@ export class WebhookIssueService {
             });
 
             if (existingIssue) {
-              // If issue exists, we can update it even without a projectId
+              // If issue exists, update it first
               await this.updateExistingIssue(issueData);
 
               // Then update its labels if present
@@ -4383,6 +4307,36 @@ export class WebhookIssueService {
                   issueData.id,
                   issueData.labels,
                 );
+              }
+
+              // Fetch the complete updated issue with labels
+              const completeIssue = await this.issueService.findById(
+                issueData.id,
+              );
+
+              // Log the labels to verify they're included
+              console.log(
+                `Issue ${issueData.id} updated with labels:`,
+                completeIssue && 'labels' in completeIssue
+                  ? completeIssue.labels
+                  : issueData.labels || 'No labels',
+              );
+
+              // Broadcast the complete issue with the action field
+              if (completeIssue) {
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  ...completeIssue,
+                  action: 'update',
+                });
+              } else {
+                // Fallback if complete issue can't be fetched
+                const basicUpdatedIssue =
+                  await this.updateExistingIssue(issueData);
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  ...basicUpdatedIssue,
+                  labels: issueData.labels || [],
+                  action: 'update',
+                });
               }
             } else {
               // Issue doesn't exist, need projectId for creation
@@ -4394,18 +4348,38 @@ export class WebhookIssueService {
                 return; // Skip further processing
               }
 
+              // Create the issue
               await this.createIssue(issueData);
 
+              // Update labels if present
               if (issueData.labels && issueData.labels.length > 0) {
                 await this.issueService.updateLabelsForIssue(
                   issueData.id,
                   issueData.labels,
                 );
               }
-            }
 
-            const updatedIssue = await this.updateExistingIssue(issueData);
-            this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
+              // Fetch the complete issue with labels
+              const completeIssue = await this.issueService.findById(
+                issueData.id,
+              );
+
+              // Broadcast the complete issue with the action field
+              if (completeIssue) {
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  ...completeIssue,
+                  action: 'create', // It's a creation via update
+                });
+              } else {
+                // Fallback if complete issue can't be fetched
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  id: issueData.id,
+                  title: issueData.title,
+                  labels: issueData.labels || [],
+                  action: 'create',
+                });
+              }
+            }
           });
           break;
 
@@ -4415,10 +4389,11 @@ export class WebhookIssueService {
           await prisma.$transaction(async (tx) => {
             await this.issueService.remove(issueData.id);
 
+            // For removals, just send the ID and action
             this.issueUpdatesGateway.broadcastIssueUpdate({
               id: issueData.id,
               action: 'remove',
-            }); // Broadcast remove event, send minimal info
+            });
           });
           break;
 
@@ -4426,7 +4401,7 @@ export class WebhookIssueService {
           console.log('Unhandled webhook action:', json.action);
       }
     } catch (error) {
-      if (error.message.includes('Missing projectId')) {
+      if (error.message && error.message.includes('Missing projectId')) {
         console.warn(
           `Could not process issue ${issueData.id}: Missing projectId. This might be a standalone issue not connected to any project.`,
         );
@@ -4439,6 +4414,9 @@ export class WebhookIssueService {
     }
   }
 
+  /**
+   * Ensures the issue has a valid projectId, either from the payload or by finding a suitable default
+   */
   private async ensureProjectId(data: IssueWebhookData): Promise<boolean> {
     // Try to get projectId from project.id if projectId is missing
     if (!data.projectId && data.project?.id) {
@@ -4482,6 +4460,7 @@ export class WebhookIssueService {
           return true;
         }
 
+        // Last resort: Create or get a special "Unassigned" project
         const unassignedProject = await this.createOrGetUnassignedProject();
         if (unassignedProject) {
           console.log(`Using "Unassigned" project for issue ${data.id}`);
@@ -4502,7 +4481,9 @@ export class WebhookIssueService {
     return true;
   }
 
-  // Helper method to create or get an "Unassigned" project
+  /**
+   * Creates or retrieves a special "Unassigned" project for issues without a project
+   */
   private async createOrGetUnassignedProject() {
     const UNASSIGNED_PROJECT_ID = 'unassigned-project-id'; // Use a fixed ID
 
@@ -4544,10 +4525,13 @@ export class WebhookIssueService {
     }
   }
 
+  /**
+   * Creates a new issue in the database
+   */
   private async createIssue(data: IssueWebhookData) {
     try {
       // Ensure we have a projectId
-      if (!this.ensureProjectId(data)) {
+      if (!(await this.ensureProjectId(data))) {
         throw new Error(
           `Issue ${data.id} has no projectId and no default project is available`,
         );
@@ -4560,6 +4544,9 @@ export class WebhookIssueService {
     }
   }
 
+  /**
+   * Updates an existing issue in the database
+   */
   private async updateExistingIssue(data: IssueWebhookData) {
     try {
       const updateData: any = {
@@ -4593,24 +4580,20 @@ export class WebhookIssueService {
         data: updateData,
       });
 
-      return { id: data.id };
+      return {
+        id: data.id,
+        title: data.title,
+        state: data.state?.name,
+        teamName: data.team?.name,
+        assigneeName: data.assignee?.name || 'No Assignee',
+        priorityLabel: data.priorityLabel || 'No Priority',
+        labels: data.labels || [],
+      };
     } catch (error) {
       console.error(
         `Failed to update existing issue ${data.id}:`,
         error.message,
       );
-      throw error;
-    }
-  }
-
-  private async updateIssue(data: IssueWebhookData) {
-    try {
-      // Try to get projectId from project.id if projectId is missing
-      this.ensureProjectId(data);
-
-      return await this.issueService.update(data.id, data);
-    } catch (error) {
-      console.error(`Failed to update issue ${data.id}:`, error.message);
       throw error;
     }
   }

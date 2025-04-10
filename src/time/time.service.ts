@@ -19,76 +19,32 @@ export class TimeService {
     });
   }
 
-  async isDuplicate(
-    startTime: Date,
-    userId: number,
-    projectId: string,
-    rateId: number,
-  ): Promise<boolean> {
-    const existingEntry = await this.prisma.time.findFirst({
-      where: {
-        startTime,
-        userId,
-        projectId,
-        rateId,
-      },
-    });
-    return !!existingEntry;
-  }
-
-  async findExistingEntry(
-    startTime: Date,
-    userId: number,
-    projectId: string,
-    rateId: number,
-  ): Promise<Time | null> {
-    return this.prisma.time.findFirst({
-      where: {
-        startTime,
-        userId,
-        projectId,
-        rateId,
-      },
-    });
-  }
-
   async create(
     startTime: Date,
     projectId: string,
     userId: number,
     rateId: number,
-    endTime: Date,
     totalElapsedTime: number,
   ): Promise<Time> {
     try {
-      console.log('Backend Service - Creating with Start Time:', startTime);
-      console.log('Backend Service - Creating with End Time:', endTime);
-
-      const duplicate = await this.isDuplicate(
+      console.log(
+        'Backend Service - create called with Start Time:',
         startTime,
-        userId,
-        projectId,
-        rateId,
       );
-
-      if (duplicate) {
-        throw new ConflictException('Duplicate time entry not allowed');
-      }
+      console.log('Backend Service - totalElapsedTime:', totalElapsedTime);
 
       return this.prisma.time.create({
         data: {
           startTime,
-          endTime, // endTime is now the actual time of submission
+          endTime: new Date(),
           projectId,
           userId,
           rateId,
-          totalElapsedTime, // totalElapsedTime is the total active working time
+          totalElapsedTime,
         },
       });
     } catch (error) {
-      if (error instanceof ConflictException) {
-        throw error;
-      }
+      console.error('Error creating time entry in service:', error);
       throw new InternalServerErrorException('Failed to create time entry');
     }
   }
@@ -96,10 +52,9 @@ export class TimeService {
   async update(
     id: number,
     endTime: Date,
-    totalElapsedTime: number, // Directly use the provided totalElapsedTime
+    totalElapsedTime: number,
   ): Promise<Time> {
     try {
-      // First check if the time entry exists
       const timeEntry = await this.prisma.time.findUnique({
         where: { id },
       });
@@ -108,17 +63,26 @@ export class TimeService {
         throw new NotFoundException(`Time entry with ID ${id} not found`);
       }
 
+      console.log(`Backend Service - update called for ID ${id}`);
+      console.log(
+        `Backend Service - updating endTime to: ${endTime.toISOString()}`,
+      );
+      console.log(
+        `Backend Service - updating totalElapsedTime to: ${totalElapsedTime}`,
+      );
+
       return this.prisma.time.update({
         where: { id },
         data: {
-          endTime, // Set the endTime to the time of submission
-          totalElapsedTime, // Use the provided totalElapsedTime
+          endTime: endTime,
+          totalElapsedTime: totalElapsedTime,
         },
       });
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      console.error(`Error updating time entry ${id} in service:`, error);
       throw new InternalServerErrorException(
         `Failed to update time entry ${id}`,
       );
@@ -127,7 +91,6 @@ export class TimeService {
 
   async remove(id: number): Promise<Time> {
     try {
-      // First check if the time entry exists
       const timeEntry = await this.prisma.time.findUnique({
         where: { id },
       });
@@ -160,11 +123,9 @@ export class TimeService {
         `getTotalTimeSpent called with userId: ${userId}, projectId: ${projectId}, startDate: ${startDate.toISOString()}, endDate: ${endDate.toISOString()}`,
       );
 
-      // Adjust startDate to the start of the day
       const adjustedStartDate = new Date(startDate);
       adjustedStartDate.setHours(0, 0, 0, 0);
 
-      // Adjust endDate to include the entire day
       const adjustedEndDate = new Date(endDate);
       adjustedEndDate.setHours(23, 59, 59, 999);
 
