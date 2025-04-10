@@ -36,9 +36,10 @@ export class WebhookIssueService {
           }
 
           await prisma.$transaction(async (tx) => {
+            // Create the issue first
             const createdIssue = await this.createIssue(issueData);
 
-            // Also update labels for newly created issue
+            // Then update labels if present
             if (issueData.labels && issueData.labels.length > 0) {
               await this.issueService.updateLabelsForIssue(
                 issueData.id,
@@ -46,9 +47,25 @@ export class WebhookIssueService {
               );
             }
 
-            this.issueUpdatesGateway.broadcastIssueUpdate(createdIssue);
+            // Fetch the complete issue with labels
+            const completeIssue = await this.issueService.findById(
+              issueData.id,
+            );
+            if (completeIssue) {
+              // Broadcast the complete issue with the action field
+              this.issueUpdatesGateway.broadcastIssueUpdate({
+                ...completeIssue,
+                action: 'create',
+              });
+            } else {
+              // Fallback if complete issue can't be fetched
+              this.issueUpdatesGateway.broadcastIssueUpdate({
+                ...createdIssue,
+                labels: issueData.labels || [],
+                action: 'create',
+              });
+            }
           });
-
           break;
 
         case 'update':
@@ -62,7 +79,7 @@ export class WebhookIssueService {
             });
 
             if (existingIssue) {
-              // If issue exists, we can update it even without a projectId
+              // If issue exists, update it first
               await this.updateExistingIssue(issueData);
 
               // Then update its labels if present
@@ -71,6 +88,36 @@ export class WebhookIssueService {
                   issueData.id,
                   issueData.labels,
                 );
+              }
+
+              // Fetch the complete updated issue with labels
+              const completeIssue = await this.issueService.findById(
+                issueData.id,
+              );
+
+              // Log the labels to verify they're included
+              console.log(
+                `Issue ${issueData.id} updated with labels:`,
+                completeIssue && 'labels' in completeIssue
+                  ? completeIssue.labels
+                  : issueData.labels || 'No labels',
+              );
+
+              // Broadcast the complete issue with the action field
+              if (completeIssue) {
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  ...completeIssue,
+                  action: 'update',
+                });
+              } else {
+                // Fallback if complete issue can't be fetched
+                const basicUpdatedIssue =
+                  await this.updateExistingIssue(issueData);
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  ...basicUpdatedIssue,
+                  labels: issueData.labels || [],
+                  action: 'update',
+                });
               }
             } else {
               // Issue doesn't exist, need projectId for creation
@@ -82,18 +129,38 @@ export class WebhookIssueService {
                 return; // Skip further processing
               }
 
+              // Create the issue
               await this.createIssue(issueData);
 
+              // Update labels if present
               if (issueData.labels && issueData.labels.length > 0) {
                 await this.issueService.updateLabelsForIssue(
                   issueData.id,
                   issueData.labels,
                 );
               }
-            }
 
-            const updatedIssue = await this.updateExistingIssue(issueData);
-            this.issueUpdatesGateway.broadcastIssueUpdate(updatedIssue);
+              // Fetch the complete issue with labels
+              const completeIssue = await this.issueService.findById(
+                issueData.id,
+              );
+
+              // Broadcast the complete issue with the action field
+              if (completeIssue) {
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  ...completeIssue,
+                  action: 'create', // It's a creation via update
+                });
+              } else {
+                // Fallback if complete issue can't be fetched
+                this.issueUpdatesGateway.broadcastIssueUpdate({
+                  id: issueData.id,
+                  title: issueData.title,
+                  labels: issueData.labels || [],
+                  action: 'create',
+                });
+              }
+            }
           });
           break;
 
@@ -103,10 +170,11 @@ export class WebhookIssueService {
           await prisma.$transaction(async (tx) => {
             await this.issueService.remove(issueData.id);
 
+            // For removals, just send the ID and action
             this.issueUpdatesGateway.broadcastIssueUpdate({
               id: issueData.id,
               action: 'remove',
-            }); // Broadcast remove event, send minimal info
+            });
           });
           break;
 
@@ -114,7 +182,7 @@ export class WebhookIssueService {
           console.log('Unhandled webhook action:', json.action);
       }
     } catch (error) {
-      if (error.message.includes('Missing projectId')) {
+      if (error.message && error.message.includes('Missing projectId')) {
         console.warn(
           `Could not process issue ${issueData.id}: Missing projectId. This might be a standalone issue not connected to any project.`,
         );
@@ -127,6 +195,9 @@ export class WebhookIssueService {
     }
   }
 
+  /**
+   * Ensures the issue has a valid projectId, either from the payload or by finding a suitable default
+   */
   private async ensureProjectId(data: IssueWebhookData): Promise<boolean> {
     // Try to get projectId from project.id if projectId is missing
     if (!data.projectId && data.project?.id) {
@@ -170,6 +241,7 @@ export class WebhookIssueService {
           return true;
         }
 
+        // Last resort: Create or get a special "Unassigned" project
         const unassignedProject = await this.createOrGetUnassignedProject();
         if (unassignedProject) {
           console.log(`Using "Unassigned" project for issue ${data.id}`);
@@ -190,7 +262,9 @@ export class WebhookIssueService {
     return true;
   }
 
-  // Helper method to create or get an "Unassigned" project
+  /**
+   * Creates or retrieves a special "Unassigned" project for issues without a project
+   */
   private async createOrGetUnassignedProject() {
     const UNASSIGNED_PROJECT_ID = 'unassigned-project-id'; // Use a fixed ID
 
@@ -232,10 +306,13 @@ export class WebhookIssueService {
     }
   }
 
+  /**
+   * Creates a new issue in the database
+   */
   private async createIssue(data: IssueWebhookData) {
     try {
       // Ensure we have a projectId
-      if (!this.ensureProjectId(data)) {
+      if (!(await this.ensureProjectId(data))) {
         throw new Error(
           `Issue ${data.id} has no projectId and no default project is available`,
         );
@@ -248,6 +325,9 @@ export class WebhookIssueService {
     }
   }
 
+  /**
+   * Updates an existing issue in the database
+   */
   private async updateExistingIssue(data: IssueWebhookData) {
     try {
       const updateData: any = {
@@ -281,7 +361,15 @@ export class WebhookIssueService {
         data: updateData,
       });
 
-      return { id: data.id };
+      return {
+        id: data.id,
+        title: data.title,
+        state: data.state?.name,
+        teamName: data.team?.name,
+        assigneeName: data.assignee?.name || 'No Assignee',
+        priorityLabel: data.priorityLabel || 'No Priority',
+        labels: data.labels || [],
+      };
     } catch (error) {
       console.error(
         `Failed to update existing issue ${data.id}:`,

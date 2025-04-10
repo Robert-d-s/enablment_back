@@ -26,7 +26,9 @@ export class IssueUpdatesGateway
   }
 
   broadcastIssueUpdate(issueUpdate: any) {
+    this.logger.log(`Broadcasting issue update for ID: ${issueUpdate.id}`);
     this.server.emit('issueUpdate', issueUpdate);
+    this.logger.log(`Broadcast completed for issue: ${issueUpdate.id}`);
     this.logger.debug(`Broadcasted issue update: ${issueUpdate.id}`);
   }
 }

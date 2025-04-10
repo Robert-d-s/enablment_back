@@ -20,6 +20,15 @@ export class IssueService {
     });
   }
 
+  async findById(id: string): Promise<Issue | null> {
+    return this.prisma.issue.findUnique({
+      where: { id },
+      include: {
+        labels: true,
+      },
+    });
+  }
+
   async create(data: IssueWebhookData): Promise<Issue> {
     try {
       // Make sure we have a valid projectId
