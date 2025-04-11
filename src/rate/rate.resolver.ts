@@ -4,8 +4,10 @@ import { Rate } from './rate.model';
 import { RateInputCreate } from './rate.input';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '@prisma/client';
 
-@Resolver()
+@Resolver(() => Rate)
 @UseGuards(AuthGuard)
 export class RateResolver {
   constructor(private rateService: RateService) {}
@@ -16,6 +18,7 @@ export class RateResolver {
   }
 
   @Mutation(() => Rate)
+  @Roles(UserRole.ADMIN)
   async createRate(
     @Args('rateInputCreate') rateInputCreate: RateInputCreate,
   ): Promise<Rate> {
@@ -27,10 +30,15 @@ export class RateResolver {
   }
 
   @Mutation(() => Rate)
+  @Roles(UserRole.ADMIN)
   async deleteRate(
     @Args('rateId', { type: () => Int }) rateId: number,
-  ): Promise<Rate> {
+  ): Promise<{ id: number }> {
     console.log(`Attempting to delete rate with ID: ${rateId}`);
-    return this.rateService.remove(rateId);
+    const deletedRate = await this.rateService.remove(rateId);
+    if (!deletedRate) {
+      return { id: rateId };
+    }
+    return { id: deletedRate.id };
   }
 }

@@ -1,6 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Rate } from '@prisma/client';
+import { Rate, Prisma } from '@prisma/client';
 
 @Injectable()
 export class RateService {
@@ -24,25 +28,31 @@ export class RateService {
     });
   }
 
-  async remove(id: number): Promise<Rate> {
+  async remove(id: number): Promise<Rate | null> {
     console.log('Removing rate with ID:', id);
 
-    return this.prisma.$transaction(async (tx) => {
-      // First, update all time entries to remove references to this rate
-      await tx.time.updateMany({
-        where: { rateId: id },
-        data: { rateId: { set: null } },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.time.updateMany({
+          where: { rateId: id },
+          data: { rateId: { set: null } },
+        });
 
-      // Then delete the rate
-      try {
-        return await tx.rate.delete({
+        const deletedRate = await tx.rate.delete({
           where: { id },
         });
-      } catch (err) {
-        console.error('Error in removing rate:', err);
-        throw err;
+        return deletedRate;
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        console.warn(`Rate with ID ${id} not found for deletion.`);
+        throw new NotFoundException(`Rate with ID ${id} not found.`);
       }
-    });
+      console.error(`Error in removing rate ${id}:`, err);
+      throw new InternalServerErrorException(`Failed to remove rate ${id}.`);
+    }
   }
 }
