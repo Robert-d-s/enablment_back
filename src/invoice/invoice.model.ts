@@ -8,6 +8,12 @@ export class Invoice {
   @Field(() => String)
   projectName: string;
 
+  @Field(() => String)
+  teamId: string;
+
+  @Field(() => String)
+  teamName: string;
+
   @Field(() => Float)
   totalHours: number;
 
@@ -16,6 +22,8 @@ export class Invoice {
 
   @Field(() => [RateDetail], { nullable: true })
   rates?: RateDetail[];
+
+  __typename?: string;
 }
 
 @ObjectType()
@@ -34,4 +42,6 @@ export class RateDetail {
 
   @Field(() => Float)
   ratePerHour: number;
+
+  __typename?: string;
 }

@@ -1,13 +1,35 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Project } from '@prisma/client';
+import { Project, Team } from '@prisma/client';
+import { TeamLoader } from '../loaders/team.loader';
 
 @Injectable()
 export class ProjectService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private teamLoader: TeamLoader,
+  ) {}
 
-  async all(): Promise<Project[]> {
-    return this.prisma.project.findMany();
+  async all(): Promise<Array<Project & { teamName?: string }>> {
+    const projects = await this.prisma.project.findMany({
+      orderBy: { name: 'asc' },
+    });
+    if (!projects || projects.length === 0) {
+      return [];
+    }
+    const teamIds = [...new Set(projects.map((p) => p.teamId))];
+    const teams = await this.teamLoader.byId.loadMany(teamIds);
+    const teamMap = new Map<string, Team>();
+    teams.forEach((t) => {
+      if (t && !(t instanceof Error)) {
+        teamMap.set(t.id, t);
+      }
+    });
+    const projectsWithTeamNames = projects.map((project) => ({
+      ...project,
+      teamName: teamMap.get(project.teamId)?.name,
+    }));
+    return projectsWithTeamNames;
   }
 
   async create(

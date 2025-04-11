@@ -2,12 +2,15 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class InvoiceService {
+  private readonly logger = new Logger(InvoiceService.name);
   constructor(private prisma: PrismaService) {}
 
   async generateInvoiceForProject(
@@ -15,72 +18,128 @@ export class InvoiceService {
     startDate: Date,
     endDate: Date,
   ): Promise<Invoice> {
+    this.logger.log(
+      `Generating invoice for Project ${projectId} from ${startDate.toISOString()} to ${endDate.toISOString()}`,
+    );
+    const projectWithTeam = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!projectWithTeam || !projectWithTeam.team) {
+      this.logger.warn(
+        `Project (ID: ${projectId}) or its associated Team not found.`,
+      );
+      throw new NotFoundException(
+        `Project with ID ${projectId} or its Team not found`,
+      );
+    }
+    const { team, ...project } = projectWithTeam;
+
+    const timeFilter: Prisma.TimeWhereInput = {
+      projectId: projectId,
+      startTime: { gte: startDate },
+      endTime: { lte: endDate },
+      rateId: { not: null },
+      totalElapsedTime: { gt: 0 },
+    };
+
     try {
-      const project = await this.prisma.project.findUnique({
-        where: { id: projectId },
-        include: {
-          time: {
-            where: {
-              startTime: { gte: startDate },
-              endTime: { lte: endDate },
-            },
-            include: {
-              rate: true,
-            },
-          },
+      const rateAggregations = await this.prisma.time.groupBy({
+        by: ['rateId'],
+        where: timeFilter,
+        _sum: {
+          totalElapsedTime: true,
         },
       });
 
-      if (!project) {
-        throw new NotFoundException(`Project with ID ${projectId} not found`);
+      if (!rateAggregations || rateAggregations.length === 0) {
+        this.logger.log(
+          `No time entries with rates found for Project ${projectId} in the period.`,
+        );
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          teamId: team.id,
+          teamName: team.name,
+          totalHours: 0,
+          totalCost: 0,
+          rates: [],
+          __typename: 'Invoice',
+        };
       }
 
-      let totalHours = 0;
-      let totalCost = 0;
-      const ratesMap: { [key: number]: RateDetail & { ratePerHour: number } } =
-        {};
+      const rateIds = rateAggregations.map((agg) => agg.rateId as number);
+      const ratesDetailsMap = await this.prisma.rate
+        .findMany({
+          where: { id: { in: rateIds } },
+          select: { id: true, name: true, rate: true },
+        })
+        .then((rates) => new Map(rates.map((r) => [r.id, r])));
 
-      project.time.forEach((entry) => {
-        if (!entry.rate) return;
+      let grandTotalHours = 0;
+      let grandTotalCost = 0;
+      const rateDetailsResult: RateDetail[] = [];
 
-        const hours = entry.totalElapsedTime / 3600000;
-        totalHours += hours;
-        totalCost += hours * entry.rate.rate;
+      for (const agg of rateAggregations) {
+        const rateId = agg.rateId as number;
+        const rateInfo = ratesDetailsMap.get(rateId);
+        const totalMs = agg._sum.totalElapsedTime ?? 0;
 
-        const rateId = entry.rateId as number;
-        if (!ratesMap[rateId]) {
-          ratesMap[rateId] = {
-            rateId,
-            rateName: entry.rate.name,
-            hours: 0,
-            cost: 0,
-            ratePerHour: entry.rate.rate,
-          };
+        if (!rateInfo) {
+          this.logger.warn(
+            `Rate info for rateId ${rateId} not found, skipping aggregation.`,
+          );
+          continue;
         }
 
-        ratesMap[rateId].hours += hours;
-        ratesMap[rateId].cost += hours * entry.rate.rate;
-      });
+        const hours = totalMs / 3600000;
+        const cost = hours * rateInfo.rate;
 
-      const rates = Object.values(ratesMap).map((rate) => ({
-        ...rate,
-        hours: Math.round(rate.hours * 100) / 100,
-        cost: Math.round(rate.cost * 100) / 100,
-      }));
+        grandTotalHours += hours;
+        grandTotalCost += cost;
+
+        rateDetailsResult.push({
+          rateId: rateInfo.id,
+          rateName: rateInfo.name,
+          hours: Math.round(hours * 100) / 100,
+          cost: Math.round(cost * 100) / 100,
+          ratePerHour: rateInfo.rate,
+          __typename: 'RateDetail',
+        });
+      }
+
+      this.logger.log(
+        `Invoice generated successfully for Project ${projectId}. Team: ${team.name}`,
+      );
 
       return {
         projectId: project.id,
         projectName: project.name,
-        totalHours: Math.round(totalHours * 100) / 100,
-        totalCost: Math.round(totalCost * 100) / 100,
-        rates,
+        teamId: team.id,
+        teamName: team.name,
+        totalHours: Math.round(grandTotalHours * 100) / 100,
+        totalCost: Math.round(grandTotalCost * 100) / 100,
+        rates: rateDetailsResult.sort((a, b) =>
+          a.rateName.localeCompare(b.rateName),
+        ),
+        __typename: 'Invoice',
       };
     } catch (error) {
+      this.logger.error(
+        `Failed to generate invoice for project ${projectId}: ${error.message}`,
+        error.stack,
+      );
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException(
-        'Failed to generate invoice for project',
+        `Failed to generate invoice for project ${projectId}`,
+        error.message,
       );
     }
   }

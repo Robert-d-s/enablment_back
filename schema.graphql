@@ -117,6 +117,8 @@ scalar DateTime
 type Invoice {
   projectId: String!
   projectName: String!
+  teamId: String!
+  teamName: String!
   totalHours: Float!
   totalCost: Float!
   rates: [RateDetail!]

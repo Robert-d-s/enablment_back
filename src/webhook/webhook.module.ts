@@ -9,8 +9,15 @@ import { TeamModule } from '../team/team.module';
 import { IssueUpdatesModule } from '../issue-updates/issue-updates.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { DatabaseSyncModule } from '../dbSynch/dbSynch.module';
+import { DataLoaderModule } from 'src/loaders/data-loader.module';
 @Module({
-  imports: [TeamModule, IssueUpdatesModule, PrismaModule, DatabaseSyncModule],
+  imports: [
+    TeamModule,
+    IssueUpdatesModule,
+    PrismaModule,
+    DatabaseSyncModule,
+    DataLoaderModule,
+  ],
   providers: [
     ProjectService,
     WebhookService,
