@@ -7,15 +7,16 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
-import { User } from '@prisma/client';
-import { UserRole } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class AuthService {
   constructor(
+    @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -67,7 +68,7 @@ export class AuthService {
         hashedRefreshToken: hashedRefreshToken,
       },
     });
-    console.log(`Updated refresh token hash for user ${userId}.`);
+    this.logger.debug(`Updated refresh token hash for user ${userId}.`);
   }
 
   async signIn(
@@ -78,20 +79,24 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
+    this.logger.debug(`Attempting sign in for user: %s`, username);
     try {
       const user = await this.userService.findOne(username);
-
       if (!user) {
+        this.logger.warn('Sign-in failed: User %s not found', username);
         throw new UnauthorizedException('Invalid email or password');
       }
 
       const isMatch = await bcrypt.compare(pass, user.password);
       if (!isMatch) {
+        this.logger.warn(
+          'Sign-in failed: Password mismatch for user %s',
+          username,
+        );
         throw new UnauthorizedException('Invalid email or password');
       }
 
       const { accessToken, refreshToken } = await this.generateTokens(user);
-
       await this.updateRefreshTokenHash(user.id, refreshToken);
 
       const result = {
@@ -99,16 +104,20 @@ export class AuthService {
         accessToken,
         refreshToken,
       };
-      console.log(
-        'AuthService.signIn returning:',
-        JSON.stringify(result, null, 2),
+      this.logger.info(
+        { userId: user.id, email: user.email },
+        'User signed in successfully',
       );
       return result;
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      console.error('Sign in error:', error);
+      this.logger.error(
+        { err: error },
+        'An error occurred during sign in for user %s',
+        username,
+      );
       throw new InternalServerErrorException(
         'An error occurred during sign in',
       );
@@ -119,11 +128,11 @@ export class AuthService {
     userId: number,
     rt: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    console.log(`Attempting refresh for user ${userId}`);
+    this.logger.debug(`Attempting token refresh for user ${userId}`);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user || !user.hashedRefreshToken) {
-      console.warn(
+      this.logger.warn(
         `Refresh Denied: User ${userId} not found or no stored hash.`,
       );
       throw new UnauthorizedException('Access Denied');
@@ -132,24 +141,28 @@ export class AuthService {
     // Compare the provided token (rt) with the stored hash
     const rtMatches = await bcrypt.compare(rt, user.hashedRefreshToken);
     if (!rtMatches) {
-      console.warn(
+      this.logger.warn(
         `Refresh Denied: Provided token does not match stored hash for user ${userId}.`,
       );
       throw new UnauthorizedException('Access Denied');
     }
-    console.log(`Refresh Granted: Token match successful for user ${userId}.`);
+    this.logger.debug(
+      `Refresh Granted: Token match successful for user ${userId}.`,
+    );
 
     const { accessToken, refreshToken: newRefreshToken } =
       await this.generateTokens(user);
 
     await this.updateRefreshTokenHash(user.id, newRefreshToken);
-    console.log(`Refresh Rotation: Stored new token hash for user ${userId}.`);
+    this.logger.debug(
+      `Refresh Rotation: Stored new token hash for user ${userId}.`,
+    );
 
     return { accessToken, refreshToken: newRefreshToken };
   }
 
   async logout(userId: number): Promise<boolean> {
-    console.log(`Logging out user ${userId}. Clearing token hash.`);
+    this.logger.info(`Logging out user ${userId}. Clearing token hash.`);
     await this.prisma.user.updateMany({
       where: {
         id: userId,
@@ -163,15 +176,18 @@ export class AuthService {
   }
 
   async signUp(email: string, password: string): Promise<User> {
+    this.logger.debug('Attempting sign-up for email: %s', email);
     try {
       this.validateEmail(email);
       this.validatePassword(password);
 
       const userCount = await this.userService.count();
       const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
+      this.logger.debug('Determined role for new user %s: %s', email, role);
 
       const existingUser = await this.userService.findOne(email);
       if (existingUser) {
+        this.logger.warn('Sign-up failed: Email %s already exists', email);
         throw new ConflictException('Email already exists');
       }
 
@@ -182,9 +198,18 @@ export class AuthService {
         error instanceof ConflictException ||
         error instanceof BadRequestException
       ) {
+        this.logger.warn(
+          { err: error },
+          'Sign up validation/conflict error for email %s',
+          email,
+        );
         throw error;
       }
-      console.error('Sign up error:', error);
+      this.logger.error(
+        { err: error },
+        'An unexpected error occurred during sign up for email %s',
+        email,
+      );
       throw new InternalServerErrorException(
         'An error occurred during sign up',
       );

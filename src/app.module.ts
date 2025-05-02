@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { registerEnumType } from '@nestjs/graphql';
-import { UserRole } from '@prisma/client';
-import { AuthModule } from './auth/auth.module';
-import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { LoggerModule } from 'nestjs-pino';
+
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
+import { UserModule } from './user/user.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { ProjectModule } from './project/project.module';
 import { IssueModule } from './issue/issue.module';
@@ -21,6 +21,8 @@ import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { Request, Response } from 'express';
 import { User } from './user/user.model';
+import { registerEnumType } from '@nestjs/graphql';
+import { UserRole } from '@prisma/client';
 
 export interface GqlContext {
   req: Request & { user?: User }; // User property from AuthGuard
@@ -35,6 +37,36 @@ registerEnumType(UserRole, {
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: 'info',
+        transport:
+          process.env.NODE_ENV !== 'production'
+            ? {
+                target: 'pino-pretty',
+                options: {
+                  singleLine: true,
+                  colorize: true,
+                  leverlFirst: true,
+                  translateTime: 'SYS:standard',
+                },
+              }
+            : undefined,
+        serializers: {
+          req(req) {
+            req.headers = {
+              ...req.headers,
+              authorization: '[REDACTED]',
+              cookie: '[REDACTED]',
+            };
+            return req;
+          },
+        },
+        customProps: (req, res) => ({
+          context: 'HTTP',
+        }),
+      },
+    }),
     AuthModule,
     UserModule,
     ProjectModule,

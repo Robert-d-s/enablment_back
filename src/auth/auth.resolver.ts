@@ -1,5 +1,3 @@
-// src/auth/auth.resolver.ts
-
 import { Args, Mutation, Query, Resolver, Context } from '@nestjs/graphql';
 import { AuthService } from './auth.service';
 import { UserProfileDto } from './dto/user-profile.dto';
@@ -16,10 +14,12 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenResponse } from './dto/refresh-token-response';
 import { UserRole } from '@prisma/client';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Resolver()
 export class AuthResolver {
   constructor(
+    @InjectPinoLogger(AuthResolver.name) private readonly logger: PinoLogger,
     private authService: AuthService,
     private jwtService: JwtService,
     private configService: ConfigService,
@@ -27,7 +27,7 @@ export class AuthResolver {
 
   private setRefreshTokenCookie(context: GqlContext, token: string): void {
     if (!context?.res) {
-      console.error(
+      this.logger.error(
         'Response object not found in context, cannot set refresh token cookie.',
       );
       return;
@@ -47,12 +47,12 @@ export class AuthResolver {
       path: '/',
       maxAge: maxAgeMs,
     });
-    console.log('Refresh token cookie set on path /.');
+    this.logger.debug('Refresh token cookie set on path /.');
   }
 
   private clearRefreshTokenCookie(context: GqlContext): void {
     if (!context?.res) {
-      console.error(
+      this.logger.debug(
         'Response object not found in context, cannot clear refresh token cookie.',
       );
       return;
@@ -63,7 +63,7 @@ export class AuthResolver {
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       path: '/',
     });
-    console.log('Refresh token cookie cleared.');
+    this.logger.debug('Refresh token cookie cleared.');
   }
 
   @Mutation(() => AuthResponse)
@@ -95,10 +95,7 @@ export class AuthResolver {
         role: user.role as UserRole,
       }),
     };
-    console.log(
-      'AuthResolver.login returning:',
-      JSON.stringify(result, null, 2),
-    );
+    this.logger.info({ user: result.user }, 'AuthResolver.login successful');
     return result;
   }
 
@@ -108,8 +105,8 @@ export class AuthResolver {
     @Context() context: GqlContext,
   ): Promise<RefreshTokenResponse> {
     const oldRefreshToken = context.req?.cookies?.['refresh_token'];
-    console.log(
-      'Refresh endpoint called. Cookie received:',
+    this.logger.debug(
+      'Refresh endpoint called. Cookie received: %s',
       oldRefreshToken ? 'Yes' : 'No',
     );
 
@@ -133,11 +130,7 @@ export class AuthResolver {
 
       return { access_token: accessToken };
     } catch (err) {
-      console.error(
-        'Refresh token validation or rotation failed:',
-        err.message,
-      );
-
+      this.logger.error({ err }, 'Refresh token validation or rotation failed');
       this.clearRefreshTokenCookie(context);
       throw new UnauthorizedException('Invalid or expired refresh token.');
     }
@@ -152,11 +145,14 @@ export class AuthResolver {
     try {
       await this.authService.logout(user.id);
     } catch (error) {
-      console.error('Error during server-side logout:', error);
+      this.logger.error(
+        { err: error, userId: user.id },
+        'Error during server-side logout',
+      );
     }
 
     this.clearRefreshTokenCookie(context);
-
+    this.logger.info({ userId: user.id }, 'User logged out');
     return { success: true };
   }
 
@@ -184,6 +180,10 @@ export class AuthResolver {
       passwordToUse,
     );
     this.setRefreshTokenCookie(context, refreshToken);
+    this.logger.info(
+      { userId: createdUser.id, email: createdUser.email },
+      'User signup successful',
+    );
     return {
       access_token: accessToken,
       user: new UserProfileDto({
@@ -197,6 +197,7 @@ export class AuthResolver {
   @Query(() => UserProfileDto)
   @UseGuards(AuthGuard)
   async me(@CurrentUser() user: UserProfileDto): Promise<UserProfileDto> {
+    this.logger.debug({ userId: user.id }, 'Executing "me" query');
     return user;
   }
 }

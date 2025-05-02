@@ -1,12 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { getCorsConfig } from './config/cors.config';
-import { BadRequestException } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+
+  const logger = app.get(Logger);
+  app.useLogger(logger);
 
   // Add global validation pipe for DTOs and GraphQL inputs
   app.useGlobalPipes(
@@ -19,18 +24,19 @@ async function bootstrap() {
       },
       forbidNonWhitelisted: false,
       exceptionFactory: (errors) => {
-        console.log('Validation errors:', JSON.stringify(errors, null, 2));
+        logger.warn({ validationErrors: errors }, 'Validation failed');
         return new BadRequestException(errors);
       },
     }),
   );
 
   app.enableCors(getCorsConfig());
-
   app.use(cookieParser());
 
-  await app.listen(process.env.PORT || 8080);
-  console.log(`Server is running on http://localhost:8080/graphql`);
+  const port = process.env.PORT || 8080;
+  await app.listen(port);
+  logger.log(`Server is running on http://localhost:${port}`);
+  logger.log(`GraphQL endpoint available at http://localhost:${port}/graphql`);
 }
 
 bootstrap();

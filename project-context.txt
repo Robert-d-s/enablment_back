@@ -1960,6 +1960,12 @@ export class Invoice {
   @Field(() => String)
   projectName: string;
 
+  @Field(() => String)
+  teamId: string;
+
+  @Field(() => String)
+  teamName: string;
+
   @Field(() => Float)
   totalHours: number;
 
@@ -1968,6 +1974,8 @@ export class Invoice {
 
   @Field(() => [RateDetail], { nullable: true })
   rates?: RateDetail[];
+
+  __typename?: string;
 }
 
 @ObjectType()
@@ -1986,6 +1994,8 @@ export class RateDetail {
 
   @Field(() => Float)
   ratePerHour: number;
+
+  __typename?: string;
 }
 
 // ====== FILE: src\invoice\invoice.module.ts ======
@@ -2037,12 +2047,15 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class InvoiceService {
+  private readonly logger = new Logger(InvoiceService.name);
   constructor(private prisma: PrismaService) {}
 
   async generateInvoiceForProject(
@@ -2050,72 +2063,128 @@ export class InvoiceService {
     startDate: Date,
     endDate: Date,
   ): Promise<Invoice> {
+    this.logger.log(
+      `Generating invoice for Project ${projectId} from ${startDate.toISOString()} to ${endDate.toISOString()}`,
+    );
+    const projectWithTeam = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!projectWithTeam || !projectWithTeam.team) {
+      this.logger.warn(
+        `Project (ID: ${projectId}) or its associated Team not found.`,
+      );
+      throw new NotFoundException(
+        `Project with ID ${projectId} or its Team not found`,
+      );
+    }
+    const { team, ...project } = projectWithTeam;
+
+    const timeFilter: Prisma.TimeWhereInput = {
+      projectId: projectId,
+      startTime: { gte: startDate },
+      endTime: { lte: endDate },
+      rateId: { not: null },
+      totalElapsedTime: { gt: 0 },
+    };
+
     try {
-      const project = await this.prisma.project.findUnique({
-        where: { id: projectId },
-        include: {
-          time: {
-            where: {
-              startTime: { gte: startDate },
-              endTime: { lte: endDate },
-            },
-            include: {
-              rate: true,
-            },
-          },
+      const rateAggregations = await this.prisma.time.groupBy({
+        by: ['rateId'],
+        where: timeFilter,
+        _sum: {
+          totalElapsedTime: true,
         },
       });
 
-      if (!project) {
-        throw new NotFoundException(`Project with ID ${projectId} not found`);
+      if (!rateAggregations || rateAggregations.length === 0) {
+        this.logger.log(
+          `No time entries with rates found for Project ${projectId} in the period.`,
+        );
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          teamId: team.id,
+          teamName: team.name,
+          totalHours: 0,
+          totalCost: 0,
+          rates: [],
+          __typename: 'Invoice',
+        };
       }
 
-      let totalHours = 0;
-      let totalCost = 0;
-      const ratesMap: { [key: number]: RateDetail & { ratePerHour: number } } =
-        {};
+      const rateIds = rateAggregations.map((agg) => agg.rateId as number);
+      const ratesDetailsMap = await this.prisma.rate
+        .findMany({
+          where: { id: { in: rateIds } },
+          select: { id: true, name: true, rate: true },
+        })
+        .then((rates) => new Map(rates.map((r) => [r.id, r])));
 
-      project.time.forEach((entry) => {
-        if (!entry.rate) return;
+      let grandTotalHours = 0;
+      let grandTotalCost = 0;
+      const rateDetailsResult: RateDetail[] = [];
 
-        const hours = entry.totalElapsedTime / 3600000;
-        totalHours += hours;
-        totalCost += hours * entry.rate.rate;
+      for (const agg of rateAggregations) {
+        const rateId = agg.rateId as number;
+        const rateInfo = ratesDetailsMap.get(rateId);
+        const totalMs = agg._sum.totalElapsedTime ?? 0;
 
-        const rateId = entry.rateId as number;
-        if (!ratesMap[rateId]) {
-          ratesMap[rateId] = {
-            rateId,
-            rateName: entry.rate.name,
-            hours: 0,
-            cost: 0,
-            ratePerHour: entry.rate.rate,
-          };
+        if (!rateInfo) {
+          this.logger.warn(
+            `Rate info for rateId ${rateId} not found, skipping aggregation.`,
+          );
+          continue;
         }
 
-        ratesMap[rateId].hours += hours;
-        ratesMap[rateId].cost += hours * entry.rate.rate;
-      });
+        const hours = totalMs / 3600000;
+        const cost = hours * rateInfo.rate;
 
-      const rates = Object.values(ratesMap).map((rate) => ({
-        ...rate,
-        hours: Math.round(rate.hours * 100) / 100,
-        cost: Math.round(rate.cost * 100) / 100,
-      }));
+        grandTotalHours += hours;
+        grandTotalCost += cost;
+
+        rateDetailsResult.push({
+          rateId: rateInfo.id,
+          rateName: rateInfo.name,
+          hours: Math.round(hours * 100) / 100,
+          cost: Math.round(cost * 100) / 100,
+          ratePerHour: rateInfo.rate,
+          __typename: 'RateDetail',
+        });
+      }
+
+      this.logger.log(
+        `Invoice generated successfully for Project ${projectId}. Team: ${team.name}`,
+      );
 
       return {
         projectId: project.id,
         projectName: project.name,
-        totalHours: Math.round(totalHours * 100) / 100,
-        totalCost: Math.round(totalCost * 100) / 100,
-        rates,
+        teamId: team.id,
+        teamName: team.name,
+        totalHours: Math.round(grandTotalHours * 100) / 100,
+        totalCost: Math.round(grandTotalCost * 100) / 100,
+        rates: rateDetailsResult.sort((a, b) =>
+          a.rateName.localeCompare(b.rateName),
+        ),
+        __typename: 'Invoice',
       };
     } catch (error) {
+      this.logger.error(
+        `Failed to generate invoice for project ${projectId}: ${error.message}`,
+        error.stack,
+      );
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException(
-        'Failed to generate invoice for project',
+        `Failed to generate invoice for project ${projectId}`,
+        error.message,
       );
     }
   }
@@ -2736,9 +2805,16 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { UserModule } from '../user/user.module';
 import { ConfigModule } from '@nestjs/config';
+import { DataLoaderModule } from '../loaders/data-loader.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UserModule, ConfigModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    UserModule,
+    ConfigModule,
+    DataLoaderModule,
+  ],
   providers: [ProjectService, ProjectResolver],
   exports: [ProjectResolver],
 })
@@ -2767,14 +2843,36 @@ export class ProjectResolver {
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Project } from '@prisma/client';
+import { Project, Team } from '@prisma/client';
+import { TeamLoader } from '../loaders/team.loader';
 
 @Injectable()
 export class ProjectService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private teamLoader: TeamLoader,
+  ) {}
 
-  async all(): Promise<Project[]> {
-    return this.prisma.project.findMany();
+  async all(): Promise<Array<Project & { teamName?: string }>> {
+    const projects = await this.prisma.project.findMany({
+      orderBy: { name: 'asc' },
+    });
+    if (!projects || projects.length === 0) {
+      return [];
+    }
+    const teamIds = [...new Set(projects.map((p) => p.teamId))];
+    const teams = await this.teamLoader.byId.loadMany(teamIds);
+    const teamMap = new Map<string, Team>();
+    teams.forEach((t) => {
+      if (t && !(t instanceof Error)) {
+        teamMap.set(t.id, t);
+      }
+    });
+    const projectsWithTeamNames = projects.map((project) => ({
+      ...project,
+      teamName: teamMap.get(project.teamId)?.name,
+    }));
+    return projectsWithTeamNames;
   }
 
   async create(
@@ -2933,8 +3031,10 @@ import { Rate } from './rate.model';
 import { RateInputCreate } from './rate.input';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '@prisma/client';
 
-@Resolver()
+@Resolver(() => Rate)
 @UseGuards(AuthGuard)
 export class RateResolver {
   constructor(private rateService: RateService) {}
@@ -2945,6 +3045,7 @@ export class RateResolver {
   }
 
   @Mutation(() => Rate)
+  @Roles(UserRole.ADMIN)
   async createRate(
     @Args('rateInputCreate') rateInputCreate: RateInputCreate,
   ): Promise<Rate> {
@@ -2956,19 +3057,28 @@ export class RateResolver {
   }
 
   @Mutation(() => Rate)
+  @Roles(UserRole.ADMIN)
   async deleteRate(
     @Args('rateId', { type: () => Int }) rateId: number,
-  ): Promise<Rate> {
+  ): Promise<{ id: number }> {
     console.log(`Attempting to delete rate with ID: ${rateId}`);
-    return this.rateService.remove(rateId);
+    const deletedRate = await this.rateService.remove(rateId);
+    if (!deletedRate) {
+      return { id: rateId };
+    }
+    return { id: deletedRate.id };
   }
 }
 
 // ====== FILE: src\rate\rate.service.ts ======
 
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Rate } from '@prisma/client';
+import { Rate, Prisma } from '@prisma/client';
 
 @Injectable()
 export class RateService {
@@ -2992,26 +3102,32 @@ export class RateService {
     });
   }
 
-  async remove(id: number): Promise<Rate> {
+  async remove(id: number): Promise<Rate | null> {
     console.log('Removing rate with ID:', id);
 
-    return this.prisma.$transaction(async (tx) => {
-      // First, update all time entries to remove references to this rate
-      await tx.time.updateMany({
-        where: { rateId: id },
-        data: { rateId: { set: null } },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.time.updateMany({
+          where: { rateId: id },
+          data: { rateId: { set: null } },
+        });
 
-      // Then delete the rate
-      try {
-        return await tx.rate.delete({
+        const deletedRate = await tx.rate.delete({
           where: { id },
         });
-      } catch (err) {
-        console.error('Error in removing rate:', err);
-        throw err;
+        return deletedRate;
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        console.warn(`Rate with ID ${id} not found for deletion.`);
+        throw new NotFoundException(`Rate with ID ${id} not found.`);
       }
-    });
+      console.error(`Error in removing rate ${id}:`, err);
+      throw new InternalServerErrorException(`Failed to remove rate ${id}.`);
+    }
   }
 }
 
@@ -3336,7 +3452,7 @@ export class TimeModule {}
 
 // ====== FILE: src\time\time.resolver.ts ======
 
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { TimeService } from './time.service';
 import { Time } from './time.model';
 import { TimeInputCreate, TimeInputUpdate } from './time.input';
@@ -3357,41 +3473,14 @@ export class TimeResolver {
   async createTime(
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
-    console.log(
-      'Backend Resolver - Received Start Time:',
+    console.log('Backend Resolver - createTime called with:', timeInputCreate);
+    return this.timeService.create(
       timeInputCreate.startTime,
+      timeInputCreate.projectId,
+      timeInputCreate.userId,
+      timeInputCreate.rateId,
+      timeInputCreate.totalElapsedTime,
     );
-    console.log(
-      'Backend Resolver - Received End Time:',
-      timeInputCreate.endTime,
-    );
-    const { startTime, projectId, userId, rateId, totalElapsedTime, endTime } =
-      timeInputCreate;
-
-    // Find an existing entry
-    const existingEntry = await this.timeService.findExistingEntry(
-      startTime,
-      userId,
-      projectId,
-      rateId,
-    );
-
-    if (existingEntry) {
-      return this.timeService.update(
-        existingEntry.id,
-        new Date(),
-        totalElapsedTime,
-      );
-    } else {
-      return this.timeService.create(
-        startTime,
-        projectId,
-        userId,
-        rateId,
-        endTime ? new Date(endTime) : new Date(),
-        totalElapsedTime,
-      );
-    }
   }
 
   @Mutation(() => Time)
@@ -3454,76 +3543,32 @@ export class TimeService {
     });
   }
 
-  async isDuplicate(
-    startTime: Date,
-    userId: number,
-    projectId: string,
-    rateId: number,
-  ): Promise<boolean> {
-    const existingEntry = await this.prisma.time.findFirst({
-      where: {
-        startTime,
-        userId,
-        projectId,
-        rateId,
-      },
-    });
-    return !!existingEntry;
-  }
-
-  async findExistingEntry(
-    startTime: Date,
-    userId: number,
-    projectId: string,
-    rateId: number,
-  ): Promise<Time | null> {
-    return this.prisma.time.findFirst({
-      where: {
-        startTime,
-        userId,
-        projectId,
-        rateId,
-      },
-    });
-  }
-
   async create(
     startTime: Date,
     projectId: string,
     userId: number,
     rateId: number,
-    endTime: Date,
     totalElapsedTime: number,
   ): Promise<Time> {
     try {
-      console.log('Backend Service - Creating with Start Time:', startTime);
-      console.log('Backend Service - Creating with End Time:', endTime);
-
-      const duplicate = await this.isDuplicate(
+      console.log(
+        'Backend Service - create called with Start Time:',
         startTime,
-        userId,
-        projectId,
-        rateId,
       );
-
-      if (duplicate) {
-        throw new ConflictException('Duplicate time entry not allowed');
-      }
+      console.log('Backend Service - totalElapsedTime:', totalElapsedTime);
 
       return this.prisma.time.create({
         data: {
           startTime,
-          endTime, // endTime is now the actual time of submission
+          endTime: new Date(),
           projectId,
           userId,
           rateId,
-          totalElapsedTime, // totalElapsedTime is the total active working time
+          totalElapsedTime,
         },
       });
     } catch (error) {
-      if (error instanceof ConflictException) {
-        throw error;
-      }
+      console.error('Error creating time entry in service:', error);
       throw new InternalServerErrorException('Failed to create time entry');
     }
   }
@@ -3531,10 +3576,9 @@ export class TimeService {
   async update(
     id: number,
     endTime: Date,
-    totalElapsedTime: number, // Directly use the provided totalElapsedTime
+    totalElapsedTime: number,
   ): Promise<Time> {
     try {
-      // First check if the time entry exists
       const timeEntry = await this.prisma.time.findUnique({
         where: { id },
       });
@@ -3543,17 +3587,26 @@ export class TimeService {
         throw new NotFoundException(`Time entry with ID ${id} not found`);
       }
 
+      console.log(`Backend Service - update called for ID ${id}`);
+      console.log(
+        `Backend Service - updating endTime to: ${endTime.toISOString()}`,
+      );
+      console.log(
+        `Backend Service - updating totalElapsedTime to: ${totalElapsedTime}`,
+      );
+
       return this.prisma.time.update({
         where: { id },
         data: {
-          endTime, // Set the endTime to the time of submission
-          totalElapsedTime, // Use the provided totalElapsedTime
+          endTime: endTime,
+          totalElapsedTime: totalElapsedTime,
         },
       });
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      console.error(`Error updating time entry ${id} in service:`, error);
       throw new InternalServerErrorException(
         `Failed to update time entry ${id}`,
       );
@@ -3562,7 +3615,6 @@ export class TimeService {
 
   async remove(id: number): Promise<Time> {
     try {
-      // First check if the time entry exists
       const timeEntry = await this.prisma.time.findUnique({
         where: { id },
       });
@@ -3595,11 +3647,9 @@ export class TimeService {
         `getTotalTimeSpent called with userId: ${userId}, projectId: ${projectId}, startDate: ${startDate.toISOString()}, endDate: ${endDate.toISOString()}`,
       );
 
-      // Adjust startDate to the start of the day
       const adjustedStartDate = new Date(startDate);
       adjustedStartDate.setHours(0, 0, 0, 0);
 
-      // Adjust endDate to include the entire day
       const adjustedEndDate = new Date(endDate);
       adjustedEndDate.setHours(23, 59, 59, 999);
 
@@ -4612,8 +4662,15 @@ import { TeamModule } from '../team/team.module';
 import { IssueUpdatesModule } from '../issue-updates/issue-updates.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { DatabaseSyncModule } from '../dbSynch/dbSynch.module';
+import { DataLoaderModule } from 'src/loaders/data-loader.module';
 @Module({
-  imports: [TeamModule, IssueUpdatesModule, PrismaModule, DatabaseSyncModule],
+  imports: [
+    TeamModule,
+    IssueUpdatesModule,
+    PrismaModule,
+    DatabaseSyncModule,
+    DataLoaderModule,
+  ],
   providers: [
     ProjectService,
     WebhookService,

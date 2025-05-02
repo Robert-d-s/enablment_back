@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 interface PageInfo {
   hasNextPage: boolean;
@@ -79,66 +80,45 @@ interface IssuesResponse {
 
 @Injectable()
 export class DatabaseSyncService {
-  private readonly logger = new Logger(DatabaseSyncService.name);
   private linearApiKey: string;
-
   constructor(
+    @InjectPinoLogger(DatabaseSyncService.name)
+    private readonly logger: PinoLogger,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
     this.linearApiKey = this.configService.get<string>('LINEAR_KEY') || '';
-
     if (!this.linearApiKey) {
       this.logger.error('LINEAR_KEY not found in environment');
     }
   }
 
   async synchronizeDatabase(): Promise<void> {
-    this.logger.log('Starting comprehensive database synchronization');
-
+    this.logger.info('Starting comprehensive database synchronization');
     try {
-      // Use a transaction to ensure atomicity
       await this.prisma.$transaction(async (tx) => {
-        // 1. Synchronize teams from Linear
         await this.synchronizeTeams(tx);
-
-        // 2. Synchronize projects from Linear
         await this.synchronizeProjects(tx);
-
-        // 3. Synchronize issues from Linear
         await this.synchronizeIssues(tx);
-
-        // 4. Clean up orphaned records
         await this.cleanupOrphanedRecords(tx);
       });
-
-      this.logger.log('Database synchronization completed successfully');
+      this.logger.info('Database synchronization completed successfully');
     } catch (error) {
-      this.logger.error(
-        `Database synchronization failed: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error({ err: error }, 'Database synchronization failed');
       throw new Error(`Synchronization failed: ${error.message}`);
     }
   }
 
-  /**
-   * Fetch data from Linear GraphQL API
-   */
   private async fetchFromLinear<T>(query: string, variables = {}): Promise<T> {
     try {
       this.logger.debug(
-        `Sending query to Linear API: ${query.substring(0, 100)}...`,
+        { query: query.substring(0, 100) + '...', variables },
+        'Sending query to Linear API',
       );
-      this.logger.debug(`With variables: ${JSON.stringify(variables)}`);
-
-      // Check if API key is present
       if (!this.linearApiKey) {
         throw new Error('LINEAR_KEY is not configured');
       }
-
-      // Make the request with proper error handling
       const response = await firstValueFrom(
         this.httpService.post(
           'https://api.linear.app/graphql',
@@ -146,50 +126,52 @@ export class DatabaseSyncService {
           {
             headers: {
               'Content-Type': 'application/json',
-              Authorization: this.linearApiKey, // Make sure this is a bearer token if required
+              Authorization: this.linearApiKey,
             },
             timeout: 10000,
           },
         ),
       );
 
-      // Check for GraphQL errors
       if (response.data.errors) {
         const errorMsg = response.data.errors
           .map((e: { message: string }) => e.message)
           .join(', ');
-        this.logger.error(`GraphQL errors: ${errorMsg}`);
+        this.logger.error(
+          { graphqlErrors: response.data.errors },
+          'GraphQL errors from Linear API',
+        );
         throw new Error(`GraphQL errors: ${errorMsg}`);
       }
-
+      this.logger.debug('Successfully fetched data from Linear API');
       return response.data.data;
     } catch (error) {
-      // Log the detailed error
       if (error.response) {
-        // The request was made and the server responded with a status code
         this.logger.error(
-          `Linear API Error - Status: ${error.response.status}`,
-        );
-        this.logger.error(
-          `Response data: ${JSON.stringify(error.response.data)}`,
+          {
+            status: error.response.status,
+            data: error.response.data,
+            config: error.config,
+          },
+          'Linear API Error - Response Received',
         );
       } else if (error.request) {
-        // The request was made but no response was received
-        this.logger.error('Linear API Error - No response received');
+        this.logger.error(
+          { err: error },
+          'Linear API Error - No response received',
+        );
       } else {
-        // Something happened in setting up the request
-        this.logger.error(`Linear API Error - Setup: ${error.message}`);
+        this.logger.error(
+          { err: error },
+          'Linear API Error - Request Setup Failed',
+        );
       }
-
       throw error;
     }
   }
 
-  /**
-   * Synchronize teams from Linear
-   */
   public async synchronizeTeams(tx: any): Promise<void> {
-    this.logger.log('Fetching teams from Linear');
+    this.logger.info('Fetching teams from Linear');
 
     const query = `
       query {
@@ -209,7 +191,7 @@ export class DatabaseSyncService {
       }>(query);
       const teams = data.teams.nodes;
 
-      this.logger.log(`Processing ${teams.length} teams from Linear`);
+      this.logger.debug(`Processing ${teams.length} teams from Linear`);
 
       // Get existing teams from database
       const allTeamsInDb = await tx.team.findMany({
