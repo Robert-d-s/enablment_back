@@ -2,15 +2,16 @@ import {
   Injectable,
   CanActivate,
   ExecutionContext,
-  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class WebhookGuard implements CanActivate {
-  private readonly logger = new Logger(WebhookGuard.name);
-
+  constructor(
+    @InjectPinoLogger(WebhookGuard.name) private readonly logger: PinoLogger
+) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const linearSignature = request.headers['linear-signature'];
@@ -21,37 +22,46 @@ export class WebhookGuard implements CanActivate {
       throw new UnauthorizedException('Missing Linear signature header');
     }
 
-    this.logger.debug(`recevived Linear signature: ${linearSignature}`);
-    this.logger.debug(
-      `Webhook secret available: ${!!process.env.WEBHOOK_SECRET}`,
-    );
+    this.logger.debug({ linearSignature }, 'Received Linear signature');
+    this.logger.debug('Webhook secret available: %s', !!webhookSecret);
 
     if (!webhookSecret) {
       this.logger.error('Webhook secret not configured');
       return false;
     }
 
-    const payload = JSON.stringify(request.body);
+    let payload: string;
+    try {
+        payload = JSON.stringify(request.body);
+    } catch (e) {
+        this.logger.error({ err: e }, "Failed to stringify request body for webhook validation");
+        throw new UnauthorizedException("Invalid request body format");
+    }
 
     const signature = crypto
       .createHmac('sha256', process.env.WEBHOOK_SECRET || '')
       .update(payload)
       .digest('hex');
 
-    this.logger.debug(`Calculated signature: ${signature}`);
+      this.logger.debug({ calculatedSignature: signature }, 'Calculated signature for webhook');
 
     try {
-      const isValid = signature === linearSignature;
+      const isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(linearSignature));
 
       if (!isValid) {
         this.logger.warn('Signature mismatch - webhook validation failed');
         throw new UnauthorizedException('Invalid webhook signature');
       }
-
+      this.logger.info('Webhook signature validated successfully');
       return true;
     } catch (error) {
-      this.logger.error('Error validating webhook signature', error);
-      throw new UnauthorizedException('Error validating webhook signature');
+      if (error instanceof UnauthorizedException) {
+        this.logger.warn({ err: error }, 'Webhook signature validation failed'); // Log as warn if expected validation failure
+        throw error;
+    } else {
+        this.logger.error({ err: error }, 'Unexpected error validating webhook signature');
+        throw new UnauthorizedException('Error validating webhook signature');
+    }
     }
   }
 }

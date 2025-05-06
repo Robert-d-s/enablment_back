@@ -4,14 +4,19 @@ import { Time } from './time.model';
 import { TimeInputCreate, TimeInputUpdate } from './time.input';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Resolver(() => Time)
 @UseGuards(AuthGuard)
 export class TimeResolver {
-  constructor(private readonly timeService: TimeService) {}
+  constructor(
+    @InjectPinoLogger(TimeResolver.name)
+    private readonly logger: PinoLogger,
+    private readonly timeService: TimeService) {}
 
   @Query(() => [Time])
   async times(@Args('projectId') projectId: string): Promise<Time[]> {
+    this.logger.debug({ projectId }, 'Executing times query');
     return this.timeService.all(projectId);
   }
 
@@ -19,7 +24,7 @@ export class TimeResolver {
   async createTime(
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
-    console.log('Backend Resolver - createTime called with:', timeInputCreate);
+    this.logger.info({ timeInput: timeInputCreate }, 'Executing createTime mutation');
     return this.timeService.create(
       timeInputCreate.startTime,
       timeInputCreate.projectId,
@@ -33,6 +38,7 @@ export class TimeResolver {
   async updateTime(
     @Args('timeInputUpdate') timeInputUpdate: TimeInputUpdate,
   ): Promise<Time> {
+    this.logger.info({ timeInput: timeInputUpdate }, 'Executing updateTime mutation');
     const { id, endTime, totalElapsedTime } = timeInputUpdate;
     return this.timeService.update(id, endTime ?? new Date(), totalElapsedTime);
   }
@@ -44,6 +50,7 @@ export class TimeResolver {
     @Args('startDate') startDate: string,
     @Args('endDate') endDate: string,
   ): Promise<number> {
+    this.logger.debug({ userId, projectId, startDate, endDate }, 'Executing getTotalTimeSpent query');
     return this.timeService.getTotalTimeSpent(
       userId,
       projectId,
@@ -57,11 +64,13 @@ export class TimeResolver {
     @Args('userId') userId: number,
     @Args('projectId') projectId: string,
   ): Promise<number> {
+    this.logger.debug({ userId, projectId }, 'Executing getTotalTimeForUserProject query');
     return this.timeService.getTotalTimeForUserProject(userId, projectId);
   }
 
   @Mutation(() => Time)
   async deleteTime(@Args('id') id: number): Promise<Time> {
+    this.logger.info({ timeId: id }, 'Executing deleteTime mutation');
     return this.timeService.remove(id);
   }
 }

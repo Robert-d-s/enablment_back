@@ -23,6 +23,7 @@ import { Project } from '../project/project.model';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserProfileDto } from '../auth/dto/user-profile.dto';
 import { IsOptional, IsInt, IsString, IsEnum } from 'class-validator';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @InputType()
 export class UserQueryArgs {
@@ -50,6 +51,7 @@ export class UserQueryArgs {
 @Resolver(() => User)
 export class UserResolver {
   constructor(
+    @InjectPinoLogger(UserResolver.name) private readonly logger: PinoLogger,
     private userService: UserService,
     private teamLoader: TeamLoader,
     private projectLoader: ProjectLoader,
@@ -61,6 +63,7 @@ export class UserResolver {
   async myProjects(
     @CurrentUser() currentUser: UserProfileDto,
   ): Promise<Project[]> {
+    this.logger.debug({ userId: currentUser.id }, 'Executing myProjects query');
     if (!currentUser) {
       throw new UnauthorizedException();
     }
@@ -100,6 +103,7 @@ export class UserResolver {
     @Args('search', { type: () => String, nullable: true }) search?: string,
     @Args('role', { type: () => UserRole, nullable: true }) role?: UserRole,
   ): Promise<number> {
+    this.logger.debug({ search, role }, 'Executing usersCount query');
     const where: Prisma.UserWhereInput = {};
     if (search) {
       where.email = { contains: search };
@@ -114,7 +118,7 @@ export class UserResolver {
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
   @UseGuards(AuthGuard)
   async users(@Args('args') args: UserQueryArgs): Promise<User[]> {
-    console.log('Received args:', JSON.stringify(args));
+    this.logger.debug({ queryArgs: args }, 'Executing users query');
     const currentPage = args.page ?? 1;
     const currentPageSize = args.pageSize ?? 10;
 
@@ -151,6 +155,7 @@ export class UserResolver {
 
   @ResolveField(() => [Team])
   async teams(@Parent() user: User): Promise<Team[]> {
+    this.logger.trace({ userId: user.id }, 'Resolving teams field for User');
     const teams = await this.teamLoader.byUserId.load(user.id);
     return teams.map((team) => ({
       ...team,
@@ -166,6 +171,7 @@ export class UserResolver {
     @Args('userId', { type: () => Int }) userId: number,
     @Args('newRole', { type: () => UserRole }) newRole: UserRole,
   ): Promise<User> {
+    this.logger.info({ userId, newRole }, 'Executing updateUserRole mutation');
     const updatedUser = await this.userService.updateUserRole(userId, newRole);
     return {
       ...updatedUser,
@@ -180,6 +186,7 @@ export class UserResolver {
     @Args('userId', { type: () => Int }) userId: number,
     @Args('teamId') teamId: string,
   ): Promise<User> {
+    this.logger.info({ userId, teamId }, 'Executing addUserToTeam mutation');
     const user = await this.userService.addUserToTeam(userId, teamId);
     return {
       ...user,
@@ -194,6 +201,7 @@ export class UserResolver {
     @Args('userId', { type: () => Int }) userId: number,
     @Args('teamId') teamId: string,
   ): Promise<User> {
+    this.logger.info({ userId, teamId }, 'Executing removeUserFromTeam mutation');
     try {
       const user = await this.userService.removeUserFromTeam(userId, teamId);
       return {
@@ -201,7 +209,7 @@ export class UserResolver {
         role: user.role as UserRole,
       };
     } catch (error) {
-      console.error('Error occurred while removing user from team:', error);
+      this.logger.error({ err: error, userId, teamId }, 'Error occurred while removing user from team');
       throw new Error('Error removing user from team');
     }
   }

@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Time } from '@prisma/client';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class TimeService {
-  constructor(private prisma: PrismaService) {}
+  constructor( @InjectPinoLogger(TimeService.name) private readonly logger: PinoLogger, private prisma: PrismaService) {}
 
   all(projectId: string): Promise<Time[]> {
+    this.logger.debug({ projectId }, 'Fetching all time entries for project');
     return this.prisma.time.findMany({
       where: {
         projectId,
@@ -27,24 +29,14 @@ export class TimeService {
     totalElapsedTime: number,
   ): Promise<Time> {
     try {
-      console.log(
-        'Backend Service - create called with Start Time:',
-        startTime,
-      );
-      console.log('Backend Service - totalElapsedTime:', totalElapsedTime);
-
-      return this.prisma.time.create({
-        data: {
-          startTime,
-          endTime: new Date(),
-          projectId,
-          userId,
-          rateId,
-          totalElapsedTime,
-        },
+      this.logger.debug({ startTime, projectId, userId, rateId, totalElapsedTime }, 'Creating time entry');
+      const createdTime = await this.prisma.time.create({
+        data: { startTime, endTime: new Date(), projectId, userId, rateId, totalElapsedTime },
       });
+      this.logger.info({ timeId: createdTime.id }, 'Successfully created time entry');
+      return createdTime;
     } catch (error) {
-      console.error('Error creating time entry in service:', error);
+      this.logger.error({ err: error, startTime, projectId, userId, rateId }, 'Error creating time entry');
       throw new InternalServerErrorException('Failed to create time entry');
     }
   }
@@ -60,29 +52,21 @@ export class TimeService {
       });
 
       if (!timeEntry) {
+        this.logger.warn({ timeId: id }, 'Time entry not found for update');
         throw new NotFoundException(`Time entry with ID ${id} not found`);
       }
-
-      console.log(`Backend Service - update called for ID ${id}`);
-      console.log(
-        `Backend Service - updating endTime to: ${endTime.toISOString()}`,
-      );
-      console.log(
-        `Backend Service - updating totalElapsedTime to: ${totalElapsedTime}`,
-      );
-
-      return this.prisma.time.update({
+      this.logger.debug({ timeId: id, endTime, totalElapsedTime }, 'Updating time entry');
+      const updatedTime = await this.prisma.time.update({
         where: { id },
-        data: {
-          endTime: endTime,
-          totalElapsedTime: totalElapsedTime,
-        },
+        data: { endTime: endTime, totalElapsedTime: totalElapsedTime },
       });
+      this.logger.info({ timeId: updatedTime.id }, 'Successfully updated time entry');
+      return updatedTime;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      console.error(`Error updating time entry ${id} in service:`, error);
+      this.logger.error({ err: error, timeId: id, endTime, totalElapsedTime }, 'Error updating time entry');
       throw new InternalServerErrorException(
         `Failed to update time entry ${id}`,
       );
@@ -90,22 +74,24 @@ export class TimeService {
   }
 
   async remove(id: number): Promise<Time> {
+    this.logger.info({ timeId: id }, 'Removing time entry');
     try {
       const timeEntry = await this.prisma.time.findUnique({
         where: { id },
       });
 
       if (!timeEntry) {
+        this.logger.warn({ timeId: id }, 'Time entry not found for deletion');
         throw new NotFoundException(`Time entry with ID ${id} not found`);
       }
-
-      return this.prisma.time.delete({
-        where: { id },
-      });
+      const deletedTime = await this.prisma.time.delete({ where: { id } });
+      this.logger.info({ timeId: id }, 'Successfully removed time entry');
+      return deletedTime;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      this.logger.error({ err: error, timeId: id }, 'Error removing time entry');
       throw new InternalServerErrorException(
         `Failed to delete time entry ${id}`,
       );
@@ -119,8 +105,9 @@ export class TimeService {
     endDate: Date,
   ): Promise<number> {
     try {
-      console.log(
-        `getTotalTimeSpent called with userId: ${userId}, projectId: ${projectId}, startDate: ${startDate.toISOString()}, endDate: ${endDate.toISOString()}`,
+      this.logger.debug(
+        { userId, projectId, startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+        'Calculating total time spent for period'
       );
 
       const adjustedStartDate = new Date(startDate);
@@ -129,7 +116,7 @@ export class TimeService {
       const adjustedEndDate = new Date(endDate);
       adjustedEndDate.setHours(23, 59, 59, 999);
 
-      console.log('Executing database query to aggregate total time spent...');
+      this.logger.trace('Executing database query to aggregate total time spent...');
 
       const aggregatedTime = await this.prisma.time.aggregate({
         where: {
@@ -154,10 +141,10 @@ export class TimeService {
       });
 
       const totalTime = aggregatedTime._sum.totalElapsedTime || 0;
-      console.log(`Total time spent for the given period: ${totalTime}`);
+      this.logger.debug({ totalTime }, 'Total time spent calculated');
       return totalTime;
     } catch (error) {
-      console.error('Error in getTotalTimeSpent:', error);
+      this.logger.error({ err: error, userId, projectId, startDate, endDate }, 'Error calculating total time spent');
       throw new InternalServerErrorException(
         'Failed to calculate total time spent',
       );
@@ -168,6 +155,7 @@ export class TimeService {
     userId: number,
     projectId: string,
   ): Promise<number> {
+    this.logger.debug({ userId, projectId }, 'Calculating total time for user project');
     try {
       const aggregatedTime = await this.prisma.time.aggregate({
         where: {
@@ -179,8 +167,11 @@ export class TimeService {
         },
       });
 
-      return aggregatedTime._sum.totalElapsedTime || 0;
+      const totalTime = aggregatedTime._sum.totalElapsedTime || 0;
+      this.logger.debug({ totalTime }, 'Total time for user project calculated');
+      return totalTime;
     } catch (error) {
+      this.logger.error({ err: error, userId, projectId }, 'Error calculating total time for user project');
       throw new InternalServerErrorException(
         'Failed to calculate total time for user project',
       );

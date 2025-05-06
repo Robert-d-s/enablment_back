@@ -1,37 +1,39 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
 import { IssueService } from '../issue/issue.service';
 import { PrismaClient } from '@prisma/client';
 import { IssueUpdatesGateway } from '../issue-updates/issue-updates.gateway';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { PrismaService } from '../prisma/prisma.service';
 
 const prisma = new PrismaClient();
 
 @Injectable()
 export class WebhookIssueService {
-  private readonly logger = new Logger(WebhookIssueService.name);
   constructor(
+    @InjectPinoLogger(WebhookIssueService.name) private readonly logger: PinoLogger,
     private issueService: IssueService,
     private readonly issueUpdatesGateway: IssueUpdatesGateway,
   ) {}
 
   async handleIssue(json: LinearWebhookBody) {
     if (json.type !== 'Issue') {
-      console.error('Expected issue data, received:', json.type);
+      this.logger.error({ type: json.type }, 'Expected issue data, received different type');
       return;
     }
 
     const issueData = json.data as IssueWebhookData;
+    const action = json.action;
+    this.logger.info({ issueId: issueData.id, action }, 'Processing issue webhook');
 
     try {
-      switch (json.action) {
+      switch (action) {
         case 'create':
-          console.log(`Processing issue create webhook for: ${issueData.id}`);
+          this.logger.debug({ issueId: issueData.id }, 'Handling "create" action');
 
           const hasProjectForCreate = await this.ensureProjectId(issueData);
           if (!hasProjectForCreate) {
-            console.warn(
-              `Cannot create issue ${issueData.id}: No suitable project found`,
-            );
+            this.logger.warn({ issueId: issueData.id }, 'Cannot create issue: No suitable project found');
             return;
           }
 
@@ -59,6 +61,7 @@ export class WebhookIssueService {
               });
             } else {
               // Fallback if complete issue can't be fetched
+              this.logger.warn({ issueId: issueData.id }, 'Could not fetch complete issue after creation for broadcast');
               this.issueUpdatesGateway.broadcastIssueUpdate({
                 ...createdIssue,
                 labels: issueData.labels || [],
@@ -69,7 +72,7 @@ export class WebhookIssueService {
           break;
 
         case 'update':
-          console.log(`Processing issue update webhook for: ${issueData.id}`);
+          this.logger.debug({ issueId: issueData.id }, 'Handling "update" action');
 
           await prisma.$transaction(async (tx) => {
             // Check if the issue exists before trying to update
@@ -96,12 +99,13 @@ export class WebhookIssueService {
               );
 
               // Log the labels to verify they're included
-              console.log(
-                `Issue ${issueData.id} updated with labels:`,
-                completeIssue && 'labels' in completeIssue
-                  ? completeIssue.labels
-                  : issueData.labels || 'No labels',
-              );
+              this.logger.trace({ issueId: issueData.id, labels: completeIssue?.labels }, 'Issue updated with labels, preparing broadcast');
+              // console.log(
+              //   `Issue ${issueData.id} updated with labels:`,
+              //   completeIssue && 'labels' in completeIssue
+              //     ? completeIssue.labels
+              //     : issueData.labels || 'No labels',
+              // );
 
               // Broadcast the complete issue with the action field
               if (completeIssue) {
@@ -123,9 +127,7 @@ export class WebhookIssueService {
               // Issue doesn't exist, need projectId for creation
               const hasProjectForUpdate = await this.ensureProjectId(issueData);
               if (!hasProjectForUpdate) {
-                console.warn(
-                  `Cannot create non-existent issue ${issueData.id} via update: Missing projectId and no suitable default found`,
-                );
+                this.logger.warn({ issueId: issueData.id }, 'Cannot create non-existent issue via update: Missing projectId/default');
                 return; // Skip further processing
               }
 
@@ -165,7 +167,7 @@ export class WebhookIssueService {
           break;
 
         case 'remove':
-          console.log(`Processing issue remove webhook for: ${issueData.id}`);
+          this.logger.debug({ issueId: issueData.id }, 'Handling "remove" action');
 
           await prisma.$transaction(async (tx) => {
             await this.issueService.remove(issueData.id);
@@ -179,18 +181,13 @@ export class WebhookIssueService {
           break;
 
         default:
-          console.log('Unhandled webhook action:', json.action);
+          this.logger.warn({ action: json.action }, 'Unhandled webhook action');
       }
     } catch (error) {
       if (error.message && error.message.includes('Missing projectId')) {
-        console.warn(
-          `Could not process issue ${issueData.id}: Missing projectId. This might be a standalone issue not connected to any project.`,
-        );
+        this.logger.warn({ err: error, issueId: issueData.id }, 'Could not process issue webhook due to missing projectId');
       } else {
-        console.error(
-          `Error processing webhook for issue ${issueData.id}:`,
-          error.message,
-        );
+        this.logger.error({ err: error, issueId: issueData.id, action }, 'Error processing issue webhook');
       }
     }
   }
@@ -217,9 +214,7 @@ export class WebhookIssueService {
           });
 
           if (teamProject) {
-            console.log(
-              `Using team's project: ${teamProject.name} (${teamProject.id}) for issue ${data.id}`,
-            );
+            this.logger.debug({ projectId: teamProject.id, issueId: data.id }, 'Using team\'s project for issue');
             data.projectId = teamProject.id;
             data.projectName = teamProject.name;
             return true;
@@ -233,9 +228,7 @@ export class WebhookIssueService {
         });
 
         if (anyProject) {
-          console.log(
-            `Using default project: ${anyProject.name} (${anyProject.id}) for issue ${data.id}`,
-          );
+          this.logger.debug({ projectId: anyProject.id, issueId: data.id }, 'Using default project for issue');
           data.projectId = anyProject.id;
           data.projectName = anyProject.name;
           return true;
@@ -244,17 +237,17 @@ export class WebhookIssueService {
         // Last resort: Create or get a special "Unassigned" project
         const unassignedProject = await this.createOrGetUnassignedProject();
         if (unassignedProject) {
-          console.log(`Using "Unassigned" project for issue ${data.id}`);
+          this.logger.debug({ projectId: unassignedProject.id, issueId: data.id }, 'Using "Unassigned" project for issue');
           data.projectId = unassignedProject.id;
           data.projectName = unassignedProject.name;
           return true;
         }
 
         // If we reach here, we couldn't find or create a suitable project
-        console.warn(`Could not find any project for issue ${data.id}`);
+        this.logger.warn({ issueId: data.id }, 'Could not find any project for issue');
         return false;
       } catch (error) {
-        console.error(`Error finding default project: ${error.message}`);
+        this.logger.error({ err: error, issueId: data.id }, 'Error finding default project');
         return false;
       }
     }
@@ -283,11 +276,12 @@ export class WebhookIssueService {
         // First need to make sure there's at least one team
         const team = await tx.team.findFirst();
         if (!team) {
-          console.error('Cannot create unassigned project: No teams exist');
+          this.logger.error('Cannot create unassigned project: No teams exist');
           return null;
         }
 
         // Create the project
+        this.logger.info('Creating "Unassigned" project');
         return await tx.project.create({
           data: {
             id: UNASSIGNED_PROJECT_ID,
@@ -301,7 +295,7 @@ export class WebhookIssueService {
         });
       });
     } catch (error) {
-      console.error(`Error creating unassigned project: ${error.message}`);
+      this.logger.error({ err: error }, 'Error creating or getting unassigned project');
       return null;
     }
   }
@@ -310,6 +304,7 @@ export class WebhookIssueService {
    * Creates a new issue in the database
    */
   private async createIssue(data: IssueWebhookData) {
+    this.logger.debug({ issueId: data.id }, 'Calling issueService.create');
     try {
       // Ensure we have a projectId
       if (!(await this.ensureProjectId(data))) {
@@ -320,7 +315,7 @@ export class WebhookIssueService {
 
       return await this.issueService.create(data);
     } catch (error) {
-      console.error(`Failed to create issue ${data.id}:`, error.message);
+      this.logger.error({ err: error, issueId: data.id }, 'Failed to create issue in createIssue helper');
       throw error;
     }
   }
@@ -329,6 +324,7 @@ export class WebhookIssueService {
    * Updates an existing issue in the database
    */
   private async updateExistingIssue(data: IssueWebhookData) {
+    this.logger.debug({ issueId: data.id }, 'Updating existing issue data');
     try {
       const updateData: any = {
         updatedAt: data.updatedAt,
@@ -360,7 +356,7 @@ export class WebhookIssueService {
         where: { id: data.id },
         data: updateData,
       });
-
+      this.logger.debug({ issueId: data.id }, 'Prisma update successful for existing issue');
       return {
         id: data.id,
         title: data.title,
@@ -371,10 +367,7 @@ export class WebhookIssueService {
         labels: data.labels || [],
       };
     } catch (error) {
-      console.error(
-        `Failed to update existing issue ${data.id}:`,
-        error.message,
-      );
+      this.logger.error({ err: error, issueId: data.id }, 'Failed to update existing issue');
       throw error;
     }
   }

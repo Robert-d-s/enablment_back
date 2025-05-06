@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { User, UserRole } from '@prisma/client';
+import { User, UserRole, Prisma } from '@prisma/client';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { InternalServerErrorException } from '@nestjs/common';
 
 type TeamBasic = {
   id: string;
@@ -21,11 +23,9 @@ type UserTeamDTO = {
 
 @Injectable()
 export class UserService {
-  private readonly logger = new Logger(UserService.name);
-
-  constructor(private prisma: PrismaService) {}
-
+    constructor(@InjectPinoLogger(UserService.name) private readonly logger: PinoLogger, private prisma: PrismaService) {}
   async findOne(email: string): Promise<User | undefined> {
+    this.logger.debug({ email }, 'Finding user by email');
     const user = await this.prisma.user.findFirst({
       where: {
         email,
@@ -47,6 +47,7 @@ export class UserService {
     hashedPassword: string,
     role: UserRole,
   ): Promise<User> {
+    this.logger.info({ email, role }, 'Creating user');
     return this.prisma.user.create({
       data: {
         email,
@@ -57,10 +58,12 @@ export class UserService {
   }
 
   async count(): Promise<number> {
+    this.logger.debug('Counting all users');
     return this.prisma.user.count();
   }
 
   async updateUserRole(userId: number, newRole: UserRole): Promise<User> {
+    this.logger.info({ userId, newRole }, 'Updating user role');
     const updatedUser = await this.prisma.user.update({
       where: {
         id: userId,
@@ -77,6 +80,7 @@ export class UserService {
   }
 
   async addUserToTeam(userId: number, teamId: string): Promise<User> {
+    this.logger.info({ userId, teamId }, 'Adding user to team');
     return this.prisma.$transaction(async (tx) => {
       const userExists = await tx.user.findUnique({
         where: { id: userId },
@@ -86,6 +90,7 @@ export class UserService {
       });
 
       if (!userExists || !teamExists) {
+        this.logger.error({ userId, teamId, userExists, teamExists }, 'User or Team not found for adding relation');
         throw new Error('User or Team not found');
       }
 
@@ -106,7 +111,7 @@ export class UserService {
           },
         });
       }
-
+      this.logger.debug({ userId, teamId }, 'Created UserTeam relation if it did not exist');
       // Get the updated user with teams within the transaction
       const user = await tx.user.findUnique({
         where: { id: userId },
@@ -125,6 +130,7 @@ export class UserService {
       });
 
       if (!user) {
+        this.logger.error({ userId }, 'User not found after adding to team within transaction');
         throw new Error(
           `User with ID ${userId} not found after adding to team`,
         );
@@ -135,6 +141,7 @@ export class UserService {
   }
 
   private async getUserWithTeams(userId: number): Promise<any> {
+    this.logger.trace({ userId }, 'Fetching user with teams');
     return this.prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -153,41 +160,35 @@ export class UserService {
   }
 
   async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
-    this.logger.debug(
-      `Removing user ${userId} from team ${teamId}. First, logging current state.`,
-    );
-
+    this.logger.info({ userId, teamId }, 'Removing user from team');
     try {
-      const userBefore = await this.getUserWithTeams(userId);
-      this.logger.debug(
-        `Current state - User ${userId} has ${
-          userBefore?.teams?.length || 0
-        } teams`,
-      );
-
-      return await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async (tx) => {
+        this.logger.debug({ userId, teamId }, 'Executing deleteMany within transaction');
         await tx.userTeam.deleteMany({
           where: {
             userId: userId,
             teamId: teamId,
           },
         });
-
-        const updatedUser = await this.getUserWithTeams(userId);
-        this.logger.debug(
-          `After removal - User ${userId} now has ${
-            updatedUser?.teams?.length || 0
-          } teams`,
-        );
-
-        return updatedUser;
       });
+  
+      this.logger.info({ userId, teamId }, 'Successfully removed UserTeam relation');
+      const updatedUser = await this.getUserWithTeams(userId);
+      if (!updatedUser) {
+           this.logger.error({ userId }, "User not found after successful team removal");
+           throw new InternalServerErrorException("Failed to retrieve user state after update");
+      }
+      this.logger.trace({ userId, teamCount: updatedUser?.teams?.length ?? 0 }, 'User team state after removal (fetched post-tx)');
+  
+      return updatedUser;
     } catch (error) {
-      this.logger.error(
-        `Failed to remove user ${userId} from team ${teamId}:`,
-        error,
-      );
-      throw error;
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2028') {
+           this.logger.error({ err: error, userId, teamId }, 'Transaction timeout during user removal');
+           throw new InternalServerErrorException("Database operation timed out during team removal.");
+      } else {
+          this.logger.error({ err: error, userId, teamId }, 'Failed to remove user from team');
+          throw error;
+      }
     }
   }
 }

@@ -2,24 +2,27 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
-  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
 import { Prisma } from '@prisma/client';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class InvoiceService {
-  private readonly logger = new Logger(InvoiceService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectPinoLogger() private readonly logger: PinoLogger,
+    private prisma: PrismaService,
+  ) {}
 
   async generateInvoiceForProject(
     projectId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<Invoice> {
-    this.logger.log(
-      `Generating invoice for Project ${projectId} from ${startDate.toISOString()} to ${endDate.toISOString()}`,
+    this.logger.info(
+      { projectId, startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+      `Generating invoice for Project`
     );
     const projectWithTeam = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -31,9 +34,7 @@ export class InvoiceService {
     });
 
     if (!projectWithTeam || !projectWithTeam.team) {
-      this.logger.warn(
-        `Project (ID: ${projectId}) or its associated Team not found.`,
-      );
+      this.logger.warn({ projectId }, 'Project or its associated Team not found.');
       throw new NotFoundException(
         `Project with ID ${projectId} or its Team not found`,
       );
@@ -58,9 +59,7 @@ export class InvoiceService {
       });
 
       if (!rateAggregations || rateAggregations.length === 0) {
-        this.logger.log(
-          `No time entries with rates found for Project ${projectId} in the period.`,
-        );
+        this.logger.info({ projectId, startDate, endDate }, 'No time entries with rates found for Project in the period.');
         return {
           projectId: project.id,
           projectName: project.name,
@@ -91,9 +90,7 @@ export class InvoiceService {
         const totalMs = agg._sum.totalElapsedTime ?? 0;
 
         if (!rateInfo) {
-          this.logger.warn(
-            `Rate info for rateId ${rateId} not found, skipping aggregation.`,
-          );
+          this.logger.warn({ rateId }, 'Rate info not found, skipping aggregation.');
           continue;
         }
 
@@ -112,9 +109,14 @@ export class InvoiceService {
           __typename: 'RateDetail',
         });
       }
-
-      this.logger.log(
-        `Invoice generated successfully for Project ${projectId}. Team: ${team.name}`,
+      this.logger.info(
+        {
+          projectId,
+          teamName: team.name,
+          totalCost: Math.round(grandTotalCost * 100) / 100,
+          totalHours: Math.round(grandTotalHours * 100) / 100,
+        },
+        'Invoice generated successfully',
       );
 
       return {
@@ -130,10 +132,7 @@ export class InvoiceService {
         __typename: 'Invoice',
       };
     } catch (error) {
-      this.logger.error(
-        `Failed to generate invoice for project ${projectId}: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error({ err: error, projectId }, 'Failed to generate invoice');
       if (error instanceof NotFoundException) {
         throw error;
       }

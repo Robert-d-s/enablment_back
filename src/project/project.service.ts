@@ -2,15 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Project, Team } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino'; 
 
 @Injectable()
 export class ProjectService {
   constructor(
+    @InjectPinoLogger(ProjectService.name)
+    private readonly logger: PinoLogger,
     private prisma: PrismaService,
     private teamLoader: TeamLoader,
   ) {}
 
   async all(): Promise<Array<Project & { teamName?: string }>> {
+    this.logger.debug('Fetching all projects');
     const projects = await this.prisma.project.findMany({
       orderBy: { name: 'asc' },
     });
@@ -43,6 +47,7 @@ export class ProjectService {
     startDate: string,
     targetDate: string,
   ): Promise<Project> {
+    this.logger.info({ projectId: id, name, teamId }, 'Creating project');
     return this.prisma.project.create({
       data: {
         id,
@@ -61,13 +66,13 @@ export class ProjectService {
   }
 
   async remove(id: string): Promise<Project | null> {
+    this.logger.info({ projectId: id }, 'Removing project');
     try {
-      return await this.prisma.project.delete({
-        where: { id },
-      });
+      const deleted = await this.prisma.project.delete({ where: { id } });
+      this.logger.info({ projectId: id }, 'Successfully removed project');
+      return deleted;
     } catch (error) {
-      console.error('Error in removing project:', error);
-      // Handle or rethrow the error as appropriate
+      this.logger.error({ err: error, projectId: id }, 'Error removing project');
       return null;
     }
   }
@@ -83,6 +88,7 @@ export class ProjectService {
     startDate: string,
     targetDate: string,
   ): Promise<Project> {
+    this.logger.info({ projectId: id }, 'Upserting project');
     return this.prisma.project.upsert({
       where: {
         id,

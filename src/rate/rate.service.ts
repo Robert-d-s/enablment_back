@@ -5,12 +5,17 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Rate, Prisma } from '@prisma/client';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class RateService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectPinoLogger(RateService.name)
+    private readonly logger: PinoLogger,
+    private prisma: PrismaService) {}
 
   all(teamId: string): Promise<Rate[]> {
+    this.logger.debug({ teamId }, 'Fetching all rates for team');
     return this.prisma.rate.findMany({
       where: {
         teamId: teamId,
@@ -29,10 +34,10 @@ export class RateService {
   }
 
   async remove(id: number): Promise<Rate | null> {
-    console.log('Removing rate with ID:', id);
-
+    this.logger.info({ rateId: id }, 'Removing rate');
     try {
       return await this.prisma.$transaction(async (tx) => {
+        this.logger.debug({ rateId: id }, 'Updating associated time entries to nullify rateId');
         await tx.time.updateMany({
           where: { rateId: id },
           data: { rateId: { set: null } },
@@ -41,6 +46,7 @@ export class RateService {
         const deletedRate = await tx.rate.delete({
           where: { id },
         });
+        this.logger.info({ rateId: id }, 'Successfully removed rate');
         return deletedRate;
       });
     } catch (err) {
@@ -48,10 +54,10 @@ export class RateService {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2025'
       ) {
-        console.warn(`Rate with ID ${id} not found for deletion.`);
+        this.logger.warn({ rateId: id }, 'Rate not found for deletion.');
         throw new NotFoundException(`Rate with ID ${id} not found.`);
       }
-      console.error(`Error in removing rate ${id}:`, err);
+      this.logger.error({ err: err, rateId: id }, 'Error removing rate');
       throw new InternalServerErrorException(`Failed to remove rate ${id}.`);
     }
   }

@@ -5,14 +5,19 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Issue } from '@prisma/client';
+import { Issue, Label } from '@prisma/client';
 import { IssueWebhookData } from '../webhook/webhook.service';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class IssueService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectPinoLogger(IssueService.name) private readonly logger: PinoLogger,
+    private prisma: PrismaService,
+  ) {}
 
   async all(): Promise<Issue[]> {
+    this.logger.debug('Fetching all issues');
     return this.prisma.issue.findMany({
       include: {
         labels: true,
@@ -20,7 +25,8 @@ export class IssueService {
     });
   }
 
-  async findById(id: string): Promise<Issue | null> {
+  async findById(id: string): Promise<(Issue & { labels: Label[] }) | null> {
+    this.logger.debug({ issueId: id }, 'Fetching issue by ID');
     return this.prisma.issue.findUnique({
       where: { id },
       include: {
@@ -30,10 +36,13 @@ export class IssueService {
   }
 
   async create(data: IssueWebhookData): Promise<Issue> {
+    this.logger.debug({ issueId: data.id }, 'Attempting to create issue');
     try {
-      // Make sure we have a valid projectId
       if (!data.projectId) {
-        console.warn(`Cannot create issue ${data.id}: Missing projectId`);
+        this.logger.warn(
+          { issueId: data.id },
+          'Cannot create issue: Missing projectId',
+        );
         throw new BadRequestException(
           'ProjectId is required to create an issue',
         );
@@ -54,7 +63,6 @@ export class IssueService {
         projectId: data.projectId,
       };
 
-      // Only set teamKey if team exists and has an id
       if (data.team?.id) {
         createData.teamKey = data.team.id;
       }
@@ -62,10 +70,16 @@ export class IssueService {
       const createdIssue = await this.prisma.issue.create({
         data: createData,
       });
-
+      this.logger.info(
+        { issueId: createdIssue.id, projectId: createdIssue.projectId },
+        'Successfully created issue',
+      );
       return createdIssue;
     } catch (error) {
-      console.error('Error creating issue:', error);
+      this.logger.error(
+        { err: error, issueData: data },
+        'Error creating issue',
+      );
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -76,14 +90,13 @@ export class IssueService {
   }
 
   async update(id: string, data: IssueWebhookData): Promise<Issue> {
+    this.logger.debug({ issueId: id }, 'Attempting to update issue');
     try {
-      // First check if the issue exists
       const existingIssue = await this.prisma.issue.findUnique({
         where: { id },
         select: { id: true },
       });
 
-      // Define update data with direct field assignments
       const updateData: any = {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
@@ -97,33 +110,39 @@ export class IssueService {
         teamName: data.team?.name,
       };
 
-      // Only update projectId if it's provided
       if (data.projectId) {
         updateData.projectId = data.projectId;
       }
 
-      // Handle team relationship directly with teamKey field
       if (data.team?.id) {
         updateData.teamKey = data.team.id;
       } else {
-        updateData.teamKey = null; // Disconnect if no team
+        updateData.teamKey = null;
       }
 
       if (existingIssue) {
-        // If issue exists, perform update
         const updatedIssue = await this.prisma.issue.update({
           where: { id },
           data: updateData,
         });
 
-        console.log(`Updated issue ID: ${updatedIssue.id}`);
+        this.logger.info(
+          { issueId: updatedIssue.id },
+          'Successfully updated existing issue',
+        );
         return updatedIssue;
       } else {
-        // If issue doesn't exist, create it
+        this.logger.info(
+          { issueId: id },
+          'Issue not found for update, attempting to create instead.',
+        );
         return this.create(data);
       }
     } catch (error) {
-      console.error(`Error updating issue ${id}:`, error);
+      this.logger.error(
+        { err: error, issueId: id, issueData: data },
+        'Error updating issue',
+      );
       if (
         error instanceof BadRequestException ||
         error instanceof NotFoundException
@@ -157,12 +176,10 @@ export class IssueService {
     webhookLabels: IssueWebhookData['labels'],
   ): Promise<void> {
     await this.prisma.$transaction(async (prisma) => {
-      // Get all labels connected to this issue
       const currentLabels = await prisma.label.findMany({
         where: { issueId },
       });
 
-      // Process removed labels
       const currentLabelIds = currentLabels.map((label) => label.id);
       const removedLabelIds = currentLabelIds.filter(
         (id) => !webhookLabels?.some((label) => label.id === id),
@@ -175,7 +192,6 @@ export class IssueService {
         },
       });
 
-      // Process existing and new labels
       if (webhookLabels) {
         for (const webhookLabel of webhookLabels) {
           const existingLabel = currentLabels.find(
@@ -183,7 +199,6 @@ export class IssueService {
           );
 
           if (existingLabel) {
-            // Update existing label
             await this.prisma.label.update({
               where: { internalId: existingLabel.internalId },
               data: {
@@ -192,7 +207,6 @@ export class IssueService {
               },
             });
           } else {
-            // Create new label
             await this.createLabelForIssue(webhookLabel, issueId);
           }
         }
@@ -201,8 +215,15 @@ export class IssueService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.prisma.issue.delete({
-      where: { id },
-    });
+    this.logger.info({ issueId: id }, 'Removing issue');
+    try {
+      await this.prisma.issue.delete({ where: { id } });
+      this.logger.info({ issueId: id }, 'Successfully removed issue');
+    } catch (error) {
+      this.logger.error({ err: error, issueId: id }, 'Error removing issue');
+      throw new InternalServerErrorException(
+        `Failed to remove issue ${id}: ${error.message}`,
+      );
+    }
   }
 }

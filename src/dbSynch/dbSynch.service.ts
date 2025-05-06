@@ -193,7 +193,6 @@ export class DatabaseSyncService {
 
       this.logger.debug(`Processing ${teams.length} teams from Linear`);
 
-      // Get existing teams from database
       const allTeamsInDb = await tx.team.findMany({
         select: { id: true, name: true },
       });
@@ -202,7 +201,6 @@ export class DatabaseSyncService {
         allTeamsInDb.map((team: { id: string }) => team.id),
       );
 
-      // Update or create teams
       for (const teamData of teams) {
         await tx.team.upsert({
           where: { id: teamData.id },
@@ -212,46 +210,32 @@ export class DatabaseSyncService {
         teamsToDelete.delete(teamData.id);
       }
 
-      // Handle teams that don't exist in Linear
       for (const teamId of teamsToDelete) {
-        this.logger.warn(`Team ${teamId} no longer exists in Linear`);
-        // We don't delete teams here - this will be handled in cleanup phase
+        this.logger.warn({ teamId }, 'Team no longer exists in Linear (will be handled in cleanup)');
       }
+      this.logger.info('Team synchronization step completed.');
     } catch (error) {
-      this.logger.error(
-        `Error synchronizing teams: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error({ err: error }, 'Error synchronizing teams');
       throw error;
     }
   }
   public async synchronizeTeamsOnly(): Promise<void> {
-    this.logger.log('Starting teams-only synchronization');
+    this.logger.info('Starting teams-only synchronization');
 
     try {
       await this.prisma.$transaction(async (tx) => {
         await this.synchronizeTeams(tx);
       });
 
-      this.logger.log('Teams synchronization completed successfully');
+      this.logger.info('Teams synchronization completed successfully');
     } catch (error) {
-      this.logger.error(
-        `Teams synchronization failed: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error({ err: error }, 'Teams synchronization failed');
       throw new Error(`Teams synchronization failed: ${error.message}`);
     }
   }
-  /**
-   * Synchronize projects from Linear
-   */
-  /**
-   * Synchronize projects from Linear, team by team
-   */
   private async synchronizeProjects(tx: any): Promise<void> {
-    this.logger.log('Fetching projects from Linear team by team');
+    this.logger.info('Fetching projects from Linear team by team');
 
-    // 1. Fetch all teams first (we need team IDs to query projects for each team)
     const teamsQuery = `
       query {
         teams {
@@ -266,7 +250,7 @@ export class DatabaseSyncService {
     }>(teamsQuery);
     const teams = teamsData.teams.nodes;
 
-    this.logger.log(`Fetched ${teams.length} teams to process projects for.`);
+    this.logger.info(`Fetched ${teams.length} teams to process projects for.`);
 
     for (const team of teams) {
       let hasNextPage = true;
@@ -312,23 +296,20 @@ export class DatabaseSyncService {
             });
 
           if (!data.team || !data.team.projects) {
-            this.logger.warn(
-              `No projects data returned for team ${team.id}. Skipping page.`,
-            );
-            hasNextPage = false; // No projects for this team on this page, move to next team
+            this.logger.warn({ teamId: team.id }, 'No projects data returned for team. Skipping page.');
+            hasNextPage = false;
             continue;
           }
 
           const pageInfo: PageInfo = data.team.projects.pageInfo;
           const projects = data.team.projects.nodes;
 
-          this.logger.log(
+          this.logger.debug(
             `Processing ${projects.length} projects for team ${team.id} (cursor: ${endCursor})`,
           );
 
-          // Get existing projects from database for this team (optimize if needed)
           const existingProjects = await tx.project.findMany({
-            where: { teamId: team.id }, // Filter by team ID
+            where: { teamId: team.id },
             select: { id: true },
           });
           const existingProjectIds = new Set(
@@ -345,7 +326,7 @@ export class DatabaseSyncService {
               updatedAt: project.updatedAt,
               startDate: project.startDate || null,
               targetDate: project.targetDate || null,
-              teamId: team.id, // <--- Team ID is now correctly set
+              teamId: team.id, 
             };
 
             await tx.project.upsert({
@@ -353,33 +334,28 @@ export class DatabaseSyncService {
               update: projectData,
               create: projectData,
             });
-            existingProjectIds.delete(project.id); // Remove processed project ID
+            existingProjectIds.delete(project.id); 
           }
 
           hasNextPage = pageInfo.hasNextPage;
           endCursor = pageInfo.endCursor;
 
           if (hasNextPage) {
-            await new Promise((resolve) => setTimeout(resolve, 500)); // Rate limit delay
+            await new Promise((resolve) => setTimeout(resolve, 500)); 
           }
         } catch (error) {
-          this.logger.error(
-            `Error synchronizing projects for team ${team.id}: ${error.message}`,
-            error.stack,
-          );
-          throw error; // Re-throw to halt transaction
+          this.logger.error({ err: error, teamId: team.id }, 'Error synchronizing projects for team');
+          throw error; 
         }
       }
     }
+    this.logger.info('Project synchronization step completed.');
   }
 
-  /**
-   * Synchronize issues from Linear
-   */
-  private async synchronizeIssues(tx: any): Promise<void> {
-    this.logger.log('Fetching issues from Linear');
 
-    // We need to query issues with pagination because there could be many
+  private async synchronizeIssues(tx: any): Promise<void> {
+    this.logger.info('Fetching issues from Linear');
+
     const pageSize = 100;
     let hasNextPage = true;
     let endCursor = null;
@@ -443,19 +419,13 @@ export class DatabaseSyncService {
         const issues = data.issues.nodes;
 
         processedCount += issues.length;
-        this.logger.log(
-          `Processing ${issues.length} issues (total: ${processedCount})`,
-        );
+        this.logger.debug(`Processing ${issues.length} issues (total: ${processedCount}, cursor: ${endCursor})`);
 
-        // Update pagination info
         hasNextPage = pageInfo.hasNextPage;
         endCursor = pageInfo.endCursor;
 
-        // Process each issue
         for (const issue of issues) {
-          // Only process issues with a project
           if (issue.project && issue.team) {
-            // Check if the project exists
             const projectExists = await tx.project.findUnique({
               where: { id: issue.project.id },
               select: { id: true },
@@ -479,23 +449,17 @@ export class DatabaseSyncService {
                 teamName: issue.team.name,
                 dueDate: issue.dueDate || null,
               };
-
-              // Update or create the issue
-              await tx.issue.upsert({
+                await tx.issue.upsert({
                 where: { id: issue.id },
                 update: issueData,
                 create: issueData,
               });
 
-              // Process labels for this issue
               if (issue.labels && issue.labels.nodes.length > 0) {
-                // First, delete any existing labels
                 await tx.label.deleteMany({
                   where: { issueId: issue.id },
                 });
-
-                // Then add the current ones
-                for (const label of issue.labels.nodes) {
+               for (const label of issue.labels.nodes) {
                   await tx.label.create({
                     data: {
                       id: label.id,
@@ -508,34 +472,24 @@ export class DatabaseSyncService {
                 }
               }
             } else {
-              this.logger.warn(
-                `Skipping issue ${issue.id}: Project ${issue.project.id} not found`,
-              );
+              this.logger.warn({ issueId: issue.id, projectId: issue.project.id }, 'Skipping issue: Project not found');
             }
           }
         }
       } catch (error) {
-        this.logger.error(
-          `Error synchronizing issues batch: ${error.message}`,
-          error.stack,
-        );
+        this.logger.error({ err: error }, 'Error synchronizing issues batch');
         throw error;
       }
-
-      // Add a slight delay to avoid hitting rate limits
       if (hasNextPage) {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
+      this.logger.info('Issue synchronization step completed.');
     }
   }
 
-  /**
-   * Clean up orphaned records after synchronization
-   */
   private async cleanupOrphanedRecords(tx: any): Promise<void> {
-    this.logger.log('Cleaning up orphaned records');
+    this.logger.info('Cleaning up orphaned records');
 
-    // Get all Linear teams and projects
     const query = `
       query {
         teams { nodes { id } }
@@ -555,7 +509,6 @@ export class DatabaseSyncService {
       data.projects.nodes.map((p: { id: string }) => p.id),
     );
 
-    // 1. Clean up orphaned projects (projects not in Linear)
     const orphanedProjects = await tx.project.findMany({
       where: {
         id: { notIn: Array.from(linearProjectIds) },
@@ -564,14 +517,12 @@ export class DatabaseSyncService {
     });
 
     if (orphanedProjects.length > 0) {
-      this.logger.warn(`Deleting ${orphanedProjects.length} orphaned projects`);
+      this.logger.warn({ count: orphanedProjects.length }, 'Deleting orphaned projects');
       for (const project of orphanedProjects) {
         await tx.project.delete({ where: { id: project.id } });
       }
     }
 
-    // 2. Clean up orphaned teams (teams not in Linear)
-    // Note: Be careful with teams as they might have manually created data
     const orphanedTeams = await tx.team.findMany({
       where: {
         id: { notIn: Array.from(linearTeamIds) },
@@ -583,18 +534,16 @@ export class DatabaseSyncService {
     });
 
     for (const team of orphanedTeams) {
-      // Only delete teams that have no projects or rates
       if (team.projects.length === 0 && team.rates.length === 0) {
-        this.logger.warn(`Deleting orphaned team: ${team.id}`);
+        this.logger.warn({ teamId: team.id }, 'Deleting orphaned team');
         await tx.team.delete({ where: { id: team.id } });
       } else {
         this.logger.warn(
-          `Team ${team.id} not found in Linear but has local data (${team.projects.length} projects, ${team.rates.length} rates). Keeping it.`,
+          { teamId: team.id, projectCount: team.projects.length, rateCount: team.rates.length },
+          'Orphaned team has local data. Keeping it.',
         );
       }
     }
-
-    // 3. Clean up orphaned rates (rates with invalid team references)
     const validTeamIds = new Set(
       (await tx.team.findMany({ select: { id: true } })).map(
         (t: { id: string }) => t.id,
@@ -609,10 +558,11 @@ export class DatabaseSyncService {
     });
 
     if (orphanedRates.length > 0) {
-      this.logger.warn(`Deleting ${orphanedRates.length} orphaned rates`);
+      this.logger.warn({ count: orphanedRates.length }, 'Deleting orphaned rates');
       for (const rate of orphanedRates) {
         await tx.rate.delete({ where: { id: rate.id } });
       }
     }
+    this.logger.info('Orphaned records cleanup completed.');
   }
 }

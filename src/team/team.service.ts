@@ -2,16 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Team } from '@prisma/client';
 import { SimpleTeamDTO } from './team.model';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class TeamService {
-  private readonly logger = new Logger(TeamService.name);
-
-  constructor(private prisma: PrismaService) {}
+    constructor(
+      @InjectPinoLogger(TeamService.name)
+      private readonly logger: PinoLogger,
+      private prisma: PrismaService) {}
 
   async create(id: string, name: string): Promise<Team> {
-    this.logger.debug(`Creating team with id: ${id}, name: ${name}`);
-
+    this.logger.debug({ teamId: id, name }, 'Creating team');
     return this.prisma.$transaction(async (tx) => {
       return tx.team.create({
         data: {
@@ -38,7 +39,7 @@ export class TeamService {
   }
 
   async getTeamById(id: string): Promise<Team | null> {
-    this.logger.debug(`Fetching team with id: ${id}`);
+    this.logger.debug({ teamId: id }, 'Fetching team by id');
 
     return this.prisma.$transaction(async (tx) => {
       return tx.team.findUnique({

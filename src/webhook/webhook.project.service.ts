@@ -1,29 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { ProjectWebhookData, LinearWebhookBody } from './webhook.service';
 import { ProjectService } from '../project/project.service';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class WebhookProjectService {
-  constructor(private projectService: ProjectService) {}
+  constructor(@InjectPinoLogger(WebhookProjectService.name) private readonly logger: PinoLogger,private projectService: ProjectService) {}
 
   async handleProject(json: LinearWebhookBody) {
     if (json.type !== 'Project') {
-      console.error('Expected project data, received:', json.type);
+      this.logger.error({ type: json.type }, 'Expected project data, received different type');
       return;
     }
-    switch (json.action) {
-      case 'create':
-        await this.create(json.data);
-        break;
-      case 'remove':
-        await this.remove(json.data);
-        break;
-      case 'update':
-        await this.update(json.data);
-        break;
-      default:
-        console.log('UNMATCHED WEBHOOK FROM LINEAR');
-        break;
+    const action = json.action;
+    const projectId = json.data.id;
+    this.logger.info({ projectId, action }, 'Handling project webhook');
+
+    try {
+        switch (action) {
+          case 'create':
+            await this.create(json.data); 
+            break;
+          case 'remove':
+            await this.remove(json.data); 
+            break;
+          case 'update':
+            await this.update(json.data); 
+            break;
+          default:
+          this.logger.warn({ action }, 'Unhandled project webhook action from Linear');
+            break;
+        }
+         this.logger.info({ projectId, action }, 'Successfully handled project webhook');
+    } catch (error) {
+        this.logger.error({ err: error, projectId, action }, 'Error handling project webhook');
+        throw error;
     }
   }
 
