@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { LoggerModule } from 'nestjs-pino';
+import { APP_FILTER } from '@nestjs/core';
+import { GlobalGqlExceptionFilter } from './common/filters/gql-exception.filter';
+import { LoggerModule, PinoLogger } from 'nestjs-pino';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -25,7 +27,7 @@ import { registerEnumType } from '@nestjs/graphql';
 import { UserRole } from '@prisma/client';
 
 export interface GqlContext {
-  req: Request & { user?: User }; // User property from AuthGuard
+  req: Request & { user?: User };
   res: Response;
 }
 
@@ -90,6 +92,18 @@ registerEnumType(UserRole, {
     PrismaModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_FILTER,
+      useClass: GlobalGqlExceptionFilter,
+    },
+    PinoLogger,
+    {
+      provide: APP_FILTER,
+      useFactory: (logger: PinoLogger) => new GlobalGqlExceptionFilter(logger),
+      inject: [PinoLogger],
+    },
+  ],
 })
 export class AppModule {}

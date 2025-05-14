@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { User, UserRole, Prisma } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { InternalServerErrorException } from '@nestjs/common';
+import { UserQueryArgs } from './user.resolver';
 
 type TeamBasic = {
   id: string;
@@ -190,5 +191,55 @@ export class UserService {
           throw error;
       }
     }
+  }
+
+  async countUsersWithFilters(args: {
+    search?: string;
+    role?: UserRole;
+  }): Promise<number> {
+    this.logger.debug({ filterArgs: args }, 'Counting users with filters');
+    const where: Prisma.UserWhereInput = {};
+    if (args.search) {
+      where.email = { contains: args.search };
+    }
+    if (args.role) {
+      where.role = args.role;
+    }
+    return this.prisma.user.count({ where });
+  }
+
+  // Method to Find users with filters and pagination (Required for users query)
+  async findUsers(
+    args: UserQueryArgs,
+  ): Promise<Array<Pick<User, 'id' | 'email' | 'role'>>> { // Return type matches resolver needs
+    this.logger.debug({ queryArgs: args }, 'Finding users with filters and pagination');
+    const currentPage = args.page ?? 1;
+    const currentPageSize = args.pageSize ?? 10;
+
+    const skip = (currentPage - 1) * currentPageSize;
+    const take = currentPageSize;
+
+    const where: Prisma.UserWhereInput = {};
+    if (args.search) {
+      where.email = { contains: args.search };
+    }
+    if (args.role) {
+      where.role = args.role;
+    }
+
+    // Return only the fields needed by the resolver/GraphQL type
+    return this.prisma.user.findMany({
+      where,
+      skip,
+      take,
+      select: {
+        id: true,
+        email: true,
+        role: true, // Prisma returns the enum value
+      },
+      orderBy: {
+        email: 'asc',
+      },
+    });
   }
 }

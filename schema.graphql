@@ -166,20 +166,20 @@ input InvoiceInput {
 }
 
 type Mutation {
-  login(input: SignInInput, email: String, password: String): AuthResponse!
+  login(input: SignInInput!): AuthResponse!
   refreshToken: RefreshTokenResponse!
   logout: LogoutResponse!
-  signup(input: SignUpInput, email: String, password: String): AuthResponse!
-  updateUserRole(userId: Int!, newRole: UserRole!): User!
-  addUserToTeam(userId: Int!, teamId: String!): User!
-  removeUserFromTeam(userId: Int!, teamId: String!): User!
+  signup(input: SignUpInput!): AuthResponse!
+  updateUserRole(input: UpdateUserRoleInput!): User!
+  addUserToTeam(input: UserTeamInput!): User!
+  removeUserFromTeam(input: UserTeamInput!): User!
   createTeam(id: String!, name: String!): Team!
   synchronizeDatabase: SyncResponse!
   createRate(rateInputCreate: RateInputCreate!): Rate!
-  deleteRate(rateId: Int!): Rate!
+  deleteRate(input: DeleteRateInput!): Rate!
   createTime(timeInputCreate: TimeInputCreate!): Time!
   updateTime(timeInputUpdate: TimeInputUpdate!): Time!
-  deleteTime(id: Float!): Time!
+  deleteTime(input: DeleteTimeInput!): Time!
 }
 
 input SignInInput {
@@ -192,6 +192,16 @@ input SignUpInput {
   password: String!
 }
 
+input UpdateUserRoleInput {
+  userId: Int!
+  newRole: UserRole!
+}
+
+input UserTeamInput {
+  userId: Int!
+  teamId: String!
+}
+
 input RateInputCreate {
   """Rate name"""
   name: String!
@@ -201,6 +211,10 @@ input RateInputCreate {
 
   """Rates team id"""
   teamId: String!
+}
+
+input DeleteRateInput {
+  rateId: Int!
 }
 
 input TimeInputCreate {
@@ -232,4 +246,8 @@ input TimeInputUpdate {
 
   """Total Elapsed Time"""
   totalElapsedTime: Int!
+}
+
+input DeleteTimeInput {
+  id: Int!
 }

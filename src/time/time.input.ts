@@ -6,6 +6,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Min,  
+  IsInt,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -97,4 +99,13 @@ export class TimeInputUpdate {
   @IsNumber()
   @IsNotEmpty()
   totalElapsedTime: number;
+}
+
+@InputType()
+export class DeleteTimeInput {
+    @Field(() => Int)
+    @IsInt()
+    @IsNotEmpty()
+    @Min(1) // Assuming time IDs start from 1
+    id: number;
 }

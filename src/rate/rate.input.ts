@@ -28,3 +28,12 @@ export class RateInputCreate {
   @IsNotEmpty()
   teamId: string;
 }
+
+@InputType()
+export class DeleteRateInput {
+    @Field(() => Int)
+    @IsInt()
+    @IsNotEmpty()
+    @Min(1)
+    rateId: number;
+}

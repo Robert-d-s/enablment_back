@@ -14,16 +14,16 @@ import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { Prisma, UserRole } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
-import { PrismaService } from '../prisma/prisma.service';
 import { ProjectLoader } from '../loaders/project.loader';
 import { Project } from '../project/project.model';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserProfileDto } from '../auth/dto/user-profile.dto';
 import { IsOptional, IsInt, IsString, IsEnum } from 'class-validator';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { UpdateUserRoleInput, UserTeamInput } from './user.input';
 
 @InputType()
 export class UserQueryArgs {
@@ -55,7 +55,7 @@ export class UserResolver {
     private userService: UserService,
     private teamLoader: TeamLoader,
     private projectLoader: ProjectLoader,
-    private prisma: PrismaService,
+    // private prisma: PrismaService,
   ) {}
 
   @Query(() => [Project])
@@ -103,53 +103,26 @@ export class UserResolver {
     @Args('search', { type: () => String, nullable: true }) search?: string,
     @Args('role', { type: () => UserRole, nullable: true }) role?: UserRole,
   ): Promise<number> {
-    this.logger.debug({ search, role }, 'Executing usersCount query');
-    const where: Prisma.UserWhereInput = {};
-    if (search) {
-      where.email = { contains: search };
-    }
-    if (role) {
-      where.role = role;
-    }
-    return this.prisma.user.count({ where });
+    this.logger.debug(
+      { search, role },
+      'Executing usersCount query (delegating to service)',
+    );
+    return this.userService.countUsersWithFilters({ search, role });
   }
 
   @Query(() => [User])
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
   @UseGuards(AuthGuard)
   async users(@Args('args') args: UserQueryArgs): Promise<User[]> {
-    this.logger.debug({ queryArgs: args }, 'Executing users query');
-    const currentPage = args.page ?? 1;
-    const currentPageSize = args.pageSize ?? 10;
-
-    const skip = (currentPage - 1) * currentPageSize;
-    const take = currentPageSize;
-
-    const where: Prisma.UserWhereInput = {};
-    if (args.search) {
-      where.email = { contains: args.search };
-    }
-    if (args.role) {
-      where.role = args.role;
-    }
-
-    const users = await this.prisma.user.findMany({
-      where,
-      skip,
-      take,
-      select: {
-        id: true,
-        email: true,
-        role: true,
-      },
-      orderBy: {
-        email: 'asc',
-      },
-    });
-
-    return users.map((user) => ({
-      ...user,
-      role: user.role as UserRole,
+    this.logger.debug(
+      { queryArgs: args },
+      'Executing users query (delegating to service)',
+    );
+    const usersFromService = await this.userService.findUsers(args);
+    return usersFromService.map((user) => ({
+      id: user.id,
+      email: user.email,
+      role: user.role,
     }));
   }
 
@@ -168,48 +141,55 @@ export class UserResolver {
   @Roles(UserRole.ADMIN)
   @UseGuards(AuthGuard)
   async updateUserRole(
-    @Args('userId', { type: () => Int }) userId: number,
-    @Args('newRole', { type: () => UserRole }) newRole: UserRole,
+    @Args('input') input: UpdateUserRoleInput,
   ): Promise<User> {
-    this.logger.info({ userId, newRole }, 'Executing updateUserRole mutation');
-    const updatedUser = await this.userService.updateUserRole(userId, newRole);
+    this.logger.info({ input }, 'Executing updateUserRole mutation');
+    const updatedUser = await this.userService.updateUserRole(
+      input.userId,
+      input.newRole,
+    );
     return {
       ...updatedUser,
-      role: updatedUser.role as UserRole,
+      role: updatedUser.role,
     };
   }
 
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
   @UseGuards(AuthGuard)
-  async addUserToTeam(
-    @Args('userId', { type: () => Int }) userId: number,
-    @Args('teamId') teamId: string,
-  ): Promise<User> {
-    this.logger.info({ userId, teamId }, 'Executing addUserToTeam mutation');
-    const user = await this.userService.addUserToTeam(userId, teamId);
+  async addUserToTeam(@Args('input') input: UserTeamInput): Promise<User> {
+    this.logger.info({ input }, 'Executing addUserToTeam mutation');
+    const user = await this.userService.addUserToTeam(
+      input.userId,
+      input.teamId,
+    );
     return {
-      ...user,
-      role: user.role as UserRole,
+      id: user.id,
+      email: user.email,
+      role: user.role,
     };
   }
 
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
   @UseGuards(AuthGuard)
-  async removeUserFromTeam(
-    @Args('userId', { type: () => Int }) userId: number,
-    @Args('teamId') teamId: string,
-  ): Promise<User> {
-    this.logger.info({ userId, teamId }, 'Executing removeUserFromTeam mutation');
+  async removeUserFromTeam(@Args('input') input: UserTeamInput): Promise<User> {
+    this.logger.info({ input }, 'Executing removeUserFromTeam mutation');
     try {
-      const user = await this.userService.removeUserFromTeam(userId, teamId);
+      const user = await this.userService.removeUserFromTeam(
+        input.userId,
+        input.teamId,
+      );
       return {
-        ...user,
-        role: user.role as UserRole,
+        id: user.id,
+        email: user.email,
+        role: user.role,
       };
     } catch (error) {
-      this.logger.error({ err: error, userId, teamId }, 'Error occurred while removing user from team');
+      this.logger.error(
+        { err: error, userId: input.userId, teamId: input.teamId },
+        'Error occurred while removing user from team',
+      );
       throw new Error('Error removing user from team');
     }
   }

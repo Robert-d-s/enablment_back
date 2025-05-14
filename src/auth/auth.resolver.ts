@@ -69,17 +69,10 @@ export class AuthResolver {
   @Mutation(() => AuthResponse)
   async login(
     @Context() context: GqlContext,
-    @Args('input', { nullable: true }) signInInput?: SignInInput,
-    @Args('email', { nullable: true }) email?: string,
-    @Args('password', { nullable: true }) password?: string,
+    @Args('input') signInInput: SignInInput,
   ): Promise<Omit<AuthResponse, 'refresh_token'>> {
-    const emailToUse = signInInput?.email || email;
-    const passwordToUse = signInInput?.password || password;
-
-    if (!emailToUse || !passwordToUse) {
-      throw new Error('Email and password are required');
-    }
-
+    const emailToUse = signInInput.email;
+    const passwordToUse = signInInput.password;
     const { user, accessToken, refreshToken } = await this.authService.signIn(
       emailToUse,
       passwordToUse,
@@ -159,17 +152,10 @@ export class AuthResolver {
   @Mutation(() => AuthResponse)
   async signup(
     @Context() context: GqlContext,
-    @Args('input', { nullable: true }) signUpInput?: SignUpInput,
-    @Args('email', { nullable: true }) email?: string,
-    @Args('password', { nullable: true }) password?: string,
+    @Args('input') signUpInput: SignUpInput,
   ): Promise<Omit<AuthResponse, 'refresh_token'>> {
-    const emailToUse = signUpInput?.email || email;
-    const passwordToUse = signUpInput?.password || password;
-
-    if (!emailToUse || !passwordToUse) {
-      throw new Error('Email and password are required');
-    }
-
+    const emailToUse = signUpInput.email;
+    const passwordToUse = signUpInput.password;
     const createdUser = await this.authService.signUp(
       emailToUse,
       passwordToUse,

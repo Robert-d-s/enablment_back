@@ -1,7 +1,7 @@
 import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { RateService } from './rate.service';
 import { Rate } from './rate.model';
-import { RateInputCreate } from './rate.input';
+import { RateInputCreate, DeleteRateInput } from './rate.input';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -26,7 +26,10 @@ export class RateResolver {
   async createRate(
     @Args('rateInputCreate') rateInputCreate: RateInputCreate,
   ): Promise<Rate> {
-    this.logger.info({ rateInput: rateInputCreate }, 'Executing createRate mutation');
+    this.logger.info(
+      { rateInput: rateInputCreate },
+      'Executing createRate mutation',
+    );
     return this.rateService.create(
       rateInputCreate.name,
       rateInputCreate.rate,
@@ -37,12 +40,12 @@ export class RateResolver {
   @Mutation(() => Rate)
   @Roles(UserRole.ADMIN)
   async deleteRate(
-    @Args('rateId', { type: () => Int }) rateId: number,
+    @Args('input') input: DeleteRateInput,
   ): Promise<{ id: number }> {
-    this.logger.info({ rateId }, 'Executing deleteRate mutation');
-    const deletedRate = await this.rateService.remove(rateId);
+    this.logger.info({ input }, 'Executing deleteRate mutation');
+    const deletedRate = await this.rateService.remove(input.rateId);
     if (!deletedRate) {
-      return { id: rateId };
+      return { id: input.rateId };
     }
     return { id: deletedRate.id };
   }
