@@ -117,16 +117,22 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
 
     // Server-side logging (using console here, replace with injected PinoLogger if added)
     // Avoid logging sensitive details from the original exception here unless needed for debugging
-    console.error(
-      `[GqlExceptionFilter] Caught Exception: ${exception instanceof Error ? exception.constructor.name : typeof exception}`,
-      `| Code: ${code}`,
-      `| Message: ${message}`,
-      `| Path: ${info?.path?.key}`,
-      `| Extensions: ${JSON.stringify(extensions)}`, // Can be verbose
-      // Log the original exception stack trace if it's an Error and not an HttpException (which is often expected)
-      exception instanceof Error && !(exception instanceof HttpException)
-        ? exception.stack
-        : '',
+    this.logger.error(
+      {
+        exception:
+          exception instanceof Error
+            ? exception.constructor.name
+            : typeof exception,
+        code,
+        message,
+        path: info?.path?.key,
+        extensions,
+        stack:
+          exception instanceof Error && !(exception instanceof HttpException)
+            ? exception.stack
+            : undefined,
+      },
+      '[GqlExceptionFilter] Caught Exception',
     );
 
     return graphqlError;
