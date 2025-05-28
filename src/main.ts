@@ -3,7 +3,10 @@ import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
 import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { getCorsConfig } from './config/cors.config';
-import { Logger } from 'nestjs-pino';
+import { Logger, PinoLogger } from 'nestjs-pino';
+import { EnhancedValidationPipe } from './common/pipes/enhanced-validation.pipe';
+import { GlobalGqlExceptionFilter } from './common/filters/gql-exception.filter';
+import { EnhancedLoggingInterceptor } from './common/interceptors/enhanced-logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -11,24 +14,24 @@ async function bootstrap() {
   });
 
   const logger = app.get(Logger);
-  app.useLogger(logger);
-
-  // Add global validation pipe for DTOs and GraphQL inputs
+  const pinoLogger = await app.resolve(PinoLogger);
+  app.useLogger(logger); // Add enhanced global validation pipe for DTOs and GraphQL inputs
   app.useGlobalPipes(
-    new ValidationPipe({
+    new EnhancedValidationPipe(pinoLogger, {
       whitelist: true,
       transform: true,
-
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
+      enableImplicitConversion: true,
       forbidNonWhitelisted: false,
-      exceptionFactory: (errors) => {
-        logger.warn({ validationErrors: errors }, 'Validation failed');
-        return new BadRequestException(errors);
-      },
+      enablePerformanceTracking: true,
+      maxCacheSize: 1000,
     }),
   );
+
+  // Add over-engineered global exception filter for comprehensive error handling
+  app.useGlobalFilters(new GlobalGqlExceptionFilter(pinoLogger));
+
+  // Add enhanced logging interceptor for performance tracking and analytics
+  app.useGlobalInterceptors(new EnhancedLoggingInterceptor(pinoLogger));
 
   app.enableCors(getCorsConfig());
   app.use(cookieParser());

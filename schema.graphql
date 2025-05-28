@@ -23,6 +23,10 @@ type Rate {
   rate: Int!
 }
 
+type DeleteRateResponse {
+  id: Int!
+}
+
 type Team {
   id: String!
   name: String!
@@ -176,7 +180,7 @@ type Mutation {
   createTeam(id: String!, name: String!): Team!
   synchronizeDatabase: SyncResponse!
   createRate(rateInputCreate: RateInputCreate!): Rate!
-  deleteRate(input: DeleteRateInput!): Rate!
+  deleteRate(input: DeleteRateInput!): DeleteRateResponse!
   createTime(timeInputCreate: TimeInputCreate!): Time!
   updateTime(timeInputUpdate: TimeInputUpdate!): Time!
   deleteTime(input: DeleteTimeInput!): Time!

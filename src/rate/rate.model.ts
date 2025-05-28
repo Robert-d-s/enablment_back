@@ -15,3 +15,9 @@ export class Rate implements RateClient {
   @Field(() => Int)
   rate: number;
 }
+
+@ObjectType()
+export class DeleteRateResponse {
+  @Field(() => Int)
+  id: number;
+}

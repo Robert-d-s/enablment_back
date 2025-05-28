@@ -10,7 +10,7 @@ export const CurrentUser = createParamDecorator(
     const payload = ctx.getContext().req.user as JwtPayload | undefined;
 
     if (!payload) {
-      return undefined; // Or handle as needed, maybe throw?
+      return undefined;
     }
     return new UserProfileDto({
       id: payload.id,

@@ -41,7 +41,7 @@ registerEnumType(UserRole, {
     ConfigModule.forRoot(),
     LoggerModule.forRoot({
       pinoHttp: {
-        level: 'info',
+        level: process.env.LOG_LEVEL || 'info', // Use env variable for flexibility
         transport:
           process.env.NODE_ENV !== 'production'
             ? {
@@ -49,19 +49,35 @@ registerEnumType(UserRole, {
                 options: {
                   singleLine: true,
                   colorize: true,
-                  leverlFirst: true,
-                  translateTime: 'SYS:standard',
+                  levelFirst: true, // Fixed typo
+                  translateTime: 'HH:MM:ss', // Shorter time format
+                  ignore: 'pid,hostname,reqId,responseTime,req,res', // Hide verbose fields
+                  messageFormat: '{msg}',
+                  errorLikeObjectKeys: ['err', 'error'],
                 },
               }
             : undefined,
         serializers: {
           req(req) {
-            req.headers = {
-              ...req.headers,
-              authorization: '[REDACTED]',
-              cookie: '[REDACTED]',
+            return {
+              method: req.method,
+              url: req.url,
+              // Remove headers entirely for cleaner logs
             };
-            return req;
+          },
+          res(res) {
+            return {
+              statusCode: res.statusCode,
+            };
+          },
+        },
+        // Reduce HTTP request logging verbosity
+        autoLogging: {
+          ignore: (req) => {
+            // Ignore health checks, static files, etc.
+            return !!(
+              req.url?.includes('/health') || req.url?.includes('/favicon')
+            );
           },
         },
         customProps: (req, res) => ({

@@ -16,10 +16,11 @@ export class UserProfileDto {
   @Field(() => UserRole)
   @Expose()
   role: UserRole;
-
-  constructor(partial: { id: number; email: string; role: UserRole }) {
-    this.id = partial.id;
-    this.email = partial.email;
-    this.role = partial.role;
+  constructor(partial?: { id: number; email: string; role: UserRole }) {
+    if (partial) {
+      this.id = partial.id;
+      this.email = partial.email;
+      this.role = partial.role;
+    }
   }
 }
