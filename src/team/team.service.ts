@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Team } from '@prisma/client';
 import { SimpleTeamDTO } from './team.model';
@@ -6,10 +6,11 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class TeamService {
-    constructor(
-      @InjectPinoLogger(TeamService.name)
-      private readonly logger: PinoLogger,
-      private prisma: PrismaService) {}
+  constructor(
+    @InjectPinoLogger(TeamService.name)
+    private readonly logger: PinoLogger,
+    private prisma: PrismaService,
+  ) {}
 
   async create(id: string, name: string): Promise<Team> {
     this.logger.debug({ teamId: id, name }, 'Creating team');

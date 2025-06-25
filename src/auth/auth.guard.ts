@@ -10,7 +10,6 @@ import { Request } from 'express';
 import { IS_PUBLIC_KEY } from './auth.module';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { UserService } from '../user/user.service';
 import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
@@ -33,7 +32,6 @@ export class AuthGuard implements CanActivate {
     @InjectPinoLogger(AuthGuard.name) private readonly logger: PinoLogger,
     private jwtService: JwtService,
     private reflector: Reflector,
-    private userService: UserService,
     private configService: ConfigService,
   ) {}
 
@@ -67,7 +65,7 @@ export class AuthGuard implements CanActivate {
       this.logger.debug({ payload }, 'Token verified successfully.');
       request.user = payload;
 
-      return await this.checkUserRoles(context, payload.email);
+      return this.checkUserRoles(context, payload);
     } catch (error) {
       this.logger.error({ err: error }, 'Token verification failed');
 
@@ -140,10 +138,10 @@ export class AuthGuard implements CanActivate {
     return undefined;
   }
 
-  private async checkUserRoles(
+  private checkUserRoles(
     context: ExecutionContext,
-    userEmail: string,
-  ): Promise<boolean> {
+    userPayload: JwtPayload,
+  ): boolean {
     const requiredRoles = this.reflector.get<UserRole[]>(
       'roles',
       context.getHandler(),
@@ -152,26 +150,17 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
-    const user = await this.userService.findOne(userEmail);
-    if (!user) {
+    if (!requiredRoles.includes(userPayload.role)) {
       this.logger.warn(
-        { email: userEmail },
-        'User not found during role check after token verification.',
-      );
-      throw new UnauthorizedException('User not found');
-    }
-
-    if (!requiredRoles.includes(user.role)) {
-      this.logger.warn(
-        { email: userEmail, userRole: user.role, requiredRoles },
+        { email: userPayload.email, userRole: userPayload.role, requiredRoles },
         'User denied access due to insufficient role',
       );
       throw new ForbiddenException(
         'Insufficient permissions to access this resource',
       );
     }
-    this.logger.info(
-      { email: userEmail, role: user.role },
+    this.logger.debug(
+      { email: userPayload.email, role: userPayload.role },
       'User granted access based on role.',
     );
     return true;

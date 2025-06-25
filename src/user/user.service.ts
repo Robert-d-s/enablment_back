@@ -74,6 +74,17 @@ export class UserService {
       },
     });
 
+    // Note: When a user's role changes, their current JWT tokens will still contain the old role
+    // until they expire. Consider implementing one of these solutions:
+    // 1. Use shorter token expiration times (current implementation relies on this)
+    // 2. Implement token blacklisting/invalidation
+    // 3. Add a "tokenVersion" field to user and increment it on role changes
+    // 4. Store role changes with timestamps and validate against token issuance time
+    this.logger.warn(
+      { userId, newRole }, 
+      'User role updated - existing JWT tokens will retain old role until expiration'
+    );
+
     return {
       ...updatedUser,
       role: UserRole[updatedUser.role as keyof typeof UserRole],
