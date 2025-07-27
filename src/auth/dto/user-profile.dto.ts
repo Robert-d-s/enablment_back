@@ -1,26 +1,25 @@
-import { Exclude, Expose } from 'class-transformer';
-import { UserRole } from '@prisma/client';
-import { Field, ObjectType, Int } from '@nestjs/graphql';
+import { Field, ObjectType, Int, OmitType } from '@nestjs/graphql';
+import { User } from '../../user/user.model';
 
 @ObjectType()
-@Exclude()
-export class UserProfileDto {
-  @Field(() => Int)
-  @Expose()
-  id: number;
+export class UserProfileDto extends OmitType(User, ['teams'] as const) {
+  static fromUser(user: Pick<User, 'id' | 'email' | 'role'>): UserProfileDto {
+    const profile = new UserProfileDto();
+    profile.id = user.id;
+    profile.email = user.email;
+    profile.role = user.role;
+    return profile;
+  }
 
-  @Field()
-  @Expose()
-  email: string;
-
-  @Field(() => UserRole)
-  @Expose()
-  role: UserRole;
-  constructor(partial?: { id: number; email: string; role: UserRole }) {
-    if (partial) {
-      this.id = partial.id;
-      this.email = partial.email;
-      this.role = partial.role;
-    }
+  static fromJwtPayload(payload: {
+    id: number;
+    email: string;
+    role: any;
+  }): UserProfileDto {
+    const profile = new UserProfileDto();
+    profile.id = payload.id;
+    profile.email = payload.email;
+    profile.role = payload.role;
+    return profile;
   }
 }

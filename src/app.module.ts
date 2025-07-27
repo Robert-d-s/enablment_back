@@ -1,12 +1,12 @@
-import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CommonModule } from './common/common.module';
+import { Module } from '@nestjs/common';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { LoggerModule, PinoLogger } from 'nestjs-pino';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { WebhookModule } from './webhook/webhook.module';
@@ -85,10 +85,6 @@ registerEnumType(UserRole, {
         }),
       },
     }),
-    AuthModule,
-    UserModule,
-    ProjectModule,
-    IssueModule,
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
@@ -97,6 +93,10 @@ registerEnumType(UserRole, {
         res,
       }),
     }),
+    AuthModule,
+    UserModule,
+    ProjectModule,
+    IssueModule,
     WebhookModule,
     TeamModule,
     RateModule,

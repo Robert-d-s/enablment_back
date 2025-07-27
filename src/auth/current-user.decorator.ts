@@ -12,10 +12,7 @@ export const CurrentUser = createParamDecorator(
     if (!payload) {
       return undefined;
     }
-    return new UserProfileDto({
-      id: payload.id,
-      email: payload.email,
-      role: payload.role,
-    });
+
+    return UserProfileDto.fromJwtPayload(payload);
   },
 );

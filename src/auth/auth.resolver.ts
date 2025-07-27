@@ -82,11 +82,7 @@ export class AuthResolver {
 
     const result = {
       access_token: accessToken,
-      user: new UserProfileDto({
-        id: user.id,
-        email: user.email,
-        role: user.role as UserRole,
-      }),
+      user: UserProfileDto.fromUser(user),
     };
     this.logger.info({ user: result.user }, 'AuthResolver.login successful');
     return result;
@@ -172,11 +168,7 @@ export class AuthResolver {
     );
     return {
       access_token: accessToken,
-      user: new UserProfileDto({
-        email: createdUser.email,
-        id: createdUser.id,
-        role: createdUser.role as UserRole,
-      }),
+      user: UserProfileDto.fromUser(createdUser),
     };
   }
 
