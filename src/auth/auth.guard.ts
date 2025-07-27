@@ -14,6 +14,8 @@ import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
+import { UserProfileDto } from './dto/user-profile.dto';
+
 export interface JwtPayload {
   email: string;
   sub: number;
@@ -23,7 +25,7 @@ export interface JwtPayload {
 }
 
 interface RequestWithUser extends Request {
-  user?: JwtPayload;
+  user?: UserProfileDto; // Changed from JwtPayload to UserProfileDto
 }
 
 @Injectable()
@@ -63,7 +65,9 @@ export class AuthGuard implements CanActivate {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       });
       this.logger.debug({ payload }, 'Token verified successfully.');
-      request.user = payload;
+
+      // Convert JWT payload directly to UserProfileDto
+      request.user = UserProfileDto.fromJwtPayload(payload);
 
       return this.checkUserRoles(context, payload);
     } catch (error) {

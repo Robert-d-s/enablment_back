@@ -1,16 +1,8 @@
-import { Field, InputType } from '@nestjs/graphql';
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { InputType } from '@nestjs/graphql';
+import { BaseAuthInput } from './base-auth.input';
 
 @InputType()
-export class SignUpInput {
-  @Field()
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @Field()
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(6)
-  password: string;
+export class SignUpInput extends BaseAuthInput {
+  // Inherits email and password with validation from BaseAuthInput
+  // Future: Could add signup-specific fields like confirmPassword, firstName, etc.
 }

@@ -3,5 +3,5 @@ import { Field, ObjectType } from '@nestjs/graphql';
 @ObjectType()
 export class RefreshTokenResponse {
   @Field(() => String)
-  access_token: string;
+  accessToken: string; // Changed from access_token to camelCase
 }

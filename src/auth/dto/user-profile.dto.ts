@@ -1,4 +1,4 @@
-import { Field, ObjectType, Int, OmitType } from '@nestjs/graphql';
+import { ObjectType, OmitType } from '@nestjs/graphql';
 import { User } from '../../user/user.model';
 
 @ObjectType()

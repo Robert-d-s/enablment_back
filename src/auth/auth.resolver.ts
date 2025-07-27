@@ -81,7 +81,7 @@ export class AuthResolver {
     this.setRefreshTokenCookie(context, refreshToken);
 
     const result = {
-      access_token: accessToken,
+      accessToken: accessToken,
       user: UserProfileDto.fromUser(user),
     };
     this.logger.info({ user: result.user }, 'AuthResolver.login successful');
@@ -117,7 +117,7 @@ export class AuthResolver {
 
       this.setRefreshTokenCookie(context, newRefreshToken);
 
-      return { access_token: accessToken };
+      return { accessToken: accessToken };
     } catch (err) {
       this.logger.error({ err }, 'Refresh token validation or rotation failed');
       this.clearRefreshTokenCookie(context);
@@ -167,7 +167,7 @@ export class AuthResolver {
       'User signup successful',
     );
     return {
-      access_token: accessToken,
+      accessToken: accessToken,
       user: UserProfileDto.fromUser(createdUser),
     };
   }
