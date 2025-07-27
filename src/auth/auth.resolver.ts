@@ -5,13 +5,11 @@ import { SignInInput } from './dto/sign-in.input';
 import { SignUpInput } from './dto/sign-up.input';
 import { AuthResponse } from './dto/auth-response';
 import { UnauthorizedException } from '@nestjs/common';
-import { AuthGuard } from './auth.guard';
 import { LogoutResponse } from './dto/logout-response';
 import { GqlContext } from '../app.module';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenResponse } from './dto/refresh-token-response';
-import { UserRole } from '@prisma/client';
 import { Public } from './public.decorator';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 

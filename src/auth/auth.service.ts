@@ -10,9 +10,9 @@ import { UserService } from '../user/user.service';
 import { User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { TokenBlacklistService } from './token-blacklist.service';
+import { TokenService } from './token.service';
 
 @Injectable()
 export class AuthService {
@@ -21,55 +21,19 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
     private readonly tokenBlacklistService: TokenBlacklistService,
+    private readonly tokenService: TokenService,
   ) {}
-
-  private async generateTokens(
-    user: User,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
-    const accessTokenPayload = {
-      email: user.email,
-      sub: user.id,
-      id: user.id,
-      role: user.role,
-    };
-    const refreshTokenPayload = { sub: user.id };
-
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(accessTokenPayload, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn:
-          this.configService.get<string>('JWT_SECRET_EXPIRATION') ?? '15m',
-      }),
-      this.jwtService.signAsync(refreshTokenPayload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn:
-          this.configService.get<string>('JWT_REFRESH_EXPIRATION') ?? '7d',
-      }),
-    ]);
-
-    return { accessToken, refreshToken };
-  }
-
-  private async hashData(data: string): Promise<string> {
-    return bcrypt.hash(data, 10);
-  }
 
   private async updateRefreshTokenHash(
     userId: number,
     refreshToken: string | null,
   ): Promise<void> {
     const hashedRefreshToken = refreshToken
-      ? await this.hashData(refreshToken)
+      ? await this.userService.hashData(refreshToken)
       : null;
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        hashedRefreshToken: hashedRefreshToken,
-      },
-    });
+    await this.userService.updateRefreshTokenHash(userId, hashedRefreshToken);
     this.logger.debug(`Updated refresh token hash for user ${userId}.`);
   }
 
@@ -98,7 +62,8 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      const { accessToken, refreshToken } = await this.generateTokens(user);
+      const { accessToken, refreshToken } =
+        await this.tokenService.generateTokens(user);
       await this.updateRefreshTokenHash(user.id, refreshToken);
 
       const result = {
@@ -131,7 +96,7 @@ export class AuthService {
     rt: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     this.logger.debug(`Attempting token refresh for user ${userId}`);
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.userService.findById(userId);
 
     if (!user || !user.hashedRefreshToken) {
       this.logger.warn(
@@ -153,7 +118,7 @@ export class AuthService {
     );
 
     const { accessToken, refreshToken: newRefreshToken } =
-      await this.generateTokens(user);
+      await this.tokenService.generateTokens(user);
 
     await this.updateRefreshTokenHash(user.id, newRefreshToken);
     this.logger.debug(
@@ -173,15 +138,7 @@ export class AuthService {
     }
 
     // Clear refresh token from database
-    await this.prisma.user.updateMany({
-      where: {
-        id: userId,
-        hashedRefreshToken: { not: null },
-      },
-      data: {
-        hashedRefreshToken: null,
-      },
-    });
+    await this.userService.clearRefreshToken(userId);
     return true;
   }
 
