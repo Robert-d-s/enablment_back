@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthResolver } from './auth.resolver';
 import { AuthGuard } from './auth.guard';
 import { TokenBlacklistService } from './token-blacklist.service';
+import { JwtCacheService } from './jwt-cache.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
@@ -21,7 +22,19 @@ import { PrismaModule } from 'src/prisma/prisma.module';
       }),
     }),
   ],
-  providers: [AuthService, AuthResolver, AuthGuard, TokenBlacklistService],
-  exports: [AuthService, JwtModule, AuthGuard, TokenBlacklistService],
+  providers: [
+    AuthService,
+    AuthResolver,
+    AuthGuard,
+    TokenBlacklistService,
+    JwtCacheService,
+  ],
+  exports: [
+    AuthService,
+    JwtModule,
+    AuthGuard,
+    TokenBlacklistService,
+    JwtCacheService,
+  ],
 })
 export class AuthModule {}

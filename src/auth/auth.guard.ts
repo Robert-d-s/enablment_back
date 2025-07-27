@@ -14,6 +14,7 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { TokenBlacklistService } from './token-blacklist.service';
+import { JwtCacheService } from './jwt-cache.service';
 
 export interface JwtPayload {
   email: string;
@@ -35,6 +36,7 @@ export class AuthGuard implements CanActivate {
     private reflector: Reflector,
     private configService: ConfigService,
     private tokenBlacklistService: TokenBlacklistService,
+    private jwtCacheService: JwtCacheService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -50,6 +52,22 @@ export class AuthGuard implements CanActivate {
     if (!token) {
       this.logger.warn('No authentication token found.');
       throw new UnauthorizedException('No authentication token found');
+    }
+
+    // Request-level JWT caching: Avoid redundant JWT verification when the same
+    // token is used multiple times within a single request (e.g., GraphQL field resolvers)
+    const cachedResult = this.jwtCacheService.getCachedVerification(
+      request,
+      token,
+    );
+    if (cachedResult) {
+      const cacheStats = this.jwtCacheService.getCacheStats(request);
+      this.logger.debug(
+        { cacheAge: cacheStats.cacheAge },
+        'Using cached JWT verification result',
+      );
+      request.user = cachedResult.user;
+      return this.checkUserRoles(context, cachedResult.payload);
     }
 
     try {
@@ -71,7 +89,11 @@ export class AuthGuard implements CanActivate {
       }
 
       // Convert JWT payload directly to UserProfileDto
-      request.user = UserProfileDto.fromJwtPayload(payload);
+      const user = UserProfileDto.fromJwtPayload(payload);
+      request.user = user;
+
+      // Cache the verification result for this request
+      this.jwtCacheService.setCachedVerification(request, token, payload, user);
 
       return this.checkUserRoles(context, payload);
     } catch (error) {
