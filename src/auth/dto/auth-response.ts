@@ -4,7 +4,7 @@ import { UserProfileDto } from './user-profile.dto';
 @ObjectType()
 export class AuthResponse {
   @Field(() => String)
-  accessToken: string; // Changed from access_token to camelCase
+  accessToken: string;
 
   @Field(() => UserProfileDto, { nullable: true })
   user?: UserProfileDto;

@@ -8,6 +8,7 @@ import {
   Parent,
   Field,
   InputType,
+  Context,
 } from '@nestjs/graphql';
 import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import { User } from './user.model';
@@ -19,11 +20,11 @@ import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
 import { ProjectLoader } from '../loaders/project.loader';
 import { Project } from '../project/project.model';
-import { CurrentUser } from '../auth/current-user.decorator';
 import { UserProfileDto } from '../auth/dto/user-profile.dto';
 import { IsOptional, IsInt, IsString, IsEnum } from 'class-validator';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { UpdateUserRoleInput, UserTeamInput } from './user.input';
+import { GqlContext } from '../app.module';
 
 @InputType()
 export class UserQueryArgs {
@@ -60,9 +61,8 @@ export class UserResolver {
 
   @Query(() => [Project])
   @UseGuards(AuthGuard)
-  async myProjects(
-    @CurrentUser() currentUser: UserProfileDto,
-  ): Promise<Project[]> {
+  async myProjects(@Context() context: GqlContext): Promise<Project[]> {
+    const currentUser = context.req.user as UserProfileDto;
     this.logger.debug({ userId: currentUser.id }, 'Executing myProjects query');
     if (!currentUser) {
       throw new UnauthorizedException();

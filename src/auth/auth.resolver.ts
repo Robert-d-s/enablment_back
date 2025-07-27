@@ -6,10 +6,8 @@ import { SignUpInput } from './dto/sign-up.input';
 import { AuthResponse } from './dto/auth-response';
 import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
-import { CurrentUser } from './current-user.decorator';
 import { LogoutResponse } from './dto/logout-response';
 import { GqlContext } from '../app.module';
-import { Public } from './public.decorator';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenResponse } from './dto/refresh-token-response';
@@ -88,7 +86,6 @@ export class AuthResolver {
     return result;
   }
 
-  @Public()
   @Mutation(() => RefreshTokenResponse)
   async refreshToken(
     @Context() context: GqlContext,
@@ -127,10 +124,8 @@ export class AuthResolver {
 
   @Mutation(() => LogoutResponse)
   @UseGuards(AuthGuard)
-  async logout(
-    @CurrentUser() user: UserProfileDto,
-    @Context() context: GqlContext,
-  ): Promise<LogoutResponse> {
+  async logout(@Context() context: GqlContext): Promise<LogoutResponse> {
+    const user = context.req.user as UserProfileDto;
     try {
       await this.authService.logout(user.id);
     } catch (error) {
@@ -174,7 +169,8 @@ export class AuthResolver {
 
   @Query(() => UserProfileDto)
   @UseGuards(AuthGuard)
-  async me(@CurrentUser() user: UserProfileDto): Promise<UserProfileDto> {
+  async me(@Context() context: GqlContext): Promise<UserProfileDto> {
+    const user = context.req.user as UserProfileDto;
     this.logger.debug({ userId: user.id }, 'Executing "me" query');
     return user;
   }

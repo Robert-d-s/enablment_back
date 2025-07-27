@@ -7,13 +7,11 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
-import { IS_PUBLIC_KEY } from './auth.module';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
-
 import { UserProfileDto } from './dto/user-profile.dto';
 
 export interface JwtPayload {
@@ -38,15 +36,7 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (isPublic) {
-      this.logger.debug(`Route is public, skipping auth.`);
-      return true;
-    }
-    this.logger.debug(`Route is NOT public, proceeding with auth.`);
+    this.logger.debug('AuthGuard: Proceeding with authentication check');
 
     const request = this.getRequest(context);
     if (!request) {

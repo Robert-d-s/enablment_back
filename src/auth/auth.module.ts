@@ -8,8 +8,6 @@ import { AuthGuard } from './auth.guard';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 
-export const IS_PUBLIC_KEY = 'isPublic';
-
 @Module({
   imports: [
     ConfigModule,
