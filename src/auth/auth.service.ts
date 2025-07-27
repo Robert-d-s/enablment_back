@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { TokenBlacklistService } from './token-blacklist.service';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +22,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   private async generateTokens(
@@ -161,8 +163,16 @@ export class AuthService {
     return { accessToken, refreshToken: newRefreshToken };
   }
 
-  async logout(userId: number): Promise<boolean> {
+  async logout(userId: number, accessToken?: string): Promise<boolean> {
     this.logger.info(`Logging out user ${userId}. Clearing token hash.`);
+
+    // Blacklist the current access token if provided
+    if (accessToken) {
+      this.tokenBlacklistService.blacklistToken(accessToken);
+      this.logger.debug({ userId }, 'Access token blacklisted');
+    }
+
+    // Clear refresh token from database
     await this.prisma.user.updateMany({
       where: {
         id: userId,

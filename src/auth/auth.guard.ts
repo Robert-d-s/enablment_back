@@ -13,6 +13,7 @@ import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { UserProfileDto } from './dto/user-profile.dto';
+import { TokenBlacklistService } from './token-blacklist.service';
 
 export interface JwtPayload {
   email: string;
@@ -33,6 +34,7 @@ export class AuthGuard implements CanActivate {
     private jwtService: JwtService,
     private reflector: Reflector,
     private configService: ConfigService,
+    private tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -55,6 +57,18 @@ export class AuthGuard implements CanActivate {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       });
       this.logger.debug({ payload }, 'Token verified successfully.');
+
+      // Check if token is blacklisted
+      if (this.tokenBlacklistService.isTokenBlacklisted(token)) {
+        this.logger.warn(
+          { userId: payload.id },
+          'Attempted access with blacklisted token',
+        );
+        throw new UnauthorizedException({
+          message: 'Token has been revoked',
+          code: 'TOKEN_REVOKED',
+        });
+      }
 
       // Convert JWT payload directly to UserProfileDto
       request.user = UserProfileDto.fromJwtPayload(payload);
@@ -123,12 +137,7 @@ export class AuthGuard implements CanActivate {
       }
     }
 
-    if (request.cookies && request.cookies['auth_token']) {
-      this.logger.warn('Token extracted from "auth_token" cookie (fallback).');
-      return request.cookies['auth_token'];
-    }
-
-    this.logger.debug('No token found in header or cookies.');
+    this.logger.debug('No token found in Authorization header.');
     return undefined;
   }
 

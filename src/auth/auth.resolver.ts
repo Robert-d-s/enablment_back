@@ -122,12 +122,23 @@ export class AuthResolver {
     }
   }
 
+  private extractTokenFromRequest(context: GqlContext): string | undefined {
+    const authHeader = context.req?.headers?.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return authHeader.substring(7);
+    }
+
+    return undefined;
+  }
+
   @Mutation(() => LogoutResponse)
   @UseGuards(AuthGuard)
   async logout(@Context() context: GqlContext): Promise<LogoutResponse> {
     const user = context.req.user as UserProfileDto;
+    const token = this.extractTokenFromRequest(context);
+
     try {
-      await this.authService.logout(user.id);
+      await this.authService.logout(user.id, token);
     } catch (error) {
       this.logger.error(
         { err: error, userId: user.id },
