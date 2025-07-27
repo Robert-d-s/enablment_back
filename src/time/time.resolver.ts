@@ -6,12 +6,9 @@ import {
   TimeInputUpdate,
   DeleteTimeInput,
 } from './time.input';
-import { UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Resolver(() => Time)
-@UseGuards(AuthGuard)
 export class TimeResolver {
   constructor(
     @InjectPinoLogger(TimeResolver.name)

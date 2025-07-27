@@ -2,14 +2,11 @@ import { Args, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { RateService } from './rate.service';
 import { Rate, DeleteRateResponse } from './rate.model';
 import { RateInputCreate, DeleteRateInput } from './rate.input';
-import { UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Resolver(() => Rate)
-@UseGuards(AuthGuard)
 export class RateResolver {
   @InjectPinoLogger(RateResolver.name)
   private readonly logger: PinoLogger;

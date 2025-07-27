@@ -24,6 +24,8 @@ import { Request, Response } from 'express';
 import { User } from './user/user.model';
 import { registerEnumType } from '@nestjs/graphql';
 import { UserRole } from '@prisma/client';
+import { APP_GUARD } from '@nestjs/core';
+import { AuthGuard } from './auth/auth.guard';
 
 export interface GqlContext {
   req: Request & { user?: User };
@@ -108,6 +110,12 @@ registerEnumType(UserRole, {
     PrismaModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
 })
 export class AppModule {}

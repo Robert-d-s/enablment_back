@@ -4,7 +4,7 @@ import { UserProfileDto } from './dto/user-profile.dto';
 import { SignInInput } from './dto/sign-in.input';
 import { SignUpInput } from './dto/sign-up.input';
 import { AuthResponse } from './dto/auth-response';
-import { UseGuards, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
 import { LogoutResponse } from './dto/logout-response';
 import { GqlContext } from '../app.module';
@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenResponse } from './dto/refresh-token-response';
 import { UserRole } from '@prisma/client';
+import { Public } from './public.decorator';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Resolver()
@@ -64,6 +65,7 @@ export class AuthResolver {
     this.logger.debug('Refresh token cookie cleared.');
   }
 
+  @Public()
   @Mutation(() => AuthResponse)
   async login(
     @Context() context: GqlContext,
@@ -86,6 +88,7 @@ export class AuthResolver {
     return result;
   }
 
+  @Public()
   @Mutation(() => RefreshTokenResponse)
   async refreshToken(
     @Context() context: GqlContext,
@@ -132,7 +135,6 @@ export class AuthResolver {
   }
 
   @Mutation(() => LogoutResponse)
-  @UseGuards(AuthGuard)
   async logout(@Context() context: GqlContext): Promise<LogoutResponse> {
     const user = context.req.user as UserProfileDto;
     const token = this.extractTokenFromRequest(context);
@@ -151,6 +153,7 @@ export class AuthResolver {
     return { success: true };
   }
 
+  @Public()
   @Mutation(() => AuthResponse)
   async signup(
     @Context() context: GqlContext,
@@ -179,7 +182,6 @@ export class AuthResolver {
   }
 
   @Query(() => UserProfileDto)
-  @UseGuards(AuthGuard)
   async me(@Context() context: GqlContext): Promise<UserProfileDto> {
     const user = context.req.user as UserProfileDto;
     this.logger.debug({ userId: user.id }, 'Executing "me" query');

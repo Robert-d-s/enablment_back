@@ -15,6 +15,7 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtCacheService } from './jwt-cache.service';
+import { IS_PUBLIC_KEY } from './public.decorator';
 
 export interface JwtPayload {
   email: string;
@@ -25,7 +26,7 @@ export interface JwtPayload {
 }
 
 interface RequestWithUser extends Request {
-  user?: UserProfileDto; // Changed from JwtPayload to UserProfileDto
+  user?: UserProfileDto;
 }
 
 @Injectable()
@@ -42,6 +43,18 @@ export class AuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     this.logger.debug('AuthGuard: Proceeding with authentication check');
 
+    // Check if the endpoint is marked as public
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      this.logger.debug(
+        'AuthGuard: Endpoint is public, skipping authentication',
+      );
+      return true;
+    }
+
     const request = this.getRequest(context);
     if (!request) {
       this.logger.error('No request object found in context.');
@@ -54,8 +67,6 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('No authentication token found');
     }
 
-    // Request-level JWT caching: Avoid redundant JWT verification when the same
-    // token is used multiple times within a single request (e.g., GraphQL field resolvers)
     const cachedResult = this.jwtCacheService.getCachedVerification(
       request,
       token,
@@ -76,7 +87,6 @@ export class AuthGuard implements CanActivate {
       });
       this.logger.debug({ payload }, 'Token verified successfully.');
 
-      // Check if token is blacklisted
       if (this.tokenBlacklistService.isTokenBlacklisted(token)) {
         this.logger.warn(
           { userId: payload.id },

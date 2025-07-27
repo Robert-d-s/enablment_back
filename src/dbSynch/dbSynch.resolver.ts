@@ -1,8 +1,6 @@
 import { Mutation, Resolver } from '@nestjs/graphql';
 import { DatabaseSyncService } from './dbSynch.service';
 import { SyncResponse } from './dto/sync-response';
-import { UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '@prisma/client';
 
@@ -11,7 +9,6 @@ export class DatabaseSyncResolver {
   constructor(private readonly databaseSyncService: DatabaseSyncService) {}
 
   @Mutation(() => SyncResponse)
-  @UseGuards(AuthGuard)
   @Roles(UserRole.ADMIN)
   async synchronizeDatabase(): Promise<SyncResponse> {
     try {

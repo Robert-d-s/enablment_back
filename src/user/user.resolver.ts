@@ -10,11 +10,11 @@ import {
   InputType,
   Context,
 } from '@nestjs/graphql';
-import { UseGuards, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
-import { AuthGuard } from '../auth/auth.guard';
+import { Public } from '../auth/public.decorator';
 import { UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
@@ -60,7 +60,6 @@ export class UserResolver {
   ) {}
 
   @Query(() => [Project])
-  @UseGuards(AuthGuard)
   async myProjects(@Context() context: GqlContext): Promise<Project[]> {
     const currentUser = context.req.user as UserProfileDto;
     this.logger.debug({ userId: currentUser.id }, 'Executing myProjects query');
@@ -98,7 +97,6 @@ export class UserResolver {
 
   @Query(() => Int)
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
-  @UseGuards(AuthGuard)
   async usersCount(
     @Args('search', { type: () => String, nullable: true }) search?: string,
     @Args('role', { type: () => UserRole, nullable: true }) role?: UserRole,
@@ -112,7 +110,6 @@ export class UserResolver {
 
   @Query(() => [User])
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
-  @UseGuards(AuthGuard)
   async users(@Args('args') args: UserQueryArgs): Promise<User[]> {
     this.logger.debug(
       { queryArgs: args },
@@ -139,7 +136,6 @@ export class UserResolver {
 
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
-  @UseGuards(AuthGuard)
   async updateUserRole(
     @Args('input') input: UpdateUserRoleInput,
   ): Promise<User> {
@@ -156,7 +152,6 @@ export class UserResolver {
 
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
-  @UseGuards(AuthGuard)
   async addUserToTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing addUserToTeam mutation');
     const user = await this.userService.addUserToTeam(
@@ -172,7 +167,6 @@ export class UserResolver {
 
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
-  @UseGuards(AuthGuard)
   async removeUserFromTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing removeUserFromTeam mutation');
     try {
