@@ -61,7 +61,7 @@ type UserProfileDto {
 }
 
 type AuthResponse {
-  access_token: String!
+  accessToken: String!
   user: UserProfileDto
 }
 
@@ -70,7 +70,7 @@ type LogoutResponse {
 }
 
 type RefreshTokenResponse {
-  access_token: String!
+  accessToken: String!
 }
 
 type SyncResponse {
@@ -138,12 +138,13 @@ type RateDetail {
 
 type Query {
   me: UserProfileDto!
-  myProjects: [Project!]!
   usersCount(search: String, role: UserRole): Int!
   users(args: UserQueryArgs!): [User!]!
+  myProjects: [Project!]!
   projects: [Project!]!
   issues: [Issue!]!
   getAllSimpleTeams: [SimpleTeamDTO!]!
+  getTeam(input: GetTeamInput!): Team!
   rates(teamId: String!): [Rate!]!
   times(projectId: String!): [Time!]!
   getTotalTimeSpent(userId: Float!, projectId: String!, startDate: String!, endDate: String!): Float!
@@ -156,6 +157,11 @@ input UserQueryArgs {
   pageSize: Int = 10
   search: String
   role: UserRole
+}
+
+input GetTeamInput {
+  """Team ID to retrieve"""
+  id: String!
 }
 
 input InvoiceInput {
@@ -174,10 +180,10 @@ type Mutation {
   refreshToken: RefreshTokenResponse!
   logout: LogoutResponse!
   signup(input: SignUpInput!): AuthResponse!
-  updateUserRole(input: UpdateUserRoleInput!): User!
   addUserToTeam(input: UserTeamInput!): User!
   removeUserFromTeam(input: UserTeamInput!): User!
-  createTeam(id: String!, name: String!): Team!
+  updateUserRole(input: UpdateUserRoleInput!): User!
+  createTeam(input: CreateTeamInput!): Team!
   synchronizeDatabase: SyncResponse!
   createRate(rateInputCreate: RateInputCreate!): Rate!
   deleteRate(input: DeleteRateInput!): DeleteRateResponse!
@@ -196,14 +202,24 @@ input SignUpInput {
   password: String!
 }
 
+input UserTeamInput {
+  userId: Int!
+  teamId: String!
+}
+
 input UpdateUserRoleInput {
   userId: Int!
   newRole: UserRole!
 }
 
-input UserTeamInput {
-  userId: Int!
-  teamId: String!
+input CreateTeamInput {
+  """
+  Unique team identifier (3-50 characters, alphanumeric, hyphens, underscores)
+  """
+  id: String!
+
+  """Team display name (2-100 characters)"""
+  name: String!
 }
 
 input RateInputCreate {

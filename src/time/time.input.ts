@@ -1,4 +1,3 @@
-// src/time/time.input.ts
 import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   IsDate,
@@ -14,7 +13,6 @@ import { Type } from 'class-transformer';
 @InputType()
 export class TimeInputCreate {
   @Field(() => Date, {
-    // For GraphQL
     nullable: false,
     description: 'Start time',
   })
