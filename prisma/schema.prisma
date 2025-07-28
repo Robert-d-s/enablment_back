@@ -13,6 +13,7 @@ model User {
   password String
 
   role UserRole @default(PENDING)
+  tokenVersion Int @default(1)
 
   times Time[]
   teams UserTeam[]

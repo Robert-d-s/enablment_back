@@ -12,24 +12,27 @@ export class UserRoleService {
 
   async updateUserRole(userId: number, newRole: UserRole): Promise<User> {
     this.logger.info({ userId, newRole }, 'Updating user role');
+
     const updatedUser = await this.prisma.user.update({
       where: {
         id: userId,
       },
       data: {
         role: newRole,
+        // Increment token version to invalidate all existing JWT tokens
+        tokenVersion: {
+          increment: 1,
+        },
       },
     });
 
-    // Note: When a user's role changes, their current JWT tokens will still contain the old role
-    // until they expire. Consider implementing one of these solutions:
-    // 1. Use shorter token expiration times (current implementation relies on this)
-    // 2. Implement token blacklisting/invalidation
-    // 3. Add a "tokenVersion" field to user and increment it on role changes
-    // 4. Store role changes with timestamps and validate against token issuance time
-    this.logger.warn(
-      { userId, newRole },
-      'User role updated - existing JWT tokens will retain old role until expiration',
+    this.logger.info(
+      {
+        userId,
+        newRole,
+        newTokenVersion: updatedUser.tokenVersion,
+      },
+      'User role updated and token version incremented - all existing tokens invalidated',
     );
 
     return updatedUser;
@@ -75,5 +78,35 @@ export class UserRoleService {
       role: user.role,
       teamIds: user.teams.map((t) => t.teamId),
     };
+  }
+
+  /**
+   * Emergency method to invalidate all tokens for a user
+   * Useful for security incidents or when user account is compromised
+   */
+  async invalidateAllUserTokens(userId: number): Promise<User> {
+    this.logger.warn(
+      { userId },
+      'Invalidating all tokens for user - emergency action',
+    );
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        tokenVersion: {
+          increment: 1,
+        },
+      },
+    });
+
+    this.logger.info(
+      {
+        userId,
+        newTokenVersion: updatedUser.tokenVersion,
+      },
+      'All user tokens invalidated successfully',
+    );
+
+    return updatedUser;
   }
 }

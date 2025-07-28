@@ -16,12 +16,14 @@ import { UserProfileDto } from './dto/user-profile.dto';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtCacheService } from './jwt-cache.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface JwtPayload {
   email: string;
   sub: number;
   id: number;
   role: UserRole;
+  tokenVersion: number;
   [key: string]: unknown;
 }
 
@@ -38,6 +40,7 @@ export class AuthGuard implements CanActivate {
     private configService: ConfigService,
     private tokenBlacklistService: TokenBlacklistService,
     private jwtCacheService: JwtCacheService,
+    private prismaService: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -95,6 +98,54 @@ export class AuthGuard implements CanActivate {
         throw new UnauthorizedException({
           message: 'Token has been revoked',
           code: 'TOKEN_REVOKED',
+        });
+      }
+
+      // Validate token version against current user's token version
+      const currentUser = await this.prismaService.user.findUnique({
+        where: { id: payload.id },
+        select: { tokenVersion: true, role: true },
+      });
+
+      if (!currentUser) {
+        this.logger.warn(
+          { userId: payload.id },
+          'Token contains non-existent user ID',
+        );
+        throw new UnauthorizedException({
+          message: 'Invalid token - user not found',
+          code: 'USER_NOT_FOUND',
+        });
+      }
+
+      if (currentUser.tokenVersion !== payload.tokenVersion) {
+        this.logger.warn(
+          {
+            userId: payload.id,
+            tokenVersion: payload.tokenVersion,
+            currentVersion: currentUser.tokenVersion,
+          },
+          'Token version mismatch - token invalidated due to role change',
+        );
+        throw new UnauthorizedException({
+          message: 'Token has been invalidated due to role change',
+          code: 'TOKEN_VERSION_MISMATCH',
+        });
+      }
+
+      // Additional check: verify role hasn't changed (extra security)
+      if (currentUser.role !== payload.role) {
+        this.logger.warn(
+          {
+            userId: payload.id,
+            tokenRole: payload.role,
+            currentRole: currentUser.role,
+          },
+          'Role mismatch detected - token role differs from current user role',
+        );
+        throw new UnauthorizedException({
+          message: 'Token role is outdated',
+          code: 'ROLE_MISMATCH',
         });
       }
 
