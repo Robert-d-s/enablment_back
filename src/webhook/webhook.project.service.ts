@@ -5,11 +5,18 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class WebhookProjectService {
-  constructor(@InjectPinoLogger(WebhookProjectService.name) private readonly logger: PinoLogger,private projectService: ProjectService) {}
+  constructor(
+    @InjectPinoLogger(WebhookProjectService.name)
+    private readonly logger: PinoLogger,
+    private projectService: ProjectService,
+  ) {}
 
   async handleProject(json: LinearWebhookBody) {
     if (json.type !== 'Project') {
-      this.logger.error({ type: json.type }, 'Expected project data, received different type');
+      this.logger.error(
+        { type: json.type },
+        'Expected project data, received different type',
+      );
       return;
     }
     const action = json.action;
@@ -17,24 +24,33 @@ export class WebhookProjectService {
     this.logger.info({ projectId, action }, 'Handling project webhook');
 
     try {
-        switch (action) {
-          case 'create':
-            await this.create(json.data); 
-            break;
-          case 'remove':
-            await this.remove(json.data); 
-            break;
-          case 'update':
-            await this.update(json.data); 
-            break;
-          default:
-          this.logger.warn({ action }, 'Unhandled project webhook action from Linear');
-            break;
-        }
-         this.logger.info({ projectId, action }, 'Successfully handled project webhook');
+      switch (action) {
+        case 'create':
+          await this.create(json.data);
+          break;
+        case 'remove':
+          await this.remove(json.data);
+          break;
+        case 'update':
+          await this.update(json.data);
+          break;
+        default:
+          this.logger.warn(
+            { action },
+            'Unhandled project webhook action from Linear',
+          );
+          break;
+      }
+      this.logger.info(
+        { projectId, action },
+        'Successfully handled project webhook',
+      );
     } catch (error) {
-        this.logger.error({ err: error, projectId, action }, 'Error handling project webhook');
-        throw error;
+      this.logger.error(
+        { err: error, projectId, action },
+        'Error handling project webhook',
+      );
+      throw error;
     }
   }
 

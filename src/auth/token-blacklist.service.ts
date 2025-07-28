@@ -11,9 +11,12 @@ export class TokenBlacklistService {
     private readonly logger: PinoLogger,
   ) {
     // Clean up expired tokens every hour
-    this.blacklistCleanupInterval = setInterval(() => {
-      this.cleanupExpiredTokens();
-    }, 60 * 60 * 1000);
+    this.blacklistCleanupInterval = setInterval(
+      () => {
+        this.cleanupExpiredTokens();
+      },
+      60 * 60 * 1000,
+    );
   }
 
   /**
@@ -38,8 +41,11 @@ export class TokenBlacklistService {
   blacklistUserTokens(userId: number): void {
     // For a more robust solution, you'd store user-specific token IDs
     // For now, we'll rely on short token expiration times
-    this.logger.info({ userId }, 'User tokens should be considered invalid due to role change');
-    
+    this.logger.info(
+      { userId },
+      'User tokens should be considered invalid due to role change',
+    );
+
     // Note: In a production environment, you'd want to:
     // 1. Store user tokens in Redis with user ID mapping
     // 2. Invalidate all tokens for that user

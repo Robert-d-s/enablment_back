@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Project, Team } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
-import { PinoLogger, InjectPinoLogger } from 'nestjs-pino'; 
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class ProjectService {
@@ -72,7 +72,10 @@ export class ProjectService {
       this.logger.info({ projectId: id }, 'Successfully removed project');
       return deleted;
     } catch (error) {
-      this.logger.error({ err: error, projectId: id }, 'Error removing project');
+      this.logger.error(
+        { err: error, projectId: id },
+        'Error removing project',
+      );
       return null;
     }
   }

@@ -31,9 +31,9 @@ export class RateInputCreate {
 
 @InputType()
 export class DeleteRateInput {
-    @Field(() => Int)
-    @IsInt()
-    @IsNotEmpty()
-    @Min(1)
-    rateId: number;
+  @Field(() => Int)
+  @IsInt()
+  @IsNotEmpty()
+  @Min(1)
+  rateId: number;
 }

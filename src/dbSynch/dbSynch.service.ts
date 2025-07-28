@@ -211,7 +211,10 @@ export class DatabaseSyncService {
       }
 
       for (const teamId of teamsToDelete) {
-        this.logger.warn({ teamId }, 'Team no longer exists in Linear (will be handled in cleanup)');
+        this.logger.warn(
+          { teamId },
+          'Team no longer exists in Linear (will be handled in cleanup)',
+        );
       }
       this.logger.info('Team synchronization step completed.');
     } catch (error) {
@@ -296,7 +299,10 @@ export class DatabaseSyncService {
             });
 
           if (!data.team || !data.team.projects) {
-            this.logger.warn({ teamId: team.id }, 'No projects data returned for team. Skipping page.');
+            this.logger.warn(
+              { teamId: team.id },
+              'No projects data returned for team. Skipping page.',
+            );
             hasNextPage = false;
             continue;
           }
@@ -326,7 +332,7 @@ export class DatabaseSyncService {
               updatedAt: project.updatedAt,
               startDate: project.startDate || null,
               targetDate: project.targetDate || null,
-              teamId: team.id, 
+              teamId: team.id,
             };
 
             await tx.project.upsert({
@@ -334,24 +340,26 @@ export class DatabaseSyncService {
               update: projectData,
               create: projectData,
             });
-            existingProjectIds.delete(project.id); 
+            existingProjectIds.delete(project.id);
           }
 
           hasNextPage = pageInfo.hasNextPage;
           endCursor = pageInfo.endCursor;
 
           if (hasNextPage) {
-            await new Promise((resolve) => setTimeout(resolve, 500)); 
+            await new Promise((resolve) => setTimeout(resolve, 500));
           }
         } catch (error) {
-          this.logger.error({ err: error, teamId: team.id }, 'Error synchronizing projects for team');
-          throw error; 
+          this.logger.error(
+            { err: error, teamId: team.id },
+            'Error synchronizing projects for team',
+          );
+          throw error;
         }
       }
     }
     this.logger.info('Project synchronization step completed.');
   }
-
 
   private async synchronizeIssues(tx: any): Promise<void> {
     this.logger.info('Fetching issues from Linear');
@@ -419,7 +427,9 @@ export class DatabaseSyncService {
         const issues = data.issues.nodes;
 
         processedCount += issues.length;
-        this.logger.debug(`Processing ${issues.length} issues (total: ${processedCount}, cursor: ${endCursor})`);
+        this.logger.debug(
+          `Processing ${issues.length} issues (total: ${processedCount}, cursor: ${endCursor})`,
+        );
 
         hasNextPage = pageInfo.hasNextPage;
         endCursor = pageInfo.endCursor;
@@ -449,7 +459,7 @@ export class DatabaseSyncService {
                 teamName: issue.team.name,
                 dueDate: issue.dueDate || null,
               };
-                await tx.issue.upsert({
+              await tx.issue.upsert({
                 where: { id: issue.id },
                 update: issueData,
                 create: issueData,
@@ -459,7 +469,7 @@ export class DatabaseSyncService {
                 await tx.label.deleteMany({
                   where: { issueId: issue.id },
                 });
-               for (const label of issue.labels.nodes) {
+                for (const label of issue.labels.nodes) {
                   await tx.label.create({
                     data: {
                       id: label.id,
@@ -472,7 +482,10 @@ export class DatabaseSyncService {
                 }
               }
             } else {
-              this.logger.warn({ issueId: issue.id, projectId: issue.project.id }, 'Skipping issue: Project not found');
+              this.logger.warn(
+                { issueId: issue.id, projectId: issue.project.id },
+                'Skipping issue: Project not found',
+              );
             }
           }
         }
@@ -517,7 +530,10 @@ export class DatabaseSyncService {
     });
 
     if (orphanedProjects.length > 0) {
-      this.logger.warn({ count: orphanedProjects.length }, 'Deleting orphaned projects');
+      this.logger.warn(
+        { count: orphanedProjects.length },
+        'Deleting orphaned projects',
+      );
       for (const project of orphanedProjects) {
         await tx.project.delete({ where: { id: project.id } });
       }
@@ -539,7 +555,11 @@ export class DatabaseSyncService {
         await tx.team.delete({ where: { id: team.id } });
       } else {
         this.logger.warn(
-          { teamId: team.id, projectCount: team.projects.length, rateCount: team.rates.length },
+          {
+            teamId: team.id,
+            projectCount: team.projects.length,
+            rateCount: team.rates.length,
+          },
           'Orphaned team has local data. Keeping it.',
         );
       }
@@ -558,7 +578,10 @@ export class DatabaseSyncService {
     });
 
     if (orphanedRates.length > 0) {
-      this.logger.warn({ count: orphanedRates.length }, 'Deleting orphaned rates');
+      this.logger.warn(
+        { count: orphanedRates.length },
+        'Deleting orphaned rates',
+      );
       for (const rate of orphanedRates) {
         await tx.rate.delete({ where: { id: rate.id } });
       }

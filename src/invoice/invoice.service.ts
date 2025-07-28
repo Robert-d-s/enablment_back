@@ -21,8 +21,12 @@ export class InvoiceService {
     endDate: Date,
   ): Promise<Invoice> {
     this.logger.info(
-      { projectId, startDate: startDate.toISOString(), endDate: endDate.toISOString() },
-      `Generating invoice for Project`
+      {
+        projectId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      },
+      `Generating invoice for Project`,
     );
     const projectWithTeam = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -34,7 +38,10 @@ export class InvoiceService {
     });
 
     if (!projectWithTeam || !projectWithTeam.team) {
-      this.logger.warn({ projectId }, 'Project or its associated Team not found.');
+      this.logger.warn(
+        { projectId },
+        'Project or its associated Team not found.',
+      );
       throw new NotFoundException(
         `Project with ID ${projectId} or its Team not found`,
       );
@@ -59,7 +66,10 @@ export class InvoiceService {
       });
 
       if (!rateAggregations || rateAggregations.length === 0) {
-        this.logger.info({ projectId, startDate, endDate }, 'No time entries with rates found for Project in the period.');
+        this.logger.info(
+          { projectId, startDate, endDate },
+          'No time entries with rates found for Project in the period.',
+        );
         return {
           projectId: project.id,
           projectName: project.name,
@@ -90,7 +100,10 @@ export class InvoiceService {
         const totalMs = agg._sum.totalElapsedTime ?? 0;
 
         if (!rateInfo) {
-          this.logger.warn({ rateId }, 'Rate info not found, skipping aggregation.');
+          this.logger.warn(
+            { rateId },
+            'Rate info not found, skipping aggregation.',
+          );
           continue;
         }
 
@@ -132,7 +145,10 @@ export class InvoiceService {
         __typename: 'Invoice',
       };
     } catch (error) {
-      this.logger.error({ err: error, projectId }, 'Failed to generate invoice');
+      this.logger.error(
+        { err: error, projectId },
+        'Failed to generate invoice',
+      );
       if (error instanceof NotFoundException) {
         throw error;
       }

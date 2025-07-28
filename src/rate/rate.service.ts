@@ -12,7 +12,8 @@ export class RateService {
   constructor(
     @InjectPinoLogger(RateService.name)
     private readonly logger: PinoLogger,
-    private prisma: PrismaService) {}
+    private prisma: PrismaService,
+  ) {}
 
   all(teamId: string): Promise<Rate[]> {
     this.logger.debug({ teamId }, 'Fetching all rates for team');
@@ -37,7 +38,10 @@ export class RateService {
     this.logger.info({ rateId: id }, 'Removing rate');
     try {
       return await this.prisma.$transaction(async (tx) => {
-        this.logger.debug({ rateId: id }, 'Updating associated time entries to nullify rateId');
+        this.logger.debug(
+          { rateId: id },
+          'Updating associated time entries to nullify rateId',
+        );
         await tx.time.updateMany({
           where: { rateId: id },
           data: { rateId: { set: null } },

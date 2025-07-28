@@ -10,8 +10,8 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 @Injectable()
 export class WebhookGuard implements CanActivate {
   constructor(
-    @InjectPinoLogger(WebhookGuard.name) private readonly logger: PinoLogger
-) {}
+    @InjectPinoLogger(WebhookGuard.name) private readonly logger: PinoLogger,
+  ) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const linearSignature = request.headers['linear-signature'];
@@ -32,10 +32,13 @@ export class WebhookGuard implements CanActivate {
 
     let payload: string;
     try {
-        payload = JSON.stringify(request.body);
+      payload = JSON.stringify(request.body);
     } catch (e) {
-        this.logger.error({ err: e }, "Failed to stringify request body for webhook validation");
-        throw new UnauthorizedException("Invalid request body format");
+      this.logger.error(
+        { err: e },
+        'Failed to stringify request body for webhook validation',
+      );
+      throw new UnauthorizedException('Invalid request body format');
     }
 
     const signature = crypto
@@ -43,10 +46,16 @@ export class WebhookGuard implements CanActivate {
       .update(payload)
       .digest('hex');
 
-      this.logger.debug({ calculatedSignature: signature }, 'Calculated signature for webhook');
+    this.logger.debug(
+      { calculatedSignature: signature },
+      'Calculated signature for webhook',
+    );
 
     try {
-      const isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(linearSignature));
+      const isValid = crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(linearSignature),
+      );
 
       if (!isValid) {
         this.logger.warn('Signature mismatch - webhook validation failed');
@@ -58,10 +67,13 @@ export class WebhookGuard implements CanActivate {
       if (error instanceof UnauthorizedException) {
         this.logger.warn({ err: error }, 'Webhook signature validation failed'); // Log as warn if expected validation failure
         throw error;
-    } else {
-        this.logger.error({ err: error }, 'Unexpected error validating webhook signature');
+      } else {
+        this.logger.error(
+          { err: error },
+          'Unexpected error validating webhook signature',
+        );
         throw new UnauthorizedException('Error validating webhook signature');
-    }
+      }
     }
   }
 }
