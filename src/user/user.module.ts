@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
-import { UserService } from './user.service';
-import { UserService as UserCoreService } from './user-core.service';
+import { UserCoreService } from './user-core.service';
 import { UserSecurityService } from './services/user-security.service';
 import { UserTeamService } from './services/user-team.service';
 import { UserRoleService } from './services/user-role.service';
@@ -13,7 +12,6 @@ import { DataLoaderModule } from '../loaders/data-loader.module';
   imports: [PrismaModule, ConfigModule, DataLoaderModule],
   providers: [
     UserResolver,
-    UserService,
     UserCoreService,
     UserSecurityService,
     UserTeamService,
@@ -21,7 +19,7 @@ import { DataLoaderModule } from '../loaders/data-loader.module';
   ],
   exports: [
     UserResolver,
-    UserService,
+    UserCoreService,
     UserSecurityService,
     UserTeamService,
     UserRoleService,

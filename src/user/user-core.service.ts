@@ -9,9 +9,9 @@ const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 10;
 
 @Injectable()
-export class UserService {
+export class UserCoreService {
   constructor(
-    @InjectPinoLogger(UserService.name) private readonly logger: PinoLogger,
+    @InjectPinoLogger(UserCoreService.name) private readonly logger: PinoLogger,
     private prisma: PrismaService,
   ) {}
 

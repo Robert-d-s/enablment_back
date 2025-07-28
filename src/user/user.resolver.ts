@@ -12,7 +12,9 @@ import {
 } from '@nestjs/graphql';
 import { UnauthorizedException } from '@nestjs/common';
 import { User } from './user.model';
-import { UserService } from './user.service';
+import { UserCoreService } from './user-core.service';
+import { UserRoleService } from './services/user-role.service';
+import { UserTeamService } from './services/user-team.service';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
@@ -52,7 +54,9 @@ export class UserQueryArgs {
 export class UserResolver {
   constructor(
     @InjectPinoLogger(UserResolver.name) private readonly logger: PinoLogger,
-    private userService: UserService,
+    private userCoreService: UserCoreService,
+    private userRoleService: UserRoleService,
+    private userTeamService: UserTeamService,
     private teamLoader: TeamLoader,
     private projectLoader: ProjectLoader,
   ) {}
@@ -103,7 +107,7 @@ export class UserResolver {
       { search, role },
       'Executing usersCount query (delegating to service)',
     );
-    return this.userService.countUsersWithFilters({ search, role });
+    return this.userCoreService.countUsersWithFilters({ search, role });
   }
 
   @Query(() => [User])
@@ -113,12 +117,14 @@ export class UserResolver {
       { queryArgs: args },
       'Executing users query (delegating to service)',
     );
-    const usersFromService = await this.userService.findUsers(args);
-    return usersFromService.map((user) => ({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    }));
+    const usersFromService = await this.userCoreService.findUsers(args);
+    return usersFromService.map(
+      (user: Pick<User, 'id' | 'email' | 'role'>) => ({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      }),
+    );
   }
 
   @ResolveField(() => [Team])
@@ -138,7 +144,7 @@ export class UserResolver {
     @Args('input') input: UpdateUserRoleInput,
   ): Promise<User> {
     this.logger.info({ input }, 'Executing updateUserRole mutation');
-    const updatedUser = await this.userService.updateUserRole(
+    const updatedUser = await this.userRoleService.updateUserRole(
       input.userId,
       input.newRole,
     );
@@ -152,7 +158,7 @@ export class UserResolver {
   @Roles(UserRole.ADMIN)
   async addUserToTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing addUserToTeam mutation');
-    const user = await this.userService.addUserToTeam(
+    const user = await this.userTeamService.addUserToTeam(
       input.userId,
       input.teamId,
     );
@@ -168,7 +174,7 @@ export class UserResolver {
   async removeUserFromTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing removeUserFromTeam mutation');
     try {
-      const user = await this.userService.removeUserFromTeam(
+      const user = await this.userTeamService.removeUserFromTeam(
         input.userId,
         input.teamId,
       );

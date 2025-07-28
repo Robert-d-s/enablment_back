@@ -5,7 +5,8 @@ import {
   InternalServerErrorException,
   BadRequestException,
 } from '@nestjs/common';
-import { UserService } from '../user/user.service';
+import { UserCoreService } from '../user/user-core.service';
+import { UserSecurityService } from '../user/services/user-security.service';
 import { User, UserRole } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { TokenBlacklistService } from './token-blacklist.service';
@@ -15,7 +16,8 @@ import { TokenService } from './token.service';
 export class AuthService {
   constructor(
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
-    private readonly userService: UserService,
+    private readonly userCoreService: UserCoreService,
+    private readonly userSecurityService: UserSecurityService,
     private readonly tokenBlacklistService: TokenBlacklistService,
     private readonly tokenService: TokenService,
   ) {}
@@ -25,10 +27,13 @@ export class AuthService {
     refreshToken: string | null,
   ): Promise<void> {
     const hashedRefreshToken = refreshToken
-      ? await this.userService.hashData(refreshToken)
+      ? await this.userSecurityService.hashData(refreshToken)
       : null;
 
-    await this.userService.updateRefreshTokenHash(userId, hashedRefreshToken);
+    await this.userSecurityService.updateRefreshTokenHash(
+      userId,
+      hashedRefreshToken,
+    );
     this.logger.debug(`Updated refresh token hash for user ${userId}.`);
   }
 
@@ -42,13 +47,13 @@ export class AuthService {
   }> {
     this.logger.debug(`Attempting sign in for user: %s`, username);
     try {
-      const user = await this.userService.findOne(username);
+      const user = await this.userCoreService.findOne(username);
       if (!user) {
         this.logger.warn('Sign-in failed: User %s not found', username);
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      const isMatch = await this.userService.verifyPassword(
+      const isMatch = await this.userSecurityService.verifyPassword(
         pass,
         user.password,
       );
@@ -94,7 +99,7 @@ export class AuthService {
     rt: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     this.logger.debug(`Attempting token refresh for user ${userId}`);
-    const user = await this.userService.findById(userId);
+    const user = await this.userCoreService.findById(userId);
 
     if (!user || !user.hashedRefreshToken) {
       this.logger.warn(
@@ -104,7 +109,7 @@ export class AuthService {
     }
 
     // Compare the provided token (rt) with the stored hash
-    const rtMatches = await this.userService.verifyRefreshToken(
+    const rtMatches = await this.userSecurityService.verifyRefreshToken(
       rt,
       user.hashedRefreshToken,
     );
@@ -139,28 +144,28 @@ export class AuthService {
     }
 
     // Clear refresh token from database
-    await this.userService.clearRefreshToken(userId);
+    await this.userSecurityService.clearRefreshToken(userId);
     return true;
   }
 
   async signUp(email: string, password: string): Promise<User> {
     this.logger.debug('Attempting sign-up for email: %s', email);
     try {
-      this.userService.validateEmail(email);
-      this.userService.validatePassword(password);
+      this.userSecurityService.validateEmail(email);
+      this.userSecurityService.validatePassword(password);
 
-      const userCount = await this.userService.count();
+      const userCount = await this.userCoreService.count();
       const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
       this.logger.debug('Determined role for new user %s: %s', email, role);
 
-      const existingUser = await this.userService.findOne(email);
+      const existingUser = await this.userCoreService.findOne(email);
       if (existingUser) {
         this.logger.warn('Sign-up failed: Email %s already exists', email);
         throw new ConflictException('Email already exists');
       }
 
-      const hashedPassword = await this.userService.hashData(password);
-      return this.userService.create(email, hashedPassword, role);
+      const hashedPassword = await this.userSecurityService.hashData(password);
+      return this.userCoreService.create(email, hashedPassword, role);
     } catch (error) {
       if (
         error instanceof ConflictException ||
