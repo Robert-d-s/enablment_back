@@ -9,6 +9,11 @@ import {
 import { UserQueryArgs } from './user.resolver';
 import * as bcrypt from 'bcrypt';
 
+// Constants
+const BCRYPT_SALT_ROUNDS = 10;
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 10;
+
 type TeamBasic = {
   id: string;
   name: string;
@@ -40,14 +45,7 @@ export class UserService {
       },
     });
 
-    if (user) {
-      return {
-        ...user,
-        role: UserRole[user.role as keyof typeof UserRole],
-      };
-    }
-
-    return undefined;
+    return user || undefined;
   }
 
   async create(
@@ -81,12 +79,6 @@ export class UserService {
       },
     });
 
-    // Note: When a user's role changes, their current JWT tokens will still contain the old role
-    // until they expire. Consider implementing one of these solutions:
-    // 1. Use shorter token expiration times (current implementation relies on this)
-    // 2. Implement token blacklisting/invalidation
-    // 3. Add a "tokenVersion" field to user and increment it on role changes
-    // 4. Store role changes with timestamps and validate against token issuance time
     this.logger.warn(
       { userId, newRole },
       'User role updated - existing JWT tokens will retain old role until expiration',
@@ -94,7 +86,7 @@ export class UserService {
 
     return {
       ...updatedUser,
-      role: UserRole[updatedUser.role as keyof typeof UserRole],
+      role: updatedUser.role,
     };
   }
 
@@ -110,10 +102,15 @@ export class UserService {
 
       if (!userExists || !teamExists) {
         this.logger.error(
-          { userId, teamId, userExists, teamExists },
+          {
+            userId,
+            teamId,
+            userExists: !!userExists,
+            teamExists: !!teamExists,
+          },
           'User or Team not found for adding relation',
         );
-        throw new Error('User or Team not found');
+        throw new BadRequestException('User or Team not found');
       }
 
       const existingRelation = await tx.userTeam.findUnique({
@@ -159,7 +156,7 @@ export class UserService {
           { userId },
           'User not found after adding to team within transaction',
         );
-        throw new Error(
+        throw new BadRequestException(
           `User with ID ${userId} not found after adding to team`,
         );
       }
@@ -269,8 +266,13 @@ export class UserService {
       { queryArgs: args },
       'Finding users with filters and pagination',
     );
-    const currentPage = args.page ?? 1;
-    const currentPageSize = args.pageSize ?? 10;
+
+    // Validate pagination parameters
+    const currentPage = Math.max(1, args.page ?? 1);
+    const currentPageSize = Math.min(
+      MAX_PAGE_SIZE,
+      Math.max(1, args.pageSize ?? DEFAULT_PAGE_SIZE),
+    );
 
     const skip = (currentPage - 1) * currentPageSize;
     const take = currentPageSize;
@@ -301,22 +303,13 @@ export class UserService {
 
   async findById(userId: number): Promise<User | null> {
     this.logger.debug({ userId }, 'Finding user by ID');
-    const user = await this.prisma.user.findUnique({
+    return this.prisma.user.findUnique({
       where: { id: userId },
     });
-
-    if (user) {
-      return {
-        ...user,
-        role: UserRole[user.role as keyof typeof UserRole],
-      };
-    }
-
-    return null;
   }
 
   async hashData(data: string): Promise<string> {
-    return bcrypt.hash(data, 10);
+    return bcrypt.hash(data, BCRYPT_SALT_ROUNDS);
   }
 
   async updateRefreshTokenHash(
