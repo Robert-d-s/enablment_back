@@ -4,6 +4,9 @@ import { UserSecurityService } from './services/user-security.service';
 import { UserTeamService } from './services/user-team.service';
 import { UserRoleService } from './services/user-role.service';
 import { UserResolver } from './user.resolver';
+import { UserProjectsResolver } from './resolvers/user-projects.resolver';
+import { UserTeamManagementResolver } from './resolvers/user-team-management.resolver';
+import { UserRoleManagementResolver } from './resolvers/user-role-management.resolver';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 import { DataLoaderModule } from '../loaders/data-loader.module';
@@ -12,6 +15,9 @@ import { DataLoaderModule } from '../loaders/data-loader.module';
   imports: [PrismaModule, ConfigModule, DataLoaderModule],
   providers: [
     UserResolver,
+    UserProjectsResolver,
+    UserTeamManagementResolver,
+    UserRoleManagementResolver,
     UserCoreService,
     UserSecurityService,
     UserTeamService,
@@ -19,6 +25,9 @@ import { DataLoaderModule } from '../loaders/data-loader.module';
   ],
   exports: [
     UserResolver,
+    UserProjectsResolver,
+    UserTeamManagementResolver,
+    UserRoleManagementResolver,
     UserCoreService,
     UserSecurityService,
     UserTeamService,
