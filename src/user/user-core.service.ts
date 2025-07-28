@@ -90,6 +90,7 @@ export class UserCoreService {
 
     const where: Prisma.UserWhereInput = {};
     if (args.search) {
+      // MySQL doesn't support mode option, but COLLATE determines case sensitivity
       where.email = { contains: args.search };
     }
     if (args.role) {

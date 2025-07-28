@@ -20,6 +20,8 @@ model User {
 
   hashedRefreshToken String?
 
+  @@index([role], name: "idx_user_role")
+  @@index([email, role], name: "idx_user_email_role")
   @@map("User")
 }
 
@@ -37,6 +39,8 @@ model UserTeam {
   team   Team   @relation(fields: [teamId], references: [id])
 
   @@id([userId, teamId])
+  @@index([userId], name: "idx_userteam_userid")
+  @@index([teamId], name: "idx_userteam_teamid")
 }
 
 model Team {

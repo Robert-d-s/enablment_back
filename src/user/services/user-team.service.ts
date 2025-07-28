@@ -3,14 +3,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { User, Prisma } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import {
-  InternalServerErrorException,
-  BadRequestException,
-} from '@nestjs/common';
-
-type TeamBasic = {
-  id: string;
-  name: string;
-};
+  UserNotFoundException,
+  TeamNotFoundException,
+  UserTeamRelationExistsException,
+  UserTeamRelationNotFoundException,
+  UserOperationFailedException,
+} from '../exceptions/user.exceptions';
 
 @Injectable()
 export class UserTeamService {
@@ -21,28 +19,94 @@ export class UserTeamService {
 
   async addUserToTeam(userId: number, teamId: string): Promise<User> {
     this.logger.info({ userId, teamId }, 'Adding user to team');
-    return this.prisma.$transaction(async (tx) => {
-      const userExists = await tx.user.findUnique({
-        where: { id: userId },
-      });
-      const teamExists = await tx.team.findUnique({
-        where: { id: teamId },
-      });
 
-      if (!userExists || !teamExists) {
-        this.logger.error(
-          {
-            userId,
-            teamId,
-            userExists: !!userExists,
-            teamExists: !!teamExists,
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Verify both user and team exist
+        const [userExists, teamExists] = await Promise.all([
+          tx.user.findUnique({ where: { id: userId }, select: { id: true } }),
+          tx.team.findUnique({ where: { id: teamId }, select: { id: true } }),
+        ]);
+
+        if (!userExists) {
+          throw new UserNotFoundException(userId, 'team assignment');
+        }
+
+        if (!teamExists) {
+          throw new TeamNotFoundException(teamId, 'user assignment');
+        }
+
+        // Check if relation already exists
+        const existingRelation = await tx.userTeam.findUnique({
+          where: {
+            userId_teamId: {
+              userId,
+              teamId,
+            },
           },
-          'User or Team not found for adding relation',
-        );
-        throw new BadRequestException('User or Team not found');
+        });
+
+        if (existingRelation) {
+          this.logger.info(
+            { userId, teamId },
+            'User is already a member of the team',
+          );
+          // Could throw UserTeamRelationExistsException or just return current state
+          // For now, we'll be idempotent and not throw an error
+        } else {
+          await tx.userTeam.create({
+            data: {
+              userId,
+              teamId,
+            },
+          });
+          this.logger.debug(
+            { userId, teamId },
+            'Created new UserTeam relation',
+          );
+        }
+
+        // Get the full user record for the response
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+        });
+
+        if (!user) {
+          throw new UserNotFoundException(
+            userId,
+            'retrieving user after team assignment',
+          );
+        }
+
+        return user;
+      });
+    } catch (error) {
+      if (
+        error instanceof UserNotFoundException ||
+        error instanceof TeamNotFoundException ||
+        error instanceof UserTeamRelationExistsException
+      ) {
+        throw error;
       }
 
-      const existingRelation = await tx.userTeam.findUnique({
+      this.logger.error(
+        { err: error, userId, teamId },
+        'Failed to add user to team',
+      );
+      throw new UserOperationFailedException(
+        'add to team',
+        userId,
+        error as Error,
+      );
+    }
+  }
+
+  async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
+    this.logger.info({ userId, teamId }, 'Removing user from team');
+
+    try {
+      // First verify the relationship exists
+      const existingRelation = await this.prisma.userTeam.findUnique({
         where: {
           userId_teamId: {
             userId,
@@ -52,52 +116,9 @@ export class UserTeamService {
       });
 
       if (!existingRelation) {
-        await tx.userTeam.create({
-          data: {
-            userId,
-            teamId,
-          },
-        });
-      }
-      this.logger.debug(
-        { userId, teamId },
-        'Created UserTeam relation if it did not exist',
-      );
-
-      // Get the updated user with teams within the transaction
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        include: {
-          teams: {
-            include: {
-              team: {
-                include: {
-                  projects: true,
-                  rates: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!user) {
-        this.logger.error(
-          { userId },
-          'User not found after adding to team within transaction',
-        );
-        throw new BadRequestException(
-          `User with ID ${userId} not found after adding to team`,
-        );
+        throw new UserTeamRelationNotFoundException(userId, teamId);
       }
 
-      return user;
-    });
-  }
-
-  async removeUserFromTeam(userId: number, teamId: string): Promise<User> {
-    this.logger.info({ userId, teamId }, 'Removing user from team');
-    try {
       await this.prisma.$transaction(async (tx) => {
         this.logger.debug(
           { userId, teamId },
@@ -115,23 +136,29 @@ export class UserTeamService {
         { userId, teamId },
         'Successfully removed UserTeam relation',
       );
+
       const updatedUser = await this.getUserWithTeams(userId);
       if (!updatedUser) {
-        this.logger.error(
-          { userId },
-          'User not found after successful team removal',
-        );
-        throw new InternalServerErrorException(
-          'Failed to retrieve user state after update',
+        throw new UserNotFoundException(
+          userId,
+          'retrieving user after team removal',
         );
       }
+
       this.logger.trace(
-        { userId, teamCount: updatedUser?.teams?.length ?? 0 },
+        { userId },
         'User team state after removal (fetched post-tx)',
       );
 
       return updatedUser;
     } catch (error) {
+      if (
+        error instanceof UserTeamRelationNotFoundException ||
+        error instanceof UserNotFoundException
+      ) {
+        throw error;
+      }
+
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2028'
@@ -140,35 +167,35 @@ export class UserTeamService {
           { err: error, userId, teamId },
           'Transaction timeout during user removal',
         );
-        throw new InternalServerErrorException(
-          'Database operation timed out during team removal.',
+        throw new UserOperationFailedException(
+          'remove from team (timeout)',
+          userId,
+          error,
         );
-      } else {
-        this.logger.error(
-          { err: error, userId, teamId },
-          'Failed to remove user from team',
-        );
-        throw error;
       }
+
+      this.logger.error(
+        { err: error, userId, teamId },
+        'Failed to remove user from team',
+      );
+      throw new UserOperationFailedException(
+        'remove from team',
+        userId,
+        error as Error,
+      );
     }
   }
 
-  async getUserWithTeams(userId: number): Promise<any> {
-    this.logger.trace({ userId }, 'Fetching user with teams');
+  async getUserWithTeams(userId: number): Promise<User | null> {
+    this.logger.trace(
+      { userId },
+      'Fetching user (teams will be loaded by field resolvers)',
+    );
+
+    // Only fetch the basic user data
+    // Team data will be efficiently loaded by DataLoaders when requested
     return this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        teams: {
-          include: {
-            team: {
-              include: {
-                projects: true,
-                rates: true,
-              },
-            },
-          },
-        },
-      },
     });
   }
 }

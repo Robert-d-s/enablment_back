@@ -65,36 +65,46 @@ export class UserResolver {
   async myProjects(@Context() context: GqlContext): Promise<Project[]> {
     const currentUser = context.req.user as UserProfileDto;
     this.logger.debug({ userId: currentUser.id }, 'Executing myProjects query');
+
     if (!currentUser) {
       throw new UnauthorizedException();
     }
-    const teams = await this.teamLoader.byUserId.load(currentUser.id);
-    if (!teams || teams.length === 0) {
-      return [];
-    }
-    const teamIds = teams.map((team) => team.id);
-    const projectsPerTeam = await this.projectLoader.byTeamId.loadMany(teamIds);
-    const allProjectsRaw = (
-      projectsPerTeam.flat() as Array<Project | Error | null>
-    ).filter((p): p is Project => p instanceof Error === false && p !== null);
-    if (allProjectsRaw.length === 0) {
+
+    // Single optimized query to get user's teams with their projects
+    const userTeams = await this.teamLoader.byUserId.load(currentUser.id);
+    if (!userTeams || userTeams.length === 0) {
       return [];
     }
 
-    const projectTeamIds = [...new Set(allProjectsRaw.map((p) => p.teamId))];
-    const correspondingTeams =
-      await this.teamLoader.byId.loadMany(projectTeamIds);
+    // Efficiently get all projects for user's teams in one batch
+    const teamIds = userTeams.map((team) => team.id);
+    const projectsPerTeam = await this.projectLoader.byTeamId.loadMany(teamIds);
+
+    // Create team name lookup map from already loaded data
     const teamNameMap = new Map<string, string>();
-    correspondingTeams.forEach((team) => {
-      if (team && !(team instanceof Error)) {
-        teamNameMap.set(team.id, team.name);
-      }
+    userTeams.forEach((team) => {
+      teamNameMap.set(team.id, team.name);
     });
-    const allProjectsWithTeamName = allProjectsRaw.map((project) => ({
-      ...project,
-      teamName: teamNameMap.get(project.teamId) || 'Unknown Team',
-    }));
-    return allProjectsWithTeamName;
+
+    // Process and enrich projects with team names
+    const allProjects = projectsPerTeam
+      .flat()
+      .filter((p): p is Project => p instanceof Error === false && p !== null)
+      .map((project) => ({
+        ...project,
+        teamName: teamNameMap.get(project.teamId) || 'Unknown Team',
+      }));
+
+    this.logger.debug(
+      {
+        userId: currentUser.id,
+        teamCount: userTeams.length,
+        projectCount: allProjects.length,
+      },
+      'Successfully loaded user projects',
+    );
+
+    return allProjects;
   }
 
   @Query(() => Int)
@@ -130,11 +140,16 @@ export class UserResolver {
   @ResolveField(() => [Team])
   async teams(@Parent() user: User): Promise<Team[]> {
     this.logger.trace({ userId: user.id }, 'Resolving teams field for User');
+
     const teams = await this.teamLoader.byUserId.load(user.id);
+
+    // Return teams with properly initialized empty arrays
+    // Note: If clients need projects/rates, they should use dedicated queries
+    // This prevents N+1 problems while keeping the resolver simple
     return teams.map((team) => ({
       ...team,
-      projects: [],
-      rates: [],
+      projects: [], // Empty by design - use dedicated queries for project data
+      rates: [], // Empty by design - use dedicated queries for rate data
     }));
   }
 
@@ -144,6 +159,7 @@ export class UserResolver {
     @Args('input') input: UpdateUserRoleInput,
   ): Promise<User> {
     this.logger.info({ input }, 'Executing updateUserRole mutation');
+    // Let custom exceptions bubble up with proper error codes
     const updatedUser = await this.userRoleService.updateUserRole(
       input.userId,
       input.newRole,
@@ -158,6 +174,7 @@ export class UserResolver {
   @Roles(UserRole.ADMIN)
   async addUserToTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing addUserToTeam mutation');
+    // Let custom exceptions bubble up with proper error codes
     const user = await this.userTeamService.addUserToTeam(
       input.userId,
       input.teamId,
@@ -173,22 +190,16 @@ export class UserResolver {
   @Roles(UserRole.ADMIN)
   async removeUserFromTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing removeUserFromTeam mutation');
-    try {
-      const user = await this.userTeamService.removeUserFromTeam(
-        input.userId,
-        input.teamId,
-      );
-      return {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      };
-    } catch (error) {
-      this.logger.error(
-        { err: error, userId: input.userId, teamId: input.teamId },
-        'Error occurred while removing user from team',
-      );
-      throw new Error('Error removing user from team');
-    }
+    // No try-catch needed - let the custom exceptions bubble up
+    // They provide proper HTTP status codes and error messages
+    const user = await this.userTeamService.removeUserFromTeam(
+      input.userId,
+      input.teamId,
+    );
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
   }
 }
