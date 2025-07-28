@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, UserRole, Prisma } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
-import { InternalServerErrorException } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  BadRequestException,
+} from '@nestjs/common';
 import { UserQueryArgs } from './user.resolver';
 import * as bcrypt from 'bcrypt';
 
@@ -355,5 +358,49 @@ export class UserService {
 
     this.logger.info(`Cleared refresh tokens for ${result.count} users`);
     return result.count;
+  }
+
+  async verifyPassword(
+    plainPassword: string,
+    hashedPassword: string,
+  ): Promise<boolean> {
+    return bcrypt.compare(plainPassword, hashedPassword);
+  }
+
+  async verifyRefreshToken(
+    providedToken: string,
+    hashedToken: string,
+  ): Promise<boolean> {
+    return bcrypt.compare(providedToken, hashedToken);
+  }
+
+  validateEmail(email: string): void {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      throw new BadRequestException('Invalid email format');
+    }
+  }
+
+  validatePassword(password: string): void {
+    if (!password) {
+      throw new BadRequestException('Password is required');
+    }
+
+    if (password.length < 6) {
+      throw new BadRequestException(
+        'Password must be at least 6 characters long',
+      );
+    }
+
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    if (!(hasUpperCase && hasLowerCase && (hasNumbers || hasSpecialChar))) {
+      throw new BadRequestException(
+        'Password must contain at least one uppercase letter, one lowercase letter, and either a number or special character',
+      );
+    }
   }
 }

@@ -5,11 +5,8 @@ import {
   InternalServerErrorException,
   BadRequestException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import { User, UserRole } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
-import { ConfigService } from '@nestjs/config';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { TokenService } from './token.service';
@@ -19,8 +16,6 @@ export class AuthService {
   constructor(
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
     private readonly userService: UserService,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
     private readonly tokenBlacklistService: TokenBlacklistService,
     private readonly tokenService: TokenService,
   ) {}
@@ -53,7 +48,10 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      const isMatch = await bcrypt.compare(pass, user.password);
+      const isMatch = await this.userService.verifyPassword(
+        pass,
+        user.password,
+      );
       if (!isMatch) {
         this.logger.warn(
           'Sign-in failed: Password mismatch for user %s',
@@ -106,7 +104,10 @@ export class AuthService {
     }
 
     // Compare the provided token (rt) with the stored hash
-    const rtMatches = await bcrypt.compare(rt, user.hashedRefreshToken);
+    const rtMatches = await this.userService.verifyRefreshToken(
+      rt,
+      user.hashedRefreshToken,
+    );
     if (!rtMatches) {
       this.logger.warn(
         `Refresh Denied: Provided token does not match stored hash for user ${userId}.`,
@@ -145,8 +146,8 @@ export class AuthService {
   async signUp(email: string, password: string): Promise<User> {
     this.logger.debug('Attempting sign-up for email: %s', email);
     try {
-      this.validateEmail(email);
-      this.validatePassword(password);
+      this.userService.validateEmail(email);
+      this.userService.validatePassword(password);
 
       const userCount = await this.userService.count();
       const role = userCount === 0 ? UserRole.ADMIN : UserRole.PENDING;
@@ -158,7 +159,7 @@ export class AuthService {
         throw new ConflictException('Email already exists');
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = await this.userService.hashData(password);
       return this.userService.create(email, hashedPassword, role);
     } catch (error) {
       if (
@@ -179,36 +180,6 @@ export class AuthService {
       );
       throw new InternalServerErrorException(
         'An error occurred during sign up',
-      );
-    }
-  }
-
-  private validateEmail(email: string): void {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email || !emailRegex.test(email)) {
-      throw new BadRequestException('Invalid email format');
-    }
-  }
-
-  private validatePassword(password: string): void {
-    if (!password) {
-      throw new BadRequestException('Password is required');
-    }
-
-    if (password.length < 6) {
-      throw new BadRequestException(
-        'Password must be at least 6 characters long',
-      );
-    }
-
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-
-    if (!(hasUpperCase && hasLowerCase && (hasNumbers || hasSpecialChar))) {
-      throw new BadRequestException(
-        'Password must contain at least one uppercase letter, one lowercase letter, and either a number or special character',
       );
     }
   }
