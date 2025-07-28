@@ -14,7 +14,6 @@ import { UnauthorizedException } from '@nestjs/common';
 import { User } from './user.model';
 import { UserService } from './user.service';
 import { Roles } from '../auth/roles.decorator';
-import { Public } from '../auth/public.decorator';
 import { UserRole } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
@@ -56,7 +55,6 @@ export class UserResolver {
     private userService: UserService,
     private teamLoader: TeamLoader,
     private projectLoader: ProjectLoader,
-    // private prisma: PrismaService,
   ) {}
 
   @Query(() => [Project])

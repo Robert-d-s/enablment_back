@@ -7,19 +7,25 @@ import {
 import { GqlExceptionFilter, GqlArgumentsHost } from '@nestjs/graphql';
 import { Prisma } from '@prisma/client';
 import { GraphQLError } from 'graphql';
-import { LoggingService } from '../services/logging.service';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Catch()
 export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
-  constructor(private readonly loggingService: LoggingService) {}
+  constructor(
+    @InjectPinoLogger(GlobalGqlExceptionFilter.name)
+    private readonly logger: PinoLogger,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost): GraphQLError {
     const gqlHost = GqlArgumentsHost.create(host);
     const info = gqlHost.getInfo(); // Log the error for debugging
-    this.loggingService.logError('GraphQL error occurred', exception as Error, {
-      operation: info?.operation?.name?.value,
-      error: this.serializeError(exception),
-    });
+    this.logger.error(
+      {
+        operation: info?.operation?.name?.value,
+        error: this.serializeError(exception),
+      },
+      'GraphQL error occurred',
+    );
 
     // Handle specific error types
     if (exception instanceof HttpException) {

@@ -5,7 +5,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { getCorsConfig } from './config/cors.config';
 import { Logger } from 'nestjs-pino';
 import { GlobalGqlExceptionFilter } from './common/filters/gql-exception.filter';
-import { LoggingService } from './common/services/logging.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -13,7 +12,6 @@ async function bootstrap() {
   });
 
   const logger = app.get(Logger);
-  const loggingService = app.get(LoggingService);
   app.useLogger(logger);
 
   app.useGlobalPipes(
@@ -26,7 +24,7 @@ async function bootstrap() {
       },
     }),
   );
-  app.useGlobalFilters(new GlobalGqlExceptionFilter(loggingService));
+  app.useGlobalFilters(app.get(GlobalGqlExceptionFilter));
 
   app.enableCors(getCorsConfig());
   app.use(cookieParser());
