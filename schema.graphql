@@ -103,6 +103,12 @@ type Label {
   parentId: String
 }
 
+type PaginatedIssueResponse {
+  issues: [Issue!]!
+  total: Int!
+  hasNext: Boolean!
+}
+
 type Time {
   id: Int!
   startTime: DateTime!
@@ -142,7 +148,11 @@ type Query {
   users(args: UserQueryArgs!): [User!]!
   myProjects: [Project!]!
   projects: [Project!]!
-  issues: [Issue!]!
+  project(id: String!): Project!
+  projectsByTeam(teamId: String!): [Project!]!
+  projectCount: Int!
+  projectCountByTeam(teamId: String!): Int!
+  issues(page: Int! = 1, limit: Int! = 50): PaginatedIssueResponse!
   getAllSimpleTeams: [SimpleTeamDTO!]!
   getTeam(input: GetTeamInput!): Team!
   rates(teamId: String!): [Rate!]!
