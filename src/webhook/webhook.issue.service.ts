@@ -1,12 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
 import { IssueService } from '../issue/issue.service';
-import { PrismaClient } from '@prisma/client';
 import { IssueUpdatesGateway } from '../issue-updates/issue-updates.gateway';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
-
-const prisma = new PrismaClient();
 
 @Injectable()
 export class WebhookIssueService {
@@ -15,6 +12,7 @@ export class WebhookIssueService {
     private readonly logger: PinoLogger,
     private issueService: IssueService,
     private readonly issueUpdatesGateway: IssueUpdatesGateway,
+    private readonly prisma: PrismaService,
   ) {}
 
   async handleIssue(json: LinearWebhookBody) {
@@ -50,41 +48,37 @@ export class WebhookIssueService {
             return;
           }
 
-          await prisma.$transaction(async (tx) => {
-            // Create the issue first
-            const createdIssue = await this.createIssue(issueData);
+          // Create the issue first
+          const createdIssue = await this.createIssue(issueData);
 
-            // Then update labels if present
-            if (issueData.labels && issueData.labels.length > 0) {
-              await this.issueService.updateLabelsForIssue(
-                issueData.id,
-                issueData.labels,
-              );
-            }
-
-            // Fetch the complete issue with labels
-            const completeIssue = await this.issueService.findById(
+          // Then update labels if present
+          if (issueData.labels && issueData.labels.length > 0) {
+            await this.issueService.updateLabelsForIssue(
               issueData.id,
+              issueData.labels,
             );
-            if (completeIssue) {
-              // Broadcast the complete issue with the action field
-              this.issueUpdatesGateway.broadcastIssueUpdate({
-                ...completeIssue,
-                action: 'create',
-              });
-            } else {
-              // Fallback if complete issue can't be fetched
-              this.logger.warn(
-                { issueId: issueData.id },
-                'Could not fetch complete issue after creation for broadcast',
-              );
-              this.issueUpdatesGateway.broadcastIssueUpdate({
-                ...createdIssue,
-                labels: issueData.labels || [],
-                action: 'create',
-              });
-            }
-          });
+          }
+
+          // Fetch the complete issue with labels
+          const completeIssue = await this.issueService.findById(issueData.id);
+          if (completeIssue) {
+            // Broadcast the complete issue with the action field
+            this.issueUpdatesGateway.broadcastIssueUpdate({
+              ...completeIssue,
+              action: 'create',
+            });
+          } else {
+            // Fallback if complete issue can't be fetched
+            this.logger.warn(
+              { issueId: issueData.id },
+              'Could not fetch complete issue after creation for broadcast',
+            );
+            this.issueUpdatesGateway.broadcastIssueUpdate({
+              ...createdIssue,
+              labels: issueData.labels || [],
+              action: 'create',
+            });
+          }
           break;
 
         case 'update':
@@ -93,9 +87,9 @@ export class WebhookIssueService {
             'Handling "update" action',
           );
 
-          await prisma.$transaction(async (tx) => {
+          await this.prisma.$transaction(async () => {
             // Check if the issue exists before trying to update
-            const existingIssue = await prisma.issue.findUnique({
+            const existingIssue = await this.prisma.issue.findUnique({
               where: { id: issueData.id },
               select: { id: true },
             });
@@ -197,7 +191,7 @@ export class WebhookIssueService {
             'Handling "remove" action',
           );
 
-          await prisma.$transaction(async (tx) => {
+          await this.prisma.$transaction(async () => {
             await this.issueService.remove(issueData.id);
 
             // For removals, just send the ID and action
@@ -241,7 +235,7 @@ export class WebhookIssueService {
       try {
         // First attempt: Try to find a project associated with the team if available
         if (data.team?.id) {
-          const teamProject = await prisma.project.findFirst({
+          const teamProject = await this.prisma.project.findFirst({
             where: { teamId: data.team.id },
             select: { id: true, name: true },
             orderBy: { createdAt: 'desc' },
@@ -259,7 +253,7 @@ export class WebhookIssueService {
         }
 
         // Second attempt: Try to find any available project
-        const anyProject = await prisma.project.findFirst({
+        const anyProject = await this.prisma.project.findFirst({
           select: { id: true, name: true },
           orderBy: { createdAt: 'desc' },
         });
@@ -312,7 +306,7 @@ export class WebhookIssueService {
 
     try {
       // Try to find existing unassigned project
-      const existingProject = await prisma.project.findUnique({
+      const existingProject = await this.prisma.project.findUnique({
         where: { id: UNASSIGNED_PROJECT_ID },
       });
 
@@ -321,7 +315,7 @@ export class WebhookIssueService {
       }
 
       // Create unassigned project if it doesn't exist
-      return await prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async (tx) => {
         // First need to make sure there's at least one team
         const team = await tx.team.findFirst();
         if (!team) {
@@ -407,7 +401,7 @@ export class WebhookIssueService {
       }
 
       // Update the issue directly using prisma to avoid the create fallback
-      await prisma.issue.update({
+      await this.prisma.issue.update({
         where: { id: data.id },
         data: updateData,
       });

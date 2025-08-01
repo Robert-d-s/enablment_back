@@ -15,20 +15,22 @@ export class WebhookGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const linearSignature = request.headers['linear-signature'];
-    const webhookSecret = process.env.WEBHOOK_SECRET || '';
+    const webhookSecret = process.env.WEBHOOK_SECRET;
 
     if (!linearSignature) {
       this.logger.warn('Missing Linear signature header');
       throw new UnauthorizedException('Missing Linear signature header');
     }
 
-    this.logger.debug({ linearSignature }, 'Received Linear signature');
-    this.logger.debug('Webhook secret available: %s', !!webhookSecret);
-
     if (!webhookSecret) {
-      this.logger.error('Webhook secret not configured');
-      return false;
+      this.logger.error(
+        'Webhook secret not configured - WEBHOOK_SECRET environment variable is missing',
+      );
+      throw new UnauthorizedException('Webhook secret not configured');
     }
+
+    this.logger.debug({ linearSignature }, 'Received Linear signature');
+    this.logger.debug('Webhook secret configured successfully');
 
     let payload: string;
     try {
@@ -42,7 +44,7 @@ export class WebhookGuard implements CanActivate {
     }
 
     const signature = crypto
-      .createHmac('sha256', process.env.WEBHOOK_SECRET || '')
+      .createHmac('sha256', webhookSecret)
       .update(payload)
       .digest('hex');
 
