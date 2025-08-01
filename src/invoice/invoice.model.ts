@@ -45,8 +45,7 @@ export class RateDetail {
   cost: number;
 
   @Field(() => Float, {
-    description:
-      'Rate per hour in Danish Krona (DKK) - converted from øre stored in database',
+    description: 'Rate per hour in Danish Krona (DKK)',
   })
   ratePerHour: number;
 

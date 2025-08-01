@@ -5,7 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Rate, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { Rate } from './rate.model';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 // Prisma error codes as constants
@@ -53,7 +54,8 @@ export class RateService {
         'Successfully fetched rates for team',
       );
 
-      return rates;
+      // Convert Prisma rates to GraphQL rates
+      return rates.map((rate) => Rate.fromPrisma(rate));
     } catch (err) {
       this.logger.error({ err, teamId }, 'Error fetching rates for team');
       throw new InternalServerErrorException(
@@ -77,9 +79,9 @@ export class RateService {
       throw new BadRequestException('Valid rate name is required');
     }
 
-    if (!Number.isInteger(rate) || rate < 0) {
+    if (typeof rate !== 'number' || rate < 0 || !Number.isFinite(rate)) {
       throw new BadRequestException(
-        'Rate must be a non-negative integer in øre (e.g., 5000 for 50.00 DKK/hour)',
+        'Rate must be a non-negative number in DKK (e.g., 50.00 for 50.00 DKK/hour)',
       );
     }
 
@@ -103,7 +105,7 @@ export class RateService {
         'Successfully created rate',
       );
 
-      return newRate;
+      return Rate.fromPrisma(newRate);
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -174,7 +176,7 @@ export class RateService {
           'Successfully removed rate',
         );
 
-        return deletedRate;
+        return Rate.fromPrisma(deletedRate);
       });
     } catch (err) {
       if (

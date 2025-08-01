@@ -1,5 +1,5 @@
-import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsNotEmpty, IsInt, IsString, Min } from 'class-validator';
+import { Field, InputType, Int, Float } from '@nestjs/graphql';
+import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
 
 @InputType()
 export class RateInputCreate {
@@ -11,11 +11,12 @@ export class RateInputCreate {
   @IsNotEmpty()
   name: string;
 
-  @Field(() => Int, {
+  @Field(() => Float, {
     nullable: false,
-    description: 'Hourly rate in øre (e.g., 5000 = 50.00 DKK/hour)',
+    description:
+      'Hourly rate in Danish Krona (DKK) - e.g., 50.00 for 50.00 DKK/hour',
   })
-  @IsInt()
+  @IsNumber()
   @IsNotEmpty()
   @Min(0)
   rate: number;
@@ -32,7 +33,7 @@ export class RateInputCreate {
 @InputType()
 export class DeleteRateInput {
   @Field(() => Int)
-  @IsInt()
+  @IsNumber()
   @IsNotEmpty()
   @Min(1)
   rateId: number;

@@ -20,7 +20,9 @@ type Rate {
   id: Int!
   name: String!
   teamId: String!
-  rate: Int!
+
+  """Hourly rate in Danish Krona (DKK) - e.g., 50.00 for 50.00 DKK/hour"""
+  rate: Float!
 }
 
 type DeleteRateResponse {
@@ -130,6 +132,8 @@ type Invoice {
   teamId: String!
   teamName: String!
   totalHours: Float!
+
+  """Total cost in Danish Krona (DKK)"""
   totalCost: Float!
   rates: [RateDetail!]
 }
@@ -138,7 +142,11 @@ type RateDetail {
   rateId: Int!
   rateName: String!
   hours: Float!
+
+  """Cost in Danish Krona (DKK) for this rate"""
   cost: Float!
+
+  """Rate per hour in Danish Krona (DKK)"""
   ratePerHour: Float!
 }
 
@@ -236,8 +244,8 @@ input RateInputCreate {
   """Rate name"""
   name: String!
 
-  """Rate"""
-  rate: Int!
+  """Hourly rate in Danish Krona (DKK) - e.g., 50.00 for 50.00 DKK/hour"""
+  rate: Float!
 
   """Rates team id"""
   teamId: String!

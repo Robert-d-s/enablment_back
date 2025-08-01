@@ -54,10 +54,10 @@ model Team {
 }
 
 model Rate {
-  id     Int    @id @default(autoincrement())
+  id     Int     @id @default(autoincrement())
   name   String
   teamId String
-  rate   Int
+  rate   Decimal @db.Decimal(10, 2) // Supports up to 99,999,999.99 DKK/hour
 
   team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
   times Time[]

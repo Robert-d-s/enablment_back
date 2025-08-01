@@ -2,15 +2,17 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { User } from '../user/user.model';
 
 // Constants for time calculations
 const MS_PER_HOUR = 60 * 60 * 1000; // 3,600,000 milliseconds in an hour
-const DECIMAL_PLACES = 100; // For rounding to 2 decimal places and converting øre to krona
+const DECIMAL_PLACES = 100; // For rounding financial calculations to 2 decimal places
 
 @Injectable()
 export class InvoiceService {
@@ -18,6 +20,37 @@ export class InvoiceService {
     @InjectPinoLogger() private readonly logger: PinoLogger,
     private prisma: PrismaService,
   ) {}
+
+  /**
+   * Validates that the user has access to the project's team
+   * Admin users have access to all projects, others need team membership
+   */
+  private async validateUserTeamAccess(
+    userId: number,
+    teamId: string,
+    userRole: UserRole,
+  ): Promise<void> {
+    // Admin users have access to all teams
+    if (userRole === UserRole.ADMIN) {
+      return;
+    }
+
+    // Check if user is a member of the project's team
+    const userTeam = await this.prisma.userTeam.findUnique({
+      where: {
+        userId_teamId: {
+          userId: userId,
+          teamId: teamId,
+        },
+      },
+    });
+
+    if (!userTeam) {
+      throw new ForbiddenException(
+        `Access denied. You are not a member of the team associated with this project.`,
+      );
+    }
+  }
 
   /**
    * Validates input parameters for invoice generation
@@ -48,7 +81,7 @@ export class InvoiceService {
 
   /**
    * Calculates hours and cost for a time aggregation with proper precision handling
-   * Note: rates are stored in øre in the database (e.g., 5000 = 50.00 DKK/hour)
+   * Note: rates are now stored as Decimal in DKK in the database (e.g., 50.00 = 50.00 DKK/hour)
    */
   private calculateRateDetail(
     rateAggregation: {
@@ -60,10 +93,10 @@ export class InvoiceService {
     const totalMs = rateAggregation._sum.totalElapsedTime ?? 0;
     const hours = totalMs / MS_PER_HOUR;
 
-    // Convert rate from øre to krona (e.g., 5000 øre = 50.00 DKK)
-    const ratePerHourInDKK = rateInfo.rate / DECIMAL_PLACES;
+    // Rate is already in DKK, no conversion needed
+    const ratePerHourInDKK = rateInfo.rate;
 
-    // Calculate cost using DKK rate, then round to avoid floating point precision issues
+    // Calculate cost and round to avoid floating point precision issues
     const cost =
       Math.round(hours * ratePerHourInDKK * DECIMAL_PLACES) / DECIMAL_PLACES;
 
@@ -129,12 +162,17 @@ export class InvoiceService {
    * associated rates. It handles overlapping time periods correctly and provides
    * detailed breakdown by rate type.
    *
+   * Security: Validates that the user has access to the project's team.
+   * Admin users have access to all projects, other users must be team members.
+   *
    * @param projectId - The unique identifier of the project
    * @param startDate - Start date of the billing period (inclusive)
    * @param endDate - End date of the billing period (inclusive)
+   * @param currentUser - The authenticated user requesting the invoice
    * @returns Promise<Invoice> - Complete invoice with totals and rate breakdown
    *
    * @throws NotFoundException - When project or team is not found
+   * @throws ForbiddenException - When user lacks access to the project's team
    * @throws InternalServerErrorException - For validation errors or data integrity issues
    *
    * @example
@@ -142,7 +180,8 @@ export class InvoiceService {
    * const invoice = await invoiceService.generateInvoiceForProject(
    *   'project-123',
    *   new Date('2024-01-01'),
-   *   new Date('2024-01-31')
+   *   new Date('2024-01-31'),
+   *   currentUser
    * );
    * ```
    */
@@ -150,6 +189,7 @@ export class InvoiceService {
     projectId: string,
     startDate: Date,
     endDate: Date,
+    currentUser: User,
   ): Promise<Invoice> {
     // Validate inputs first
     this.validateInvoiceInput(projectId, startDate, endDate);
@@ -180,6 +220,13 @@ export class InvoiceService {
       );
     }
     const { team, ...project } = projectWithTeam;
+
+    // Validate that the user has access to this project's team
+    await this.validateUserTeamAccess(
+      currentUser.id,
+      team.id,
+      currentUser.role,
+    );
 
     // Fix date filtering to include overlapping time entries
     const timeFilter: Prisma.TimeWhereInput = {
@@ -226,7 +273,19 @@ export class InvoiceService {
           where: { id: { in: rateIds } },
           select: { id: true, name: true, rate: true },
         })
-        .then((rates) => new Map(rates.map((r) => [r.id, r])));
+        .then(
+          (rates) =>
+            new Map(
+              rates.map((r) => [
+                r.id,
+                {
+                  id: r.id,
+                  name: r.name,
+                  rate: r.rate.toNumber(), // Convert Decimal to number
+                },
+              ]),
+            ),
+        );
 
       let grandTotalHours = 0;
       let grandTotalCost = 0;
