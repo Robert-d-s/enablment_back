@@ -3,9 +3,10 @@ import {
   NotFoundException,
   InternalServerErrorException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { Rate } from './rate.model';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
@@ -25,13 +26,54 @@ export class RateService {
   ) {}
 
   /**
+   * Validates that a user has access to a team
+   * @param userId - The user ID
+   * @param teamId - The team ID
+   * @param userRole - The user role
+   * @throws ForbiddenException if user doesn't have access
+   */
+  private async validateTeamAccess(
+    userId: number,
+    teamId: string,
+    userRole: UserRole,
+  ): Promise<void> {
+    // Admin users have access to all teams
+    if (userRole === UserRole.ADMIN) {
+      return;
+    }
+
+    // Check if user is a member of the team
+    const userTeam = await this.prisma.userTeam.findUnique({
+      where: {
+        userId_teamId: {
+          userId: userId,
+          teamId: teamId,
+        },
+      },
+    });
+
+    if (!userTeam) {
+      throw new ForbiddenException(
+        `Access denied. You are not a member of team ${teamId}`,
+      );
+    }
+  }
+
+  /**
    * Fetches all rates for a specific team
    * @param teamId - The team identifier
+   * @param userId - The requesting user ID
+   * @param userRole - The requesting user role
    * @returns Promise<Rate[]> - Array of rates for the team
    * @throws BadRequestException if teamId is invalid
+   * @throws ForbiddenException if user doesn't have access to team
    * @throws InternalServerErrorException if database operation fails
    */
-  async all(teamId: string): Promise<Rate[]> {
+  async all(
+    teamId: string,
+    userId: number,
+    userRole: UserRole,
+  ): Promise<Rate[]> {
     if (!teamId || typeof teamId !== 'string' || teamId.trim().length === 0) {
       this.logger.warn(
         { teamId },
@@ -40,7 +82,10 @@ export class RateService {
       throw new BadRequestException('Valid teamId is required');
     }
 
-    this.logger.debug({ teamId }, 'Fetching all rates for team');
+    // Validate team access
+    await this.validateTeamAccess(userId, teamId, userRole);
+
+    this.logger.debug({ teamId, userId }, 'Fetching all rates for team');
 
     try {
       const rates = await this.prisma.rate.findMany({
@@ -71,6 +116,7 @@ export class RateService {
    * @param teamId - The team identifier
    * @returns Promise<Rate> - The created rate
    * @throws BadRequestException if input validation fails
+   * @throws NotFoundException if team doesn't exist
    * @throws InternalServerErrorException if database operation fails
    */
   async create(name: string, rate: number, teamId: string): Promise<Rate> {
@@ -79,14 +125,28 @@ export class RateService {
       throw new BadRequestException('Valid rate name is required');
     }
 
-    if (typeof rate !== 'number' || rate < 0 || !Number.isFinite(rate)) {
+    if (typeof rate !== 'number' || rate <= 0 || !Number.isFinite(rate)) {
       throw new BadRequestException(
-        'Rate must be a non-negative number in DKK (e.g., 50.00 for 50.00 DKK/hour)',
+        'Rate must be a positive number in DKK (e.g., 50.00 for 50.00 DKK/hour)',
       );
+    }
+
+    if (rate > 10000) {
+      throw new BadRequestException('Rate cannot exceed 10,000 DKK per hour');
     }
 
     if (!teamId || typeof teamId !== 'string' || teamId.trim().length === 0) {
       throw new BadRequestException('Valid teamId is required');
+    }
+
+    // Validate team exists
+    const teamExists = await this.prisma.team.findUnique({
+      where: { id: teamId },
+      select: { id: true },
+    });
+
+    if (!teamExists) {
+      throw new NotFoundException(`Team with ID ${teamId} not found`);
     }
 
     this.logger.info({ name, rate, teamId }, 'Creating new rate');
@@ -109,19 +169,6 @@ export class RateService {
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === PRISMA_ERRORS.UNIQUE_CONSTRAINT_VIOLATION
-      ) {
-        this.logger.warn(
-          { name, teamId },
-          'Rate with this name already exists for team',
-        );
-        throw new BadRequestException(
-          `Rate with name "${name}" already exists for this team`,
-        );
-      }
-
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === PRISMA_ERRORS.FOREIGN_KEY_CONSTRAINT_VIOLATION
       ) {
         this.logger.warn({ teamId }, 'Team not found for rate creation');
@@ -138,11 +185,12 @@ export class RateService {
   /**
    * Removes a rate and nullifies associated time entries
    * @param id - The rate ID to remove
-   * @returns Promise<Rate | null> - The deleted rate or null if not found
+   * @returns Promise<Rate> - The deleted rate
    * @throws NotFoundException if rate doesn't exist
+   * @throws BadRequestException if id is invalid
    * @throws InternalServerErrorException if database operation fails
    */
-  async remove(id: number): Promise<Rate | null> {
+  async remove(id: number): Promise<Rate> {
     if (!Number.isInteger(id) || id <= 0) {
       throw new BadRequestException('Valid rate ID is required');
     }

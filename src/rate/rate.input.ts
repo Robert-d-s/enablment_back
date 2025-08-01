@@ -1,5 +1,5 @@
 import { Field, InputType, Int, Float } from '@nestjs/graphql';
-import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, Min, Max } from 'class-validator';
 
 @InputType()
 export class RateInputCreate {
@@ -18,7 +18,8 @@ export class RateInputCreate {
   })
   @IsNumber()
   @IsNotEmpty()
-  @Min(0)
+  @Min(0.01)
+  @Max(10000)
   rate: number;
 
   @Field(() => String, {
