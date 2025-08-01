@@ -13,7 +13,7 @@ export class RateInputCreate {
 
   @Field(() => Int, {
     nullable: false,
-    description: 'Rate',
+    description: 'Hourly rate in øre (e.g., 5000 = 50.00 DKK/hour)',
   })
   @IsInt()
   @IsNotEmpty()

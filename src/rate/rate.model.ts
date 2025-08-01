@@ -12,7 +12,9 @@ export class Rate implements RateClient {
   @Field(() => String)
   teamId: string;
 
-  @Field(() => Int)
+  @Field(() => Int, {
+    description: 'Hourly rate in øre (e.g., 5000 = 50.00 DKK/hour)',
+  })
   rate: number;
 }
 

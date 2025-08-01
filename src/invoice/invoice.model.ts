@@ -17,7 +17,9 @@ export class Invoice {
   @Field(() => Float)
   totalHours: number;
 
-  @Field(() => Float)
+  @Field(() => Float, {
+    description: 'Total cost in Danish Krona (DKK)',
+  })
   totalCost: number;
 
   @Field(() => [RateDetail], { nullable: true })
@@ -37,10 +39,15 @@ export class RateDetail {
   @Field(() => Float)
   hours: number;
 
-  @Field(() => Float)
+  @Field(() => Float, {
+    description: 'Cost in Danish Krona (DKK) for this rate',
+  })
   cost: number;
 
-  @Field(() => Float)
+  @Field(() => Float, {
+    description:
+      'Rate per hour in Danish Krona (DKK) - converted from øre stored in database',
+  })
   ratePerHour: number;
 
   __typename?: string;

@@ -78,7 +78,9 @@ export class RateService {
     }
 
     if (!Number.isInteger(rate) || rate < 0) {
-      throw new BadRequestException('Rate must be a non-negative integer');
+      throw new BadRequestException(
+        'Rate must be a non-negative integer in øre (e.g., 5000 for 50.00 DKK/hour)',
+      );
     }
 
     if (!teamId || typeof teamId !== 'string' || teamId.trim().length === 0) {
