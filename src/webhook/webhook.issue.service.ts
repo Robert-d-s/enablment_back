@@ -4,6 +4,28 @@ import { IssueService } from '../issue/issue.service';
 import { IssueUpdatesGateway } from '../issue-updates/issue-updates.gateway';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { Project, Issue } from '@prisma/client';
+
+// Constants for better maintainability
+const WEBHOOK_CONSTANTS = {
+  UNASSIGNED_PROJECT: {
+    ID: process.env.UNASSIGNED_PROJECT_ID || 'unassigned-project-default',
+    NAME: 'Unassigned',
+    STATE: 'Unassigned',
+    DESCRIPTION: 'Automatically created for issues without projects',
+  },
+} as const;
+
+// Interface for update operations return type
+interface IssueUpdateResult {
+  id: string;
+  title: string;
+  state?: string;
+  teamName?: string;
+  assigneeName: string;
+  priorityLabel: string;
+  labels: Array<{ id: string; name: string; color: string; parentId: string }>;
+}
 
 @Injectable()
 export class WebhookIssueService {
@@ -15,7 +37,7 @@ export class WebhookIssueService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async handleIssue(json: LinearWebhookBody) {
+  async handleIssue(json: LinearWebhookBody): Promise<void> {
     if (json.type !== 'Issue') {
       this.logger.error(
         { type: json.type },
@@ -116,12 +138,6 @@ export class WebhookIssueService {
                 { issueId: issueData.id, labels: completeIssue?.labels },
                 'Issue updated with labels, preparing broadcast',
               );
-              // console.log(
-              //   `Issue ${issueData.id} updated with labels:`,
-              //   completeIssue && 'labels' in completeIssue
-              //     ? completeIssue.labels
-              //     : issueData.labels || 'No labels',
-              // );
 
               // Broadcast the complete issue with the action field
               if (completeIssue) {
@@ -301,13 +317,11 @@ export class WebhookIssueService {
   /**
    * Creates or retrieves a special "Unassigned" project for issues without a project
    */
-  private async createOrGetUnassignedProject() {
-    const UNASSIGNED_PROJECT_ID = 'unassigned-project-id'; // Use a fixed ID
-
+  private async createOrGetUnassignedProject(): Promise<Project | null> {
     try {
       // Try to find existing unassigned project
       const existingProject = await this.prisma.project.findUnique({
-        where: { id: UNASSIGNED_PROJECT_ID },
+        where: { id: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.ID },
       });
 
       if (existingProject) {
@@ -327,13 +341,13 @@ export class WebhookIssueService {
         this.logger.info('Creating "Unassigned" project');
         return await tx.project.create({
           data: {
-            id: UNASSIGNED_PROJECT_ID,
-            name: 'Unassigned',
+            id: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.ID,
+            name: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.NAME,
             teamId: team.id,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            state: 'Unassigned',
-            description: 'Automatically created for issues without projects',
+            state: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.STATE,
+            description: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.DESCRIPTION,
           },
         });
       });
@@ -349,7 +363,7 @@ export class WebhookIssueService {
   /**
    * Creates a new issue in the database
    */
-  private async createIssue(data: IssueWebhookData) {
+  private async createIssue(data: IssueWebhookData): Promise<Issue> {
     this.logger.debug({ issueId: data.id }, 'Calling issueService.create');
     try {
       // Ensure we have a projectId
@@ -372,10 +386,12 @@ export class WebhookIssueService {
   /**
    * Updates an existing issue in the database
    */
-  private async updateExistingIssue(data: IssueWebhookData) {
+  private async updateExistingIssue(
+    data: IssueWebhookData,
+  ): Promise<IssueUpdateResult> {
     this.logger.debug({ issueId: data.id }, 'Updating existing issue data');
     try {
-      const updateData: any = {
+      const updateData: Partial<Issue> = {
         updatedAt: data.updatedAt,
         title: data.title,
         dueDate: data.dueDate,
