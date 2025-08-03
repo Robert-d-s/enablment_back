@@ -5,6 +5,7 @@ import {
   OnGatewayDisconnect,
   OnGatewayInit,
 } from '@nestjs/websockets';
+import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { getCorsConfig } from '../config/cors.config';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
@@ -12,10 +13,14 @@ import { BroadcastOptions } from './dto/issue-update.dto';
 import { WEBSOCKET_CONSTANTS } from './constants/websocket.constants';
 import { IssueUpdateValidationService } from './utils/issue-update-validation.service';
 import { ConnectionManagerService } from './services/connection-manager.service';
+import { WebSocketAuthGuard } from './guards/websocket-auth.guard';
+import { TokenService } from '../auth/token.service';
+import { TokenBlacklistService } from '../auth/token-blacklist.service';
 
 @WebSocketGateway({
   cors: getCorsConfig(),
 })
+@UseGuards(WebSocketAuthGuard)
 export class IssueUpdatesGateway
   implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
@@ -25,6 +30,8 @@ export class IssueUpdatesGateway
     @InjectPinoLogger(IssueUpdatesGateway.name)
     private readonly logger: PinoLogger,
     private readonly connectionManager: ConnectionManagerService,
+    private readonly tokenService: TokenService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   afterInit(): void {
@@ -43,24 +50,26 @@ export class IssueUpdatesGateway
 
   handleConnection(client: Socket): void {
     try {
-      // Extract user info from auth token if available
-      const userId = this.extractUserIdFromSocket(client);
+      // User ID is now available from authentication guard
+      const userId = client.data.userId || client.data.user?.id;
 
       this.connectionManager.addConnection(client, userId);
       this.logger.info(
-        { clientId: client.id, userId },
-        'Client connected to WebSocket',
+        { clientId: client.id, userId, userEmail: client.data.user?.email },
+        'Authenticated client connected to WebSocket',
       );
 
-      // Send connection confirmation
+      // Send connection confirmation with user info
       client.emit(WEBSOCKET_CONSTANTS.EVENTS.CONNECTION_STATUS, {
         status: 'connected',
+        authenticated: true,
+        userId,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
       this.logger.error(
         { err: error, clientId: client.id },
-        'Error handling new connection',
+        'Error handling authenticated connection',
       );
       client.disconnect();
     }
@@ -147,25 +156,11 @@ export class IssueUpdatesGateway
     }
   }
 
-  // Additional utility methods
-  private extractUserIdFromSocket(socket: Socket): string | undefined {
-    try {
-      // Extract from auth token or headers
-      const token =
-        socket.handshake.auth?.token || socket.handshake.headers?.authorization;
-      if (token) {
-        // TODO: Implement proper JWT token validation
-        // For now, return undefined (anonymous connection)
-        return undefined;
-      }
-      return undefined;
-    } catch (error) {
-      this.logger.warn(
-        { err: error, socketId: socket.id },
-        'Failed to extract user ID from socket',
-      );
-      return undefined;
-    }
+  // Additional utility methods - now handled by authentication guard
+  private getUserFromSocket(
+    socket: Socket,
+  ): { id: number; email: string; role: string } | undefined {
+    return socket.data.user;
   }
 
   private sendHeartbeat(): void {
