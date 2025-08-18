@@ -57,7 +57,10 @@ async function combineFiles() {
           if (!EXCLUDE_DIRS.has(dirent.name)) {
             directoryQueue.push(fullPath);
           }
-        } else if (!EXCLUDE_FILES.has(dirent.name)) {
+        } else if (
+          !EXCLUDE_FILES.has(dirent.name) &&
+          !dirent.name.endsWith('.md')
+        ) {
           const ext = path.extname(dirent.name);
           if (INCLUDE_EXTENSIONS.has(ext)) {
             try {

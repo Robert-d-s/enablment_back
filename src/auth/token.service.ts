@@ -14,6 +14,7 @@ export interface AccessTokenPayload {
   sub: number;
   id: number;
   role: string;
+  tokenVersion: number;
 }
 
 export interface RefreshTokenPayload {
@@ -34,6 +35,7 @@ export class TokenService {
       sub: user.id,
       id: user.id,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     };
 
     const refreshTokenPayload: RefreshTokenPayload = {

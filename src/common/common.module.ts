@@ -1,9 +1,9 @@
 import { Global, Module } from '@nestjs/common';
-import { LoggingService } from './services/logging.service';
+import { GlobalGqlExceptionFilter } from './filters/gql-exception.filter';
 
 @Global()
 @Module({
-  providers: [LoggingService],
-  exports: [LoggingService],
+  providers: [GlobalGqlExceptionFilter],
+  exports: [GlobalGqlExceptionFilter],
 })
 export class CommonModule {}

@@ -13,12 +13,15 @@ model User {
   password String
 
   role UserRole @default(PENDING)
+  tokenVersion Int @default(1)
 
   times Time[]
   teams UserTeam[]
 
   hashedRefreshToken String?
 
+  @@index([role], name: "idx_user_role")
+  @@index([email, role], name: "idx_user_email_role")
   @@map("User")
 }
 
@@ -36,6 +39,8 @@ model UserTeam {
   team   Team   @relation(fields: [teamId], references: [id])
 
   @@id([userId, teamId])
+  @@index([userId], name: "idx_userteam_userid")
+  @@index([teamId], name: "idx_userteam_teamid")
 }
 
 model Team {
@@ -49,10 +54,10 @@ model Team {
 }
 
 model Rate {
-  id     Int    @id @default(autoincrement())
+  id     Int     @id @default(autoincrement())
   name   String
   teamId String
-  rate   Int
+  rate   Decimal @db.Decimal(10, 2) // Supports up to 99,999,999.99 DKK/hour
 
   team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
   times Time[]

@@ -1,4 +1,3 @@
-// src/time/time.input.ts
 import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   IsDate,
@@ -6,7 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  Min,  
+  Min,
   IsInt,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -14,7 +13,6 @@ import { Type } from 'class-transformer';
 @InputType()
 export class TimeInputCreate {
   @Field(() => Date, {
-    // For GraphQL
     nullable: false,
     description: 'Start time',
   })
@@ -103,9 +101,9 @@ export class TimeInputUpdate {
 
 @InputType()
 export class DeleteTimeInput {
-    @Field(() => Int)
-    @IsInt()
-    @IsNotEmpty()
-    @Min(1) // Assuming time IDs start from 1
-    id: number;
+  @Field(() => Int)
+  @IsInt()
+  @IsNotEmpty()
+  @Min(1) // Assuming time IDs start from 1
+  id: number;
 }

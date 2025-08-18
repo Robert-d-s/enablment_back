@@ -57,7 +57,8 @@ export type LinearWebhookBody = {
 
 @Injectable()
 export class WebhookService {
-    constructor( @InjectPinoLogger(WebhookService.name) private readonly logger: PinoLogger,
+  constructor(
+    @InjectPinoLogger(WebhookService.name) private readonly logger: PinoLogger,
     private webhookProjectService: WebhookProjectService,
     private webhookIssueService: WebhookIssueService,
     private teamService: TeamService,
@@ -72,34 +73,52 @@ export class WebhookService {
     try {
       if (type == 'Project') {
         const projectData = json.data as ProjectWebhookData;
-        const teamId = projectData.teamIds[0]; 
-        this.logger.debug({ teamId, projectId: dataId }, 'Checking team existence for project webhook');
-        const team = await this.teamService.getTeamById(teamId); 
+        const teamId = projectData.teamIds[0];
+        this.logger.debug(
+          { teamId, projectId: dataId },
+          'Checking team existence for project webhook',
+        );
+        const team = await this.teamService.getTeamById(teamId);
 
         if (!team) {
-          this.logger.info({ teamId }, 'Team not found for project webhook. Triggering team synchronization.');
+          this.logger.info(
+            { teamId },
+            'Team not found for project webhook. Triggering team synchronization.',
+          );
           try {
-              await this.databaseSyncService.synchronizeTeamsOnly();
-              const synchronizedTeam = await this.teamService.getTeamById(teamId);
-              if (!synchronizedTeam) {
-                 this.logger.error({ teamId, projectId: dataId }, 'Team still not found after synchronization. Cannot process project webhook.');
-                 return;
-              }
-              this.logger.info({ teamId }, 'Team synchronization complete, proceeding with project webhook.');
-          } catch(syncError) {
-              this.logger.error({ err: syncError, teamId }, 'Error during team synchronization triggered by webhook');
+            await this.databaseSyncService.synchronizeTeamsOnly();
+            const synchronizedTeam = await this.teamService.getTeamById(teamId);
+            if (!synchronizedTeam) {
+              this.logger.error(
+                { teamId, projectId: dataId },
+                'Team still not found after synchronization. Cannot process project webhook.',
+              );
               return;
+            }
+            this.logger.info(
+              { teamId },
+              'Team synchronization complete, proceeding with project webhook.',
+            );
+          } catch (syncError) {
+            this.logger.error(
+              { err: syncError, teamId },
+              'Error during team synchronization triggered by webhook',
+            );
+            return;
           }
         }
-        await this.webhookProjectService.handleProject(json); 
+        await this.webhookProjectService.handleProject(json);
       } else if (type === 'Issue') {
         await this.webhookIssueService.handleIssue(json);
       } else {
-         this.logger.warn({ type }, 'Received webhook for unhandled type');
+        this.logger.warn({ type }, 'Received webhook for unhandled type');
       }
       this.logger.info({ type, action, dataId }, 'Webhook processing complete');
-  } catch (error) {
-      this.logger.error({ err: error, type, action, dataId }, 'Unhandled error during webhook processing');
+    } catch (error) {
+      this.logger.error(
+        { err: error, type, action, dataId },
+        'Unhandled error during webhook processing',
+      );
+    }
   }
-}
 }

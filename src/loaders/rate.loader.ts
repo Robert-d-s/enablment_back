@@ -1,7 +1,7 @@
 import { Injectable, Scope } from '@nestjs/common';
 import * as DataLoader from 'dataloader';
 import { PrismaService } from '../prisma/prisma.service';
-import { Rate } from '@prisma/client';
+import { Rate } from '../rate/rate.model';
 
 @Injectable({ scope: Scope.REQUEST })
 export class RateLoader {
@@ -14,7 +14,9 @@ export class RateLoader {
       },
     });
 
-    const rateMap = new Map(rates.map((rate) => [rate.id, rate]));
+    const rateMap = new Map(
+      rates.map((rate) => [rate.id, Rate.fromPrisma(rate)]),
+    );
     return ids.map((id) => rateMap.get(id) || null);
   });
 
@@ -33,7 +35,7 @@ export class RateLoader {
 
     rates.forEach((rate) => {
       const teamRates = teamRatesMap.get(rate.teamId) || [];
-      teamRates.push(rate);
+      teamRates.push(Rate.fromPrisma(rate));
       teamRatesMap.set(rate.teamId, teamRates);
     });
 

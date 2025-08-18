@@ -2,7 +2,6 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
-
 @Injectable()
 export class PrismaService
   extends PrismaClient<{
@@ -10,7 +9,7 @@ export class PrismaService
       { emit: 'event'; level: 'query' },
       { emit: 'event'; level: 'info' },
       { emit: 'event'; level: 'warn' },
-      { emit: 'event'; level: 'error' }
+      { emit: 'event'; level: 'error' },
     ];
   }>
   implements OnModuleInit, OnModuleDestroy

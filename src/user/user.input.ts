@@ -28,7 +28,7 @@ export class UpdateUserRoleInput {
   @Field(() => Int)
   @IsInt()
   @IsNotEmpty()
-  @Min(1) 
+  @Min(1)
   userId: number;
 
   @Field(() => UserRole)
@@ -47,6 +47,6 @@ export class UserTeamInput {
 
   @Field(() => String)
   @IsString()
-  @IsNotEmpty() 
+  @IsNotEmpty()
   teamId: string;
 }

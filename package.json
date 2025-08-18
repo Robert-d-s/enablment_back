@@ -18,7 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "codemod:ponno": "ts-node ponnoCodemod.ts"
+    "codemod:ponno": "ts-node ponnoCodemod.ts",
+    "db:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@apollo/server": "^4.11.3",
