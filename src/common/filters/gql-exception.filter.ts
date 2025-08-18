@@ -8,6 +8,10 @@ import { GqlExceptionFilter, GqlArgumentsHost } from '@nestjs/graphql';
 import { Prisma } from '@prisma/client';
 import { GraphQLError } from 'graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import {
+  BaseAppException,
+  StructuredErrorResponse,
+} from '../exceptions/base.exception';
 
 @Catch()
 export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
@@ -18,36 +22,54 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): GraphQLError {
     const gqlHost = GqlArgumentsHost.create(host);
-    const info = gqlHost.getInfo(); // Log the error for debugging
+    const info = gqlHost.getInfo();
+
+    // Enhanced logging with operation context
     this.logger.error(
       {
         operation: info?.operation?.name?.value,
+        fieldName: info?.fieldName,
         error: this.serializeError(exception),
+        path: info?.path,
       },
       'GraphQL error occurred',
     );
 
-    // Handle specific error types
+    // Handle standardized application exceptions first
+    if (exception instanceof BaseAppException) {
+      return this.handleStandardizedException(exception);
+    }
+
+    // Handle legacy HTTP exceptions
     if (exception instanceof HttpException) {
       return this.handleHttpException(exception);
     }
 
+    // Handle Prisma database errors
     if (this.isPrismaError(exception)) {
       return this.handlePrismaError(
         exception as Prisma.PrismaClientKnownRequestError,
       );
     }
 
+    // Handle GraphQL errors
     if (exception instanceof GraphQLError) {
       return exception;
     }
 
-    // Default error handling
-    return new GraphQLError('Internal server error', {
-      extensions: {
-        code: 'INTERNAL_SERVER_ERROR',
+    // Default error handling with sanitized response
+    this.logger.error({ err: exception }, 'Unhandled exception in GraphQL');
+    return new GraphQLError(
+      process.env.NODE_ENV === 'production'
+        ? 'Internal server error'
+        : `Unhandled error: ${String(exception)}`,
+      {
+        extensions: {
+          code: 'INTERNAL_SERVER_ERROR',
+          timestamp: new Date().toISOString(),
+        },
       },
-    });
+    );
   }
 
   private handleHttpException(exception: HttpException): GraphQLError {
@@ -126,11 +148,42 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
     );
   }
 
+  private handleStandardizedException(
+    exception: BaseAppException,
+  ): GraphQLError {
+    const response = exception.getResponse() as StructuredErrorResponse;
+
+    return new GraphQLError(response.message, {
+      extensions: {
+        code: response.error,
+        statusCode: response.statusCode,
+        context: response.context,
+        timestamp: response.timestamp,
+      },
+    });
+  }
+
   private serializeError(error: unknown): any {
-    if (error instanceof Error) {
-      const { name, message, stack } = error;
-      return { name, message, stack };
+    if (error instanceof BaseAppException) {
+      return {
+        name: error.name,
+        message: error.message,
+        errorCode: error.errorCode,
+        context: error.context,
+        // Only include stack trace in development
+        ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+      };
     }
+
+    if (error instanceof Error) {
+      return {
+        name: error.name,
+        message: error.message,
+        // Only include stack trace in development
+        ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+      };
+    }
+
     return error;
   }
 }

@@ -1,10 +1,8 @@
+import { Injectable } from '@nestjs/common';
 import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  InternalServerErrorException,
-  BadRequestException,
-} from '@nestjs/common';
+  ExceptionFactory,
+  ResourceConflictException,
+} from '../common/exceptions';
 import { UserCoreService } from '../user/user-core.service';
 import { UserSecurityService } from '../user/services/user-security.service';
 import { User, UserRole } from '@prisma/client';
@@ -50,7 +48,7 @@ export class AuthService {
       const user = await this.userCoreService.findOne(username);
       if (!user) {
         this.logger.warn('Sign-in failed: User %s not found', username);
-        throw new UnauthorizedException('Invalid email or password');
+        throw ExceptionFactory.invalidCredentials();
       }
 
       const isMatch = await this.userSecurityService.verifyPassword(
@@ -62,7 +60,7 @@ export class AuthService {
           'Sign-in failed: Password mismatch for user %s',
           username,
         );
-        throw new UnauthorizedException('Invalid email or password');
+        throw ExceptionFactory.invalidCredentials();
       }
 
       const { accessToken, refreshToken } =
@@ -80,7 +78,8 @@ export class AuthService {
       );
       return result;
     } catch (error) {
-      if (error instanceof UnauthorizedException) {
+      if (error.errorCode) {
+        // Re-throw standardized exceptions
         throw error;
       }
       this.logger.error(
@@ -88,8 +87,10 @@ export class AuthService {
         'An error occurred during sign in for user %s',
         username,
       );
-      throw new InternalServerErrorException(
-        'An error occurred during sign in',
+      throw ExceptionFactory.databaseError(
+        'user authentication',
+        'User',
+        error as Error,
       );
     }
   }
@@ -105,7 +106,7 @@ export class AuthService {
       this.logger.warn(
         `Refresh Denied: User ${userId} not found or no stored hash.`,
       );
-      throw new UnauthorizedException('Access Denied');
+      throw ExceptionFactory.tokenExpired();
     }
 
     // Compare the provided token (rt) with the stored hash
@@ -117,7 +118,7 @@ export class AuthService {
       this.logger.warn(
         `Refresh Denied: Provided token does not match stored hash for user ${userId}.`,
       );
-      throw new UnauthorizedException('Access Denied');
+      throw ExceptionFactory.tokenExpired();
     }
     this.logger.debug(
       `Refresh Granted: Token match successful for user ${userId}.`,
@@ -161,16 +162,16 @@ export class AuthService {
       const existingUser = await this.userCoreService.findOne(email);
       if (existingUser) {
         this.logger.warn('Sign-up failed: Email %s already exists', email);
-        throw new ConflictException('Email already exists');
+        throw new ResourceConflictException('User', 'Email already exists', {
+          email,
+        });
       }
 
       const hashedPassword = await this.userSecurityService.hashData(password);
       return this.userCoreService.create(email, hashedPassword, role);
     } catch (error) {
-      if (
-        error instanceof ConflictException ||
-        error instanceof BadRequestException
-      ) {
+      if (error.errorCode) {
+        // Re-throw standardized exceptions
         this.logger.warn(
           { err: error },
           'Sign up validation/conflict error for email %s',
@@ -183,8 +184,10 @@ export class AuthService {
         'An unexpected error occurred during sign up for email %s',
         email,
       );
-      throw new InternalServerErrorException(
-        'An error occurred during sign up',
+      throw ExceptionFactory.databaseError(
+        'user creation',
+        'User',
+        error as Error,
       );
     }
   }

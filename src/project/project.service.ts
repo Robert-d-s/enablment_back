@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Project, Team } from '@prisma/client';
 import { TeamLoader } from '../loaders/team.loader';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
-import { ProjectNotFoundError } from './project.errors';
+import { ExceptionFactory } from '../common/exceptions';
 
 /**
  * Service for project query operations.
@@ -66,7 +66,7 @@ export class ProjectService {
     });
 
     if (!project) {
-      throw new ProjectNotFoundError(id);
+      throw ExceptionFactory.projectNotFound(id, 'findById operation');
     }
 
     return project;

@@ -7,6 +7,7 @@ import {
 import { Socket } from 'socket.io';
 import { TokenService } from '../../auth/token.service';
 import { TokenBlacklistService } from '../../auth/token-blacklist.service';
+import { ExceptionFactory, WebSocketException } from '../../common/exceptions';
 
 @Injectable()
 export class WebSocketAuthGuard implements CanActivate {
@@ -24,27 +25,23 @@ export class WebSocketAuthGuard implements CanActivate {
       const token = this.extractTokenFromSocket(client);
 
       if (!token) {
+        const exception = ExceptionFactory.webSocketAuthRequired();
         this.logger.warn(
-          { socketId: client.id },
+          { socketId: client.id, error: exception.errorCode },
           'WebSocket connection denied: No token provided',
         );
-        client.emit('auth_error', {
-          message: 'Authentication required',
-          code: 'NO_TOKEN',
-        });
+        this.emitAuthError(client, exception);
         return false;
       }
 
       // Check if token is blacklisted
       if (this.tokenBlacklistService.isTokenBlacklisted(token)) {
+        const exception = ExceptionFactory.tokenBlacklisted();
         this.logger.warn(
-          { socketId: client.id },
+          { socketId: client.id, error: exception.errorCode },
           'WebSocket connection denied: Token is blacklisted',
         );
-        client.emit('auth_error', {
-          message: 'Token is invalid',
-          code: 'TOKEN_BLACKLISTED',
-        });
+        this.emitAuthError(client, exception);
         return false;
       }
 
@@ -62,18 +59,26 @@ export class WebSocketAuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
+      const exception = ExceptionFactory.tokenExpired();
       this.logger.warn(
-        { err: error, socketId: client.id },
+        { err: error, socketId: client.id, error: exception.errorCode },
         'WebSocket authentication failed',
       );
 
-      client.emit('auth_error', {
-        message: 'Authentication failed',
-        code: 'INVALID_TOKEN',
-      });
-
+      this.emitAuthError(client, exception);
       return false;
     }
+  }
+
+  private emitAuthError(client: Socket, exception: any): void {
+    const errorResponse = {
+      message: exception.message,
+      error: exception.errorCode,
+      statusCode: exception.getStatus(),
+      timestamp: new Date().toISOString(),
+    };
+
+    client.emit('auth_error', errorResponse);
   }
 
   private extractTokenFromSocket(socket: Socket): string | undefined {
