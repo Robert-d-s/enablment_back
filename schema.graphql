@@ -61,7 +61,7 @@ type UserProfileDto {
 }
 
 type AuthResponse {
-  access_token: String!
+  accessToken: String!
   user: UserProfileDto
 }
 
@@ -70,7 +70,7 @@ type LogoutResponse {
 }
 
 type RefreshTokenResponse {
-  access_token: String!
+  accessToken: String!
 }
 
 type SyncResponse {

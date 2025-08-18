@@ -36,3 +36,11 @@ lerna-debug.log*
 
 .env
 project-context.txt
+
+# Database backups
+*.sql
+*.dump
+*.backup
+backup/
+db_backups/
+*backup*.sql

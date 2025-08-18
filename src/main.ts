@@ -17,7 +17,6 @@ async function bootstrap() {
   const loggingService = app.get(LoggingService);
   app.useLogger(logger);
 
-  // Use standard NestJS ValidationPipe with sensible defaults
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -28,12 +27,8 @@ async function bootstrap() {
       },
     }),
   );
-  // Use simplified exception filter
   app.useGlobalFilters(new GlobalGqlExceptionFilter(loggingService));
-
-  // Use simplified logging interceptor
   app.useGlobalInterceptors(new LoggingInterceptor(loggingService));
-
   app.enableCors(getCorsConfig());
   app.use(cookieParser());
 
