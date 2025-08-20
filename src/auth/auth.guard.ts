@@ -13,6 +13,7 @@ import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { UserProfileDto } from './dto/user-profile.dto';
+import type { UserProfile } from './index';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtCacheService } from './jwt-cache.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
@@ -20,9 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import type { JwtPayload } from './types';
 
-interface RequestWithUser extends Request {
-  user?: UserProfileDto;
-}
+type RequestWithUser = Request & { user?: UserProfile };
 
 @Injectable()
 export class AuthGuard implements CanActivate {
