@@ -3,7 +3,7 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class TokenBlacklistService {
-  private blacklistedTokens = new Set<string>();
+  private blacklistedTokens = new Map<string, number>();
   private blacklistCleanupInterval: NodeJS.Timeout;
 
   constructor(
@@ -18,53 +18,53 @@ export class TokenBlacklistService {
     );
   }
 
-  /**
-   * Add a token to the blacklist by its JTI (JWT ID) or token hash
-   */
-  blacklistToken(tokenId: string): void {
-    this.blacklistedTokens.add(tokenId);
-    this.logger.debug({ tokenId }, 'Token added to blacklist');
+  blacklistToken(
+    tokenId: string,
+    opts?: { expiresAt?: number; ttlMs?: number },
+  ): void {
+    const expiresAt =
+      opts?.expiresAt ??
+      (opts?.ttlMs
+        ? Date.now() + opts.ttlMs
+        : Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    this.blacklistedTokens.set(tokenId, expiresAt);
+    this.logger.debug({ tokenId, expiresAt }, 'Token added to blacklist');
   }
 
-  /**
-   * Check if a token is blacklisted
-   */
   isTokenBlacklisted(tokenId: string): boolean {
-    return this.blacklistedTokens.has(tokenId);
+    const exp = this.blacklistedTokens.get(tokenId);
+    if (!exp) return false;
+
+    if (Date.now() > exp) {
+      this.blacklistedTokens.delete(tokenId);
+      return false;
+    }
+
+    return true;
   }
 
-  /**
-   * Blacklist all tokens for a specific user (useful when role changes)
-   * This requires tokens to include user ID in a consistent format
-   */
   blacklistUserTokens(userId: number): void {
-    // For a more robust solution, you'd store user-specific token IDs
-    // For now, we'll rely on short token expiration times
     this.logger.info(
       { userId },
       'User tokens should be considered invalid due to role change',
     );
-
-    // Note: In a production environment, you'd want to:
-    // 1. Store user tokens in Redis with user ID mapping
-    // 2. Invalidate all tokens for that user
-    // 3. Or implement token versioning in JWT payload
   }
 
-  /**
-   * Clean up tokens that are past their expiration time
-   * This is a simple cleanup - in production, use Redis with TTL
-   */
   private cleanupExpiredTokens(): void {
-    // Since we don't store expiration times in this simple implementation,
-    // we'll clear the entire blacklist periodically
-    // In production, use Redis with proper TTL handling
-    const size = this.blacklistedTokens.size;
-    this.blacklistedTokens.clear();
-    this.logger.debug({ clearedTokens: size }, 'Cleaned up blacklisted tokens');
+    const now = Date.now();
+    let removed = 0;
+
+    for (const [tokenId, expiresAt] of this.blacklistedTokens) {
+      if (now > expiresAt) {
+        this.blacklistedTokens.delete(tokenId);
+        removed++;
+      }
+    }
+    this.logger.debug({ removed }, 'Cleaned up expired blacklisted tokens');
   }
 
-  onModuleDestroy() {
+  onModuleDestroy(): void {
     if (this.blacklistCleanupInterval) {
       clearInterval(this.blacklistCleanupInterval);
     }

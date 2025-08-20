@@ -21,21 +21,6 @@ export class AuthService {
     private readonly tokenService: TokenService,
   ) {}
 
-  private async updateRefreshTokenHash(
-    userId: number,
-    refreshToken: string | null,
-  ): Promise<void> {
-    const hashedRefreshToken = refreshToken
-      ? await this.userSecurityService.hashData(refreshToken)
-      : null;
-
-    await this.userSecurityService.updateRefreshTokenHash(
-      userId,
-      hashedRefreshToken,
-    );
-    this.logger.debug(`Updated refresh token hash for user ${userId}.`);
-  }
-
   async signIn(
     username: string,
     pass: string,
@@ -95,57 +80,6 @@ export class AuthService {
     }
   }
 
-  async refreshToken(
-    userId: number,
-    rt: string,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
-    this.logger.debug(`Attempting token refresh for user ${userId}`);
-    const user = await this.userCoreService.findById(userId);
-
-    if (!user || !user.hashedRefreshToken) {
-      this.logger.warn(
-        `Refresh Denied: User ${userId} not found or no stored hash.`,
-      );
-      throw ExceptionFactory.tokenExpired();
-    }
-
-    const rtMatches = await this.userSecurityService.verifyRefreshToken(
-      rt,
-      user.hashedRefreshToken,
-    );
-    if (!rtMatches) {
-      this.logger.warn(
-        `Refresh Denied: Provided token does not match stored hash for user ${userId}.`,
-      );
-      throw ExceptionFactory.tokenExpired();
-    }
-    this.logger.debug(
-      `Refresh Granted: Token match successful for user ${userId}.`,
-    );
-
-    const { accessToken, refreshToken: newRefreshToken } =
-      await this.tokenService.generateTokens(user);
-
-    await this.updateRefreshTokenHash(user.id, newRefreshToken);
-    this.logger.debug(
-      `Refresh Rotation: Stored new token hash for user ${userId}.`,
-    );
-
-    return { accessToken, refreshToken: newRefreshToken };
-  }
-
-  async logout(userId: number, accessToken?: string): Promise<boolean> {
-    this.logger.info(`Logging out user ${userId}. Clearing token hash.`);
-
-    if (accessToken) {
-      this.tokenBlacklistService.blacklistToken(accessToken);
-      this.logger.debug({ userId }, 'Access token blacklisted');
-    }
-
-    await this.userSecurityService.clearRefreshToken(userId);
-    return true;
-  }
-
   async signUp(email: string, password: string): Promise<User> {
     this.logger.debug('Attempting sign-up for email: %s', email);
     try {
@@ -186,5 +120,77 @@ export class AuthService {
         error as Error,
       );
     }
+  }
+
+  async logout(userId: number, accessToken?: string): Promise<boolean> {
+    this.logger.info(`Logging out user ${userId}. Clearing token hash.`);
+
+    if (accessToken) {
+      const expiresAt = this.tokenService.getTokenExpiry(accessToken);
+      if (expiresAt) {
+        const ttlMs = Math.max(0, expiresAt - Date.now());
+        this.tokenBlacklistService.blacklistToken(accessToken, { ttlMs });
+      } else {
+        this.tokenBlacklistService.blacklistToken(accessToken);
+      }
+      this.logger.debug({ userId }, 'Access token blacklisted');
+    }
+
+    await this.userSecurityService.clearRefreshToken(userId);
+    return true;
+  }
+
+  async refreshToken(
+    userId: number,
+    rt: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    this.logger.debug(`Attempting token refresh for user ${userId}`);
+    const user = await this.userCoreService.findById(userId);
+
+    if (!user || !user.hashedRefreshToken) {
+      this.logger.warn(
+        `Refresh Denied: User ${userId} not found or no stored hash.`,
+      );
+      throw ExceptionFactory.tokenExpired();
+    }
+
+    const rtMatches = await this.userSecurityService.verifyRefreshToken(
+      rt,
+      user.hashedRefreshToken,
+    );
+    if (!rtMatches) {
+      this.logger.warn(
+        `Refresh Denied: Provided token does not match stored hash for user ${userId}.`,
+      );
+      throw ExceptionFactory.tokenExpired();
+    }
+    this.logger.debug(
+      `Refresh Granted: Token match successful for user ${userId}.`,
+    );
+
+    const { accessToken, refreshToken: newRefreshToken } =
+      await this.tokenService.generateTokens(user);
+
+    await this.updateRefreshTokenHash(user.id, newRefreshToken);
+    this.logger.debug(
+      `Refresh Rotation: Stored new token hash for user ${userId}.`,
+    );
+
+    return { accessToken, refreshToken: newRefreshToken };
+  }
+
+  private async updateRefreshTokenHash(
+    userId: number,
+    refreshToken: string | null,
+  ): Promise<void> {
+    const hashedRefreshToken = refreshToken
+      ? await this.userSecurityService.hashData(refreshToken)
+      : null;
+
+    await this.userSecurityService.updateRefreshTokenHash(
+      userId,
+      hashedRefreshToken,
+    );
+    this.logger.debug(`Updated refresh token hash for user ${userId}.`);
   }
 }

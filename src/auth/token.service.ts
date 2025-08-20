@@ -97,4 +97,15 @@ export class TokenService {
     }
     return undefined;
   }
+
+  getTokenExpiry(token: string): number | null {
+    try {
+      const decoded = this.jwtService.decode(token) as { exp?: number } | null;
+      if (!decoded || typeof decoded.exp !== 'number') return null;
+      return decoded.exp * 1000;
+    } catch (err) {
+      this.logger.warn({ err }, 'Failed to decode token for expiry extraction');
+      return null;
+    }
+  }
 }

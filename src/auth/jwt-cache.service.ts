@@ -22,9 +22,6 @@ export class JwtCacheService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Get cached JWT verification result for the current request
-   */
   getCachedVerification(
     request: RequestWithJwtCache,
     token: string,
@@ -36,9 +33,6 @@ export class JwtCacheService {
     return null;
   }
 
-  /**
-   * Cache JWT verification result for the current request
-   */
   setCachedVerification(
     request: RequestWithJwtCache,
     token: string,
@@ -54,9 +48,6 @@ export class JwtCacheService {
     this.logger.debug('JWT verification result cached for request');
   }
 
-  /**
-   * Clear JWT cache for the current request
-   */
   clearCache(request: RequestWithJwtCache): void {
     if (request._jwtCache) {
       delete request._jwtCache;
@@ -64,9 +55,6 @@ export class JwtCacheService {
     }
   }
 
-  /**
-   * Get cache statistics for debugging
-   */
   getCacheStats(request: RequestWithJwtCache): {
     hasCachedResult: boolean;
     cachedAt?: number;
