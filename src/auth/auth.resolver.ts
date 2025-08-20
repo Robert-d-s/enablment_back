@@ -21,6 +21,7 @@ import { RefreshTokenResponse } from './dto/refresh-token-response';
 import { SignInInput } from './dto/sign-in.input';
 import { SignUpInput } from './dto/sign-up.input';
 import { UserProfileDto } from './dto/user-profile.dto';
+import { ensureUserProfileDto } from './convert';
 
 @Resolver()
 export class AuthResolver {
@@ -144,7 +145,7 @@ export class AuthResolver {
 
   @Mutation(() => LogoutResponse)
   async logout(@Context() context: GqlContext): Promise<LogoutResponse> {
-    const user = context.req.user as UserProfileDto;
+    const user = ensureUserProfileDto(context.req.user);
     const token = this.extractTokenFromRequest(context);
 
     try {
@@ -191,7 +192,7 @@ export class AuthResolver {
 
   @Query(() => UserProfileDto)
   async me(@Context() context: GqlContext): Promise<UserProfileDto> {
-    const user = context.req.user as UserProfileDto;
+    const user = ensureUserProfileDto(context.req.user);
     this.logger.debug({ userId: user.id }, 'Executing "me" query');
     return user;
   }

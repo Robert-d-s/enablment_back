@@ -6,7 +6,7 @@ import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { GqlContext } from '../app.module';
-import { UserProfileDto } from '../auth/dto/user-profile.dto';
+import { ensureUserProfileDto } from '../auth/convert';
 
 @Resolver(() => Rate)
 export class RateResolver {
@@ -20,7 +20,7 @@ export class RateResolver {
     @Args('teamId') teamId: string,
     @Context() context: GqlContext,
   ): Promise<Rate[]> {
-    const currentUser = context.req.user as UserProfileDto;
+    const currentUser = ensureUserProfileDto(context.req.user);
     this.logger.debug(
       { teamId, userId: currentUser.id },
       'Executing rates query',

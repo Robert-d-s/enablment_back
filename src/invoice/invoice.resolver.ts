@@ -5,7 +5,8 @@ import { InvoiceInput } from './invoice.input';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { GqlContext } from '../app.module';
-import { User } from '../user/user.model';
+import { ensureUserProfileDto } from '../auth/convert';
+import type { UserProfile } from '../auth';
 
 @Resolver(() => Invoice)
 export class InvoiceResolver {
@@ -17,7 +18,12 @@ export class InvoiceResolver {
     @Args('input') input: InvoiceInput,
     @Context() context: GqlContext,
   ): Promise<Invoice> {
-    const currentUser = context.req.user as User;
+    const userDto = ensureUserProfileDto(context.req.user);
+    const currentUser: UserProfile = {
+      id: userDto.id,
+      email: userDto.email,
+      role: userDto.role,
+    };
     return this.invoiceService.generateInvoiceForProject(
       input.projectId,
       input.startDate,

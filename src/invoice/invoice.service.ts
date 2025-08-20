@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
 import { Prisma, UserRole } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
-import { User } from '../user/user.model';
+import type { UserProfile } from '../auth';
 
 // Constants for time calculations
 const MS_PER_HOUR = 60 * 60 * 1000; // 3,600,000 milliseconds in an hour
@@ -199,7 +199,7 @@ export class InvoiceService {
     projectId: string,
     startDate: Date,
     endDate: Date,
-    currentUser: User,
+    currentUser: UserProfile,
   ): Promise<Invoice> {
     // Validate inputs first
     this.validateInvoiceInput(projectId, startDate, endDate);
