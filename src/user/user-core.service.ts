@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, UserRole, Prisma } from '@prisma/client';
+import type { UserProfile } from '../auth';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { UserQueryArgs } from './user.resolver';
 
@@ -97,9 +98,7 @@ export class UserCoreService {
     return this.prisma.user.count({ where });
   }
 
-  async findUsers(
-    args: UserQueryArgs,
-  ): Promise<Array<Pick<User, 'id' | 'email' | 'role'>>> {
+  async findUsers(args: UserQueryArgs): Promise<Array<UserProfile>> {
     this.logger.debug(
       { queryArgs: args },
       'Finding users with filters and pagination',

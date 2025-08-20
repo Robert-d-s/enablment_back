@@ -6,6 +6,7 @@ import {
 import { UserCoreService } from '../user/user-core.service';
 import { UserSecurityService } from '../user/services/user-security.service';
 import { User, UserRole } from '@prisma/client';
+import type { UserProfile } from '../auth';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { TokenService } from './token.service';
@@ -25,7 +26,7 @@ export class AuthService {
     username: string,
     pass: string,
   ): Promise<{
-    user: Pick<User, 'id' | 'email' | 'role'>;
+    user: UserProfile;
     accessToken: string;
     refreshToken: string;
   }> {
@@ -54,7 +55,11 @@ export class AuthService {
       await this.updateRefreshTokenHash(user.id, refreshToken);
 
       const result = {
-        user: { id: user.id, email: user.email, role: user.role },
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        } as UserProfile,
         accessToken,
         refreshToken,
       };

@@ -16,6 +16,7 @@ import { TeamLoader } from '../loaders/team.loader';
 import { Team } from '../team/team.model';
 import { IsOptional, IsInt, IsString, IsEnum } from 'class-validator';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import type { UserProfile } from '../auth';
 
 @InputType()
 export class UserQueryArgs {
@@ -70,13 +71,11 @@ export class UserResolver {
       'Executing users query (delegating to service)',
     );
     const usersFromService = await this.userCoreService.findUsers(args);
-    return usersFromService.map(
-      (user: Pick<User, 'id' | 'email' | 'role'>) => ({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      }),
-    );
+    return usersFromService.map((user: UserProfile) => ({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    }));
   }
 
   @ResolveField(() => [Team])

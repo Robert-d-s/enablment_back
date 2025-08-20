@@ -18,14 +18,7 @@ import { JwtCacheService } from './jwt-cache.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
-export interface JwtPayload {
-  email: string;
-  sub: number;
-  id: number;
-  role: UserRole;
-  tokenVersion: number;
-  [key: string]: unknown;
-}
+import type { JwtPayload } from './types';
 
 interface RequestWithUser extends Request {
   user?: UserProfileDto;
@@ -46,7 +39,6 @@ export class AuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     this.logger.debug('AuthGuard: Proceeding with authentication check');
 
-    // Check if the endpoint is marked as public
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -101,7 +93,6 @@ export class AuthGuard implements CanActivate {
         });
       }
 
-      // Validate token version against current user's token version
       const currentUser = await this.prismaService.user.findUnique({
         where: { id: payload.id },
         select: { tokenVersion: true, role: true },
@@ -133,7 +124,6 @@ export class AuthGuard implements CanActivate {
         });
       }
 
-      // Additional check: verify role hasn't changed (extra security)
       if (currentUser.role !== payload.role) {
         this.logger.warn(
           {
@@ -149,11 +139,9 @@ export class AuthGuard implements CanActivate {
         });
       }
 
-      // Convert JWT payload directly to UserProfileDto
       const user = UserProfileDto.fromJwtPayload(payload);
       request.user = user;
 
-      // Cache the verification result for this request
       this.jwtCacheService.setCachedVerification(request, token, payload, user);
 
       return this.checkUserRoles(context, payload);

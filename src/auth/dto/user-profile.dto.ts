@@ -1,10 +1,10 @@
 import { ObjectType, OmitType } from '@nestjs/graphql';
 import { User } from '../../user/user.model';
-import { UserRole } from '@prisma/client';
+import type { JwtPayload, UserProfile } from '../types';
 
 @ObjectType()
 export class UserProfileDto extends OmitType(User, ['teams'] as const) {
-  static fromUser(user: Pick<User, 'id' | 'email' | 'role'>): UserProfileDto {
+  static fromUser(user: UserProfile): UserProfileDto {
     const profile = new UserProfileDto();
     profile.id = user.id;
     profile.email = user.email;
@@ -12,12 +12,7 @@ export class UserProfileDto extends OmitType(User, ['teams'] as const) {
     return profile;
   }
 
-  static fromJwtPayload(payload: {
-    id: number;
-    email: string;
-    role: UserRole;
-    tokenVersion: number;
-  }): UserProfileDto {
+  static fromJwtPayload(payload: JwtPayload): UserProfileDto {
     const profile = new UserProfileDto();
     profile.id = payload.id;
     profile.email = payload.email;
