@@ -280,4 +280,18 @@ export class ExceptionFactory {
   static webSocketInvalidMessage(reason: string): WebSocketException {
     return new WebSocketException(reason, 'INVALID_MESSAGE');
   }
+
+  static externalServiceError(
+    serviceName: string,
+    operation: string,
+    originalError?: Error,
+    context?: Record<string, unknown>,
+  ): ExternalServiceException {
+    return new ExternalServiceException(
+      serviceName,
+      operation,
+      originalError,
+      context,
+    );
+  }
 }

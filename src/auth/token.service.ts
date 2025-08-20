@@ -24,7 +24,8 @@ export interface RefreshTokenPayload {
 @Injectable()
 export class TokenService {
   constructor(
-    @InjectPinoLogger(TokenService.name) private readonly logger: PinoLogger,
+    @InjectPinoLogger(TokenService.name)
+    private readonly logger: PinoLogger,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -90,9 +91,6 @@ export class TokenService {
     }
   }
 
-  /**
-   * Extract token from Authorization header
-   */
   extractTokenFromAuthHeader(authHeader?: string): string | undefined {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.substring(7);

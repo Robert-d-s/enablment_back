@@ -11,7 +11,8 @@ const DEFAULT_PAGE_SIZE = 10;
 @Injectable()
 export class UserCoreService {
   constructor(
-    @InjectPinoLogger(UserCoreService.name) private readonly logger: PinoLogger,
+    @InjectPinoLogger(UserCoreService.name)
+    private readonly logger: PinoLogger,
     private prisma: PrismaService,
   ) {}
 
@@ -53,51 +54,60 @@ export class UserCoreService {
     });
   }
 
+  private buildUserFilters(args: {
+    search?: string;
+    role?: UserRole;
+  }): Prisma.UserWhereInput {
+    const where: Prisma.UserWhereInput = {};
+    if (args.search) {
+      where.email = { contains: args.search };
+    }
+    if (args.role) {
+      where.role = args.role;
+    }
+    return where;
+  }
+
+  private calculatePagination(
+    page?: number,
+    pageSize?: number,
+  ): {
+    skip: number;
+    take: number;
+    currentPage: number;
+    currentPageSize: number;
+  } {
+    const currentPage = Math.max(1, page ?? 1);
+    const currentPageSize = Math.min(
+      MAX_PAGE_SIZE,
+      Math.max(1, pageSize ?? DEFAULT_PAGE_SIZE),
+    );
+    const skip = (currentPage - 1) * currentPageSize;
+    const take = currentPageSize;
+
+    return { skip, take, currentPage, currentPageSize };
+  }
+
   async countUsersWithFilters(args: {
     search?: string;
     role?: UserRole;
   }): Promise<number> {
     this.logger.debug({ filterArgs: args }, 'Counting users with filters');
-    const where: Prisma.UserWhereInput = {};
-    if (args.search) {
-      where.email = { contains: args.search };
-    }
-    if (args.role) {
-      where.role = args.role;
-    }
+    const where = this.buildUserFilters(args);
     return this.prisma.user.count({ where });
   }
 
-  // Method to Find users with filters and pagination (Required for users query)
   async findUsers(
     args: UserQueryArgs,
   ): Promise<Array<Pick<User, 'id' | 'email' | 'role'>>> {
-    // Return type matches resolver needs
     this.logger.debug(
       { queryArgs: args },
       'Finding users with filters and pagination',
     );
 
-    // Validate pagination parameters
-    const currentPage = Math.max(1, args.page ?? 1);
-    const currentPageSize = Math.min(
-      MAX_PAGE_SIZE,
-      Math.max(1, args.pageSize ?? DEFAULT_PAGE_SIZE),
-    );
+    const { skip, take } = this.calculatePagination(args.page, args.pageSize);
+    const where = this.buildUserFilters(args);
 
-    const skip = (currentPage - 1) * currentPageSize;
-    const take = currentPageSize;
-
-    const where: Prisma.UserWhereInput = {};
-    if (args.search) {
-      // MySQL doesn't support mode option, but COLLATE determines case sensitivity
-      where.email = { contains: args.search };
-    }
-    if (args.role) {
-      where.role = args.role;
-    }
-
-    // Return only the fields needed by the resolver/GraphQL type
     return this.prisma.user.findMany({
       where,
       skip,
@@ -105,7 +115,7 @@ export class UserCoreService {
       select: {
         id: true,
         email: true,
-        role: true, // Prisma returns the enum value
+        role: true,
       },
       orderBy: {
         email: 'asc',

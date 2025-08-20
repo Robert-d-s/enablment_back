@@ -1,22 +1,32 @@
-import { Args, Mutation, Query, Resolver, Context } from '@nestjs/graphql';
+// NestJS Core
+import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { JwtService } from '@nestjs/jwt';
+
+// Third-party packages
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+
+// Internal modules
+import { GqlContext } from '../app.module';
+
+// Local services and decorators
 import { AuthService } from './auth.service';
-import { UserProfileDto } from './dto/user-profile.dto';
+import { Public } from './public.decorator';
+
+// DTOs and types
+import { AuthResponse } from './dto/auth-response';
+import { LogoutResponse } from './dto/logout-response';
+import { RefreshTokenResponse } from './dto/refresh-token-response';
 import { SignInInput } from './dto/sign-in.input';
 import { SignUpInput } from './dto/sign-up.input';
-import { AuthResponse } from './dto/auth-response';
-import { UnauthorizedException } from '@nestjs/common';
-import { LogoutResponse } from './dto/logout-response';
-import { GqlContext } from '../app.module';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { RefreshTokenResponse } from './dto/refresh-token-response';
-import { Public } from './public.decorator';
-import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { UserProfileDto } from './dto/user-profile.dto';
 
 @Resolver()
 export class AuthResolver {
   constructor(
-    @InjectPinoLogger(AuthResolver.name) private readonly logger: PinoLogger,
+    @InjectPinoLogger(AuthResolver.name)
+    private readonly logger: PinoLogger,
     private authService: AuthService,
     private jwtService: JwtService,
     private configService: ConfigService,

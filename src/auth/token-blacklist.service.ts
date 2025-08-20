@@ -10,7 +10,6 @@ export class TokenBlacklistService {
     @InjectPinoLogger(TokenBlacklistService.name)
     private readonly logger: PinoLogger,
   ) {
-    // Clean up expired tokens every hour
     this.blacklistCleanupInterval = setInterval(
       () => {
         this.cleanupExpiredTokens();

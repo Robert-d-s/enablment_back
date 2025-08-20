@@ -13,7 +13,8 @@ import { TokenService } from './token.service';
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
+    @InjectPinoLogger(AuthService.name)
+    private readonly logger: PinoLogger,
     private readonly userCoreService: UserCoreService,
     private readonly userSecurityService: UserSecurityService,
     private readonly tokenBlacklistService: TokenBlacklistService,
@@ -79,7 +80,6 @@ export class AuthService {
       return result;
     } catch (error) {
       if (error.errorCode) {
-        // Re-throw standardized exceptions
         throw error;
       }
       this.logger.error(
@@ -109,7 +109,6 @@ export class AuthService {
       throw ExceptionFactory.tokenExpired();
     }
 
-    // Compare the provided token (rt) with the stored hash
     const rtMatches = await this.userSecurityService.verifyRefreshToken(
       rt,
       user.hashedRefreshToken,
@@ -138,13 +137,11 @@ export class AuthService {
   async logout(userId: number, accessToken?: string): Promise<boolean> {
     this.logger.info(`Logging out user ${userId}. Clearing token hash.`);
 
-    // Blacklist the current access token if provided
     if (accessToken) {
       this.tokenBlacklistService.blacklistToken(accessToken);
       this.logger.debug({ userId }, 'Access token blacklisted');
     }
 
-    // Clear refresh token from database
     await this.userSecurityService.clearRefreshToken(userId);
     return true;
   }
@@ -171,7 +168,6 @@ export class AuthService {
       return this.userCoreService.create(email, hashedPassword, role);
     } catch (error) {
       if (error.errorCode) {
-        // Re-throw standardized exceptions
         this.logger.warn(
           { err: error },
           'Sign up validation/conflict error for email %s',
