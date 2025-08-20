@@ -1,9 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import {
-  Injectable,
-  BadRequestException,
-  NotFoundException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+  ExceptionFactory,
+  ValidationException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { PrismaService } from '../prisma/prisma.service';
 import { Issue, Label } from '@prisma/client';
 import { IssueWebhookData } from '../webhook/webhook.service';
@@ -136,11 +136,13 @@ export class IssueService {
         { err: error, issueData: data },
         'Error creating issue',
       );
-      if (error instanceof BadRequestException) {
+      if (error instanceof ValidationException) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        `Failed to create issue: ${error.message}`,
+      throw ExceptionFactory.databaseError(
+        'create issue',
+        'Issue',
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   }
@@ -212,13 +214,15 @@ export class IssueService {
         'Error updating issue',
       );
       if (
-        error instanceof BadRequestException ||
-        error instanceof NotFoundException
+        error instanceof ValidationException ||
+        error instanceof ResourceNotFoundException
       ) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        `Failed to update issue ${id}: ${error.message}`,
+      throw ExceptionFactory.databaseError(
+        'update issue',
+        'Issue',
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   }
@@ -339,7 +343,7 @@ export class IssueService {
 
       if (!existingIssue) {
         this.logger.warn({ issueId: id }, 'Issue not found for removal');
-        throw new NotFoundException(`Issue with ID ${id} not found`);
+        throw ExceptionFactory.issueNotFound(id, 'update operation');
       }
 
       await this.prisma.issue.delete({ where: { id } });
@@ -350,11 +354,13 @@ export class IssueService {
       this.logger.info({ issueId: id }, 'Successfully removed issue');
     } catch (error) {
       this.logger.error({ err: error, issueId: id }, 'Error removing issue');
-      if (error instanceof NotFoundException) {
+      if (error instanceof ResourceNotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        `Failed to remove issue ${id}: ${error.message}`,
+      throw ExceptionFactory.databaseError(
+        'remove issue',
+        'Issue',
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   }

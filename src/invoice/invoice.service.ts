@@ -1,9 +1,10 @@
+import { Injectable } from '@nestjs/common';
 import {
-  Injectable,
-  NotFoundException,
-  InternalServerErrorException,
-  ForbiddenException,
-} from '@nestjs/common';
+  ExceptionFactory,
+  ValidationException,
+  BusinessLogicException,
+  DatabaseException,
+} from '../common/exceptions';
 import { PrismaService } from '../prisma/prisma.service';
 import { Invoice, RateDetail } from './invoice.model';
 import { Prisma, UserRole } from '@prisma/client';
@@ -46,8 +47,9 @@ export class InvoiceService {
     });
 
     if (!userTeam) {
-      throw new ForbiddenException(
-        `Access denied. You are not a member of the team associated with this project.`,
+      throw ExceptionFactory.insufficientPermissions(
+        'access project invoice',
+        `team ${teamId}`,
       );
     }
   }
@@ -61,11 +63,17 @@ export class InvoiceService {
     endDate: Date,
   ): void {
     if (!projectId?.trim()) {
-      throw new NotFoundException('Project ID is required');
+      throw ExceptionFactory.validationError(
+        'projectId',
+        projectId,
+        'Project ID is required',
+      );
     }
 
     if (startDate >= endDate) {
-      throw new InternalServerErrorException(
+      throw ExceptionFactory.validationError(
+        'dateRange',
+        { startDate, endDate },
         'Start date must be before end date',
       );
     }
@@ -73,7 +81,9 @@ export class InvoiceService {
     // Check for reasonable date ranges (not more than 1 year)
     const oneYear = 365 * 24 * 60 * 60 * 1000;
     if (endDate.getTime() - startDate.getTime() > oneYear) {
-      throw new InternalServerErrorException(
+      throw ExceptionFactory.validationError(
+        'dateRange',
+        { startDate, endDate },
         'Date range cannot exceed one year',
       );
     }
@@ -215,9 +225,7 @@ export class InvoiceService {
         { projectId },
         'Project or its associated Team not found.',
       );
-      throw new NotFoundException(
-        `Project with ID ${projectId} or its Team not found`,
-      );
+      throw ExceptionFactory.projectNotFound(projectId, 'invoice generation');
     }
     const { team, ...project } = projectWithTeam;
 
@@ -300,8 +308,12 @@ export class InvoiceService {
             { rateId, projectId },
             'Rate info not found for time entries - data integrity issue',
           );
-          throw new InternalServerErrorException(
-            `Rate with ID ${rateId} not found for project ${projectId}. This indicates a data integrity issue.`,
+          throw ExceptionFactory.databaseError(
+            'rate lookup',
+            'Rate',
+            new Error(
+              `Rate with ID ${rateId} not found for project ${projectId}`,
+            ),
           );
         }
 
@@ -344,21 +356,20 @@ export class InvoiceService {
         'Failed to generate invoice',
       );
 
-      // Re-throw known exceptions without wrapping
+      // Re-throw structured exceptions without wrapping
       if (
-        error instanceof NotFoundException ||
-        error instanceof InternalServerErrorException
+        error instanceof ValidationException ||
+        error instanceof BusinessLogicException ||
+        error instanceof DatabaseException
       ) {
         throw error;
       }
 
       // Wrap unknown errors with context
-      throw new InternalServerErrorException(
-        `Failed to generate invoice for project ${projectId}: ${error.message}`,
-        {
-          cause: error,
-          description: 'Unexpected error during invoice generation',
-        },
+      throw ExceptionFactory.databaseError(
+        'invoice generation',
+        'Project',
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   }

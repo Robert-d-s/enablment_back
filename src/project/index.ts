@@ -8,13 +8,8 @@ export { Project } from './project.model';
 export { ProjectSyncService } from './project-sync.service';
 export { ProjectSyncData } from './project.input';
 
-// Error exports
-export {
-  ProjectNotFoundError,
-  InvalidProjectDatesError,
-  TeamNotFoundError,
-  ProjectValidationError,
-} from './project.errors';
+// Exception exports - use standardized exception system
+export { ExceptionFactory } from '../common/exceptions';
 
 // Input/DTO exports (for potential future use)
 export { CreateProjectInput, UpdateProjectInput } from './project.input';

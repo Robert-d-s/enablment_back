@@ -1,13 +1,4 @@
-import {
-  HttpException,
-  HttpStatus,
-  BadRequestException,
-  NotFoundException,
-  ConflictException,
-  ForbiddenException,
-  UnauthorizedException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { HttpException, HttpStatus } from '@nestjs/common';
 
 /**
  * Base interface for structured error responses
@@ -16,7 +7,7 @@ export interface StructuredErrorResponse {
   message: string;
   error: string;
   statusCode: number;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   timestamp?: string;
   path?: string;
 }
@@ -32,7 +23,7 @@ export abstract class BaseAppException extends HttpException {
     message: string,
     errorCode: string,
     statusCode: HttpStatus,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ) {
     const response: StructuredErrorResponse = {
       message,
@@ -69,7 +60,7 @@ export class TokenException extends BaseAppException {
   constructor(
     message: string,
     type: 'INVALID' | 'EXPIRED' | 'BLACKLISTED',
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ) {
     super(message, `TOKEN_${type}`, HttpStatus.UNAUTHORIZED, context);
   }
@@ -77,7 +68,7 @@ export class TokenException extends BaseAppException {
 
 // Validation
 export class ValidationException extends BaseAppException {
-  constructor(field: string, value: any, reason: string) {
+  constructor(field: string, value: unknown, reason: string) {
     super(
       `Validation failed for field '${field}': ${reason}`,
       'VALIDATION_ERROR',
@@ -115,7 +106,7 @@ export class ResourceConflictException extends BaseAppException {
   constructor(
     resourceType: string,
     conflictReason: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ) {
     super(
       `${resourceType} conflict: ${conflictReason}`,
@@ -131,7 +122,7 @@ export class BusinessLogicException extends BaseAppException {
   constructor(
     operation: string,
     reason: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ) {
     super(
       `Business rule violation in ${operation}: ${reason}`,
@@ -148,7 +139,7 @@ export class ExternalServiceException extends BaseAppException {
     serviceName: string,
     operation: string,
     originalError?: Error,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ) {
     super(
       `External service ${serviceName} failed during ${operation}`,
@@ -170,7 +161,7 @@ export class DatabaseException extends BaseAppException {
     operation: string,
     table?: string,
     originalError?: Error,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ) {
     const message = table
       ? `Database operation failed: ${operation} on ${table}`
@@ -190,7 +181,7 @@ export class WebSocketException extends BaseAppException {
   constructor(
     reason: string,
     code: 'CONNECTION_FAILED' | 'AUTH_REQUIRED' | 'INVALID_MESSAGE',
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ) {
     super(
       `WebSocket error: ${reason}`,
@@ -257,7 +248,7 @@ export class ExceptionFactory {
 
   static validationError(
     field: string,
-    value: any,
+    value: unknown,
     reason: string,
   ): ValidationException {
     return new ValidationException(field, value, reason);
@@ -266,7 +257,7 @@ export class ExceptionFactory {
   static businessLogicError(
     operation: string,
     reason: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ): BusinessLogicException {
     return new BusinessLogicException(operation, reason, context);
   }

@@ -56,7 +56,7 @@ export class ProjectService {
   /**
    * Retrieves a single project by ID.
    * @param id Project ID
-   * @throws ProjectNotFoundError if project doesn't exist
+   * @throws ResourceNotFoundException if project doesn't exist
    */
   async findById(id: string): Promise<Project> {
     this.logger.debug({ projectId: id }, 'Fetching project by ID');

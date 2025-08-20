@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { ExceptionFactory } from '../../common/exceptions';
 import { IssueUpdateMessage } from '../dto/issue-update.dto';
 import { WEBSOCKET_CONSTANTS } from '../constants/websocket.constants';
 
@@ -6,7 +7,7 @@ import { WEBSOCKET_CONSTANTS } from '../constants/websocket.constants';
 export class IssueUpdateValidationService {
   static validateIssueUpdate(data: unknown): IssueUpdateMessage {
     if (!data || typeof data !== 'object') {
-      throw new BadRequestException(
+      throw ExceptionFactory.webSocketInvalidMessage(
         WEBSOCKET_CONSTANTS.ERRORS.INVALID_MESSAGE_FORMAT,
       );
     }
@@ -15,7 +16,7 @@ export class IssueUpdateValidationService {
 
     // Validate required fields
     if (!update.id || typeof update.id !== 'string') {
-      throw new BadRequestException(
+      throw ExceptionFactory.webSocketInvalidMessage(
         'Issue ID is required and must be a string',
       );
     }
@@ -24,7 +25,7 @@ export class IssueUpdateValidationService {
       !update.action ||
       !['create', 'update', 'remove'].includes(update.action)
     ) {
-      throw new BadRequestException(
+      throw ExceptionFactory.webSocketInvalidMessage(
         'Valid action is required (create, update, remove)',
       );
     }
@@ -32,7 +33,7 @@ export class IssueUpdateValidationService {
     // Validate message size
     const messageSize = JSON.stringify(data).length;
     if (messageSize > WEBSOCKET_CONSTANTS.LIMITS.MAX_MESSAGE_SIZE) {
-      throw new BadRequestException(
+      throw ExceptionFactory.webSocketInvalidMessage(
         WEBSOCKET_CONSTANTS.ERRORS.MESSAGE_TOO_LARGE,
       );
     }
@@ -54,19 +55,23 @@ export class IssueUpdateValidationService {
 
     for (const field of stringFields) {
       if (update[field] !== undefined && typeof update[field] !== 'string') {
-        throw new BadRequestException(`${field} must be a string`);
+        throw ExceptionFactory.webSocketInvalidMessage(
+          `${field} must be a string`,
+        );
       }
     }
 
     // Validate labels array
     if (update.labels !== undefined) {
       if (!Array.isArray(update.labels)) {
-        throw new BadRequestException('Labels must be an array');
+        throw ExceptionFactory.webSocketInvalidMessage(
+          'Labels must be an array',
+        );
       }
 
       for (const label of update.labels) {
         if (!label.id || !label.name || !label.color) {
-          throw new BadRequestException(
+          throw ExceptionFactory.webSocketInvalidMessage(
             'Each label must have id, name, and color',
           );
         }

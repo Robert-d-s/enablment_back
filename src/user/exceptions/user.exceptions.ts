@@ -1,127 +1,76 @@
 import {
-  BadRequestException,
-  NotFoundException,
-  ConflictException,
-  ForbiddenException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+  BaseAppException,
+  ResourceNotFoundException,
+  ResourceConflictException,
+  ValidationException,
+  AuthorizationException,
+  DatabaseException,
+} from '../../common/exceptions';
+import { HttpStatus } from '@nestjs/common';
 
 /**
  * Custom user-related exceptions with consistent error codes and messages
  */
 
-export class UserNotFoundException extends NotFoundException {
+export class UserNotFoundException extends ResourceNotFoundException {
   constructor(userId: number, context?: string) {
-    const message = context
-      ? `User with ID ${userId} not found in context: ${context}`
-      : `User with ID ${userId} not found`;
-
-    super({
-      message,
-      error: 'USER_NOT_FOUND',
-      statusCode: 404,
-      userId,
-      context,
-    });
+    super('User', userId, context);
   }
 }
 
-export class TeamNotFoundException extends NotFoundException {
+export class TeamNotFoundException extends ResourceNotFoundException {
   constructor(teamId: string, context?: string) {
-    const message = context
-      ? `Team with ID ${teamId} not found in context: ${context}`
-      : `Team with ID ${teamId} not found`;
-
-    super({
-      message,
-      error: 'TEAM_NOT_FOUND',
-      statusCode: 404,
-      teamId,
-      context,
-    });
+    super('Team', teamId, context);
   }
 }
 
-export class UserTeamRelationExistsException extends ConflictException {
+export class UserTeamRelationExistsException extends ResourceConflictException {
   constructor(userId: number, teamId: string) {
-    super({
-      message: `User ${userId} is already a member of team ${teamId}`,
-      error: 'USER_TEAM_RELATION_EXISTS',
-      statusCode: 409,
-      userId,
-      teamId,
-    });
+    super(
+      'UserTeamRelation',
+      `User ${userId} is already a member of team ${teamId}`,
+      { userId, teamId },
+    );
   }
 }
 
-export class UserTeamRelationNotFoundException extends NotFoundException {
+export class UserTeamRelationNotFoundException extends BaseAppException {
   constructor(userId: number, teamId: string) {
-    super({
-      message: `User ${userId} is not a member of team ${teamId}`,
-      error: 'USER_TEAM_RELATION_NOT_FOUND',
-      statusCode: 404,
-      userId,
-      teamId,
-    });
+    super(
+      `User ${userId} is not a member of team ${teamId}`,
+      'USER_TEAM_RELATION_NOT_FOUND',
+      HttpStatus.NOT_FOUND,
+      { userId, teamId },
+    );
   }
 }
 
-export class InvalidRoleChangeException extends BadRequestException {
+export class InvalidRoleChangeException extends ValidationException {
   constructor(currentRole: string, newRole: string, reason?: string) {
-    const message = reason
-      ? `Cannot change role from ${currentRole} to ${newRole}: ${reason}`
+    const validationReason = reason
+      ? `Cannot change from ${currentRole} to ${newRole}: ${reason}`
       : `Invalid role change from ${currentRole} to ${newRole}`;
-
-    super({
-      message,
-      error: 'INVALID_ROLE_CHANGE',
-      statusCode: 400,
-      currentRole,
-      newRole,
-      reason,
-    });
+    super('role', `${currentRole} -> ${newRole}`, validationReason);
   }
 }
 
-export class UserOperationFailedException extends InternalServerErrorException {
+export class UserOperationFailedException extends DatabaseException {
   constructor(operation: string, userId: number, originalError?: Error) {
-    super({
-      message: `Failed to ${operation} for user ${userId}`,
-      error: 'USER_OPERATION_FAILED',
-      statusCode: 500,
-      operation,
-      userId,
-      originalError: originalError?.message,
-    });
+    super(operation, 'User', originalError, { userId });
   }
 }
 
-export class TeamOperationFailedException extends InternalServerErrorException {
+export class TeamOperationFailedException extends DatabaseException {
   constructor(operation: string, teamId: string, originalError?: Error) {
-    super({
-      message: `Failed to ${operation} for team ${teamId}`,
-      error: 'TEAM_OPERATION_FAILED',
-      statusCode: 500,
-      operation,
-      teamId,
-      originalError: originalError?.message,
-    });
+    super(operation, 'Team', originalError, { teamId });
   }
 }
 
-export class UserPermissionDeniedException extends ForbiddenException {
+export class UserPermissionDeniedException extends AuthorizationException {
   constructor(userId: number, operation: string, resource?: string) {
     const message = resource
       ? `User ${userId} does not have permission to ${operation} on ${resource}`
       : `User ${userId} does not have permission to ${operation}`;
-
-    super({
-      message,
-      error: 'USER_PERMISSION_DENIED',
-      statusCode: 403,
-      userId,
-      operation,
-      resource,
-    });
+    super(message, { userId, operation, resource });
   }
 }

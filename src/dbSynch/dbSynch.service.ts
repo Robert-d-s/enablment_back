@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { ExceptionFactory } from '../common/exceptions';
 
 interface PageInfo {
   hasNextPage: boolean;
@@ -106,7 +107,11 @@ export class DatabaseSyncService {
       this.logger.info('Database synchronization completed successfully');
     } catch (error) {
       this.logger.error({ err: error }, 'Database synchronization failed');
-      throw new Error(`Synchronization failed: ${error.message}`);
+      throw ExceptionFactory.externalServiceError(
+        'Linear',
+        'database synchronization',
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 
@@ -117,7 +122,10 @@ export class DatabaseSyncService {
         'Sending query to Linear API',
       );
       if (!this.linearApiKey) {
-        throw new Error('LINEAR_KEY is not configured');
+        throw ExceptionFactory.businessLogicError(
+          'Linear API query',
+          'LINEAR_KEY is not configured',
+        );
       }
       const response = await firstValueFrom(
         this.httpService.post(
@@ -141,7 +149,11 @@ export class DatabaseSyncService {
           { graphqlErrors: response.data.errors },
           'GraphQL errors from Linear API',
         );
-        throw new Error(`GraphQL errors: ${errorMsg}`);
+        throw ExceptionFactory.externalServiceError(
+          'Linear',
+          'GraphQL query',
+          new Error(`GraphQL errors: ${errorMsg}`),
+        );
       }
       this.logger.debug('Successfully fetched data from Linear API');
       return response.data.data;
@@ -233,7 +245,11 @@ export class DatabaseSyncService {
       this.logger.info('Teams synchronization completed successfully');
     } catch (error) {
       this.logger.error({ err: error }, 'Teams synchronization failed');
-      throw new Error(`Teams synchronization failed: ${error.message}`);
+      throw ExceptionFactory.databaseError(
+        'teams synchronization',
+        'Team',
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
   private async synchronizeProjects(tx: any): Promise<void> {

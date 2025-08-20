@@ -81,6 +81,30 @@ type SyncResponse {
   timestamp: String!
 }
 
+type Invoice {
+  projectId: String!
+  projectName: String!
+  teamId: String!
+  teamName: String!
+  totalHours: Float!
+
+  """Total cost in Danish Krona (DKK)"""
+  totalCost: Float!
+  rates: [RateDetail!]
+}
+
+type RateDetail {
+  rateId: Int!
+  rateName: String!
+  hours: Float!
+
+  """Cost in Danish Krona (DKK) for this rate"""
+  cost: Float!
+
+  """Rate per hour in Danish Krona (DKK)"""
+  ratePerHour: Float!
+}
+
 type Issue {
   id: String!
   createdAt: String!
@@ -125,30 +149,6 @@ type Time {
 A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
 """
 scalar DateTime
-
-type Invoice {
-  projectId: String!
-  projectName: String!
-  teamId: String!
-  teamName: String!
-  totalHours: Float!
-
-  """Total cost in Danish Krona (DKK)"""
-  totalCost: Float!
-  rates: [RateDetail!]
-}
-
-type RateDetail {
-  rateId: Int!
-  rateName: String!
-  hours: Float!
-
-  """Cost in Danish Krona (DKK) for this rate"""
-  cost: Float!
-
-  """Rate per hour in Danish Krona (DKK)"""
-  ratePerHour: Float!
-}
 
 type Query {
   me: UserProfileDto!

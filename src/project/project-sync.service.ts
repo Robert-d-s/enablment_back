@@ -3,11 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Project } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { ProjectSyncData } from './project.input';
-import {
-  InvalidProjectDatesError,
-  TeamNotFoundError,
-  ProjectValidationError,
-} from './project.errors';
+import { ExceptionFactory } from '../common/exceptions';
 
 /**
  * Internal service for project synchronization operations.
@@ -124,15 +120,27 @@ export class ProjectSyncService {
    */
   private validateProjectData(data: ProjectSyncData): void {
     if (!data.id?.trim()) {
-      throw new ProjectValidationError('Project ID is required');
+      throw ExceptionFactory.validationError(
+        'projectId',
+        data.id,
+        'Project ID is required',
+      );
     }
 
     if (!data.name?.trim()) {
-      throw new ProjectValidationError('Project name is required');
+      throw ExceptionFactory.validationError(
+        'projectName',
+        data.name,
+        'Project name is required',
+      );
     }
 
     if (!data.teamId?.trim()) {
-      throw new ProjectValidationError('Team ID is required');
+      throw ExceptionFactory.validationError(
+        'teamId',
+        data.teamId,
+        'Team ID is required',
+      );
     }
 
     // Validate date logic if both dates are provided
@@ -141,11 +149,17 @@ export class ProjectSyncService {
       const targetDate = new Date(data.targetDate);
 
       if (isNaN(startDate.getTime()) || isNaN(targetDate.getTime())) {
-        throw new InvalidProjectDatesError('Invalid date format');
+        throw ExceptionFactory.validationError(
+          'projectDates',
+          { startDate: data.startDate, targetDate: data.targetDate },
+          'Invalid date format',
+        );
       }
 
       if (startDate > targetDate) {
-        throw new InvalidProjectDatesError(
+        throw ExceptionFactory.validationError(
+          'projectDates',
+          { startDate: data.startDate, targetDate: data.targetDate },
           'Start date cannot be after target date',
         );
       }
@@ -162,7 +176,7 @@ export class ProjectSyncService {
     });
 
     if (!team) {
-      throw new TeamNotFoundError(teamId);
+      throw ExceptionFactory.teamNotFound(teamId, 'project validation');
     }
   }
 }

@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { ExceptionFactory } from '../../common/exceptions';
 import { IssueWebhookData } from '../../webhook/webhook.service';
 import { ISSUE_CONSTANTS } from '../constants/issue.constants';
 
@@ -31,7 +31,11 @@ export class IssueValidationService {
     }
 
     if (errors.length > 0) {
-      throw new BadRequestException(`Validation failed: ${errors.join(', ')}`);
+      throw ExceptionFactory.validationError(
+        'issueData',
+        data,
+        `Validation failed: ${errors.join(', ')}`,
+      );
     }
   }
 
@@ -62,7 +66,11 @@ export class IssueValidationService {
     }
 
     if (errors.length > 0) {
-      throw new BadRequestException(`Validation failed: ${errors.join(', ')}`);
+      throw ExceptionFactory.validationError(
+        'issueData',
+        data,
+        `Validation failed: ${errors.join(', ')}`,
+      );
     }
   }
 }

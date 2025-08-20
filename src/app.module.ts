@@ -1,31 +1,35 @@
-import { ConfigModule } from '@nestjs/config';
-import { CommonModule } from './common/common.module';
+// Third-party libraries
+import { Request, Response } from 'express';
+import { LoggerModule } from 'nestjs-pino';
+
+// NestJS core imports
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { HttpModule } from '@nestjs/axios';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { LoggerModule, PinoLogger } from 'nestjs-pino';
+import { registerEnumType } from '@nestjs/graphql';
 
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+// Prisma types
+import { UserRole } from '@prisma/client';
+
+// Internal modules
+import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
-import { UserModule } from './user/user.module';
-import { WebhookModule } from './webhook/webhook.module';
-import { ProjectModule } from './project/project.module';
-import { IssueModule } from './issue/issue.module';
-import { TeamModule } from './team/team.module';
-import { RateModule } from './rate/rate.module';
-import { TimeModule } from './time/time.module';
-import { InvoiceModule } from './invoice/invoice.module';
+import { CommonModule } from './common/common.module';
 import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
-import { HttpModule } from '@nestjs/axios';
+import { InvoiceModule } from './invoice/invoice.module';
+import { IssueModule } from './issue/issue.module';
 import { IssueUpdatesModule } from './issue-updates/issue-updates.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { Request, Response } from 'express';
+import { ProjectModule } from './project/project.module';
+import { RateModule } from './rate/rate.module';
+import { TeamModule } from './team/team.module';
+import { TimeModule } from './time/time.module';
 import { User } from './user/user.model';
-import { registerEnumType } from '@nestjs/graphql';
-import { UserRole } from '@prisma/client';
-import { APP_GUARD } from '@nestjs/core';
-import { AuthGuard } from './auth/auth.guard';
+import { UserModule } from './user/user.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 export interface GqlContext {
   req: Request & { user?: User };
@@ -43,7 +47,7 @@ registerEnumType(UserRole, {
     CommonModule,
     LoggerModule.forRoot({
       pinoHttp: {
-        level: process.env.LOG_LEVEL || 'info', // Use env variable for flexibility
+        level: process.env.LOG_LEVEL || 'info',
         transport:
           process.env.NODE_ENV !== 'production'
             ? {
@@ -51,9 +55,9 @@ registerEnumType(UserRole, {
                 options: {
                   singleLine: true,
                   colorize: true,
-                  levelFirst: true, // Fixed typo
-                  translateTime: 'HH:MM:ss', // Shorter time format
-                  ignore: 'pid,hostname,reqId,responseTime,req,res', // Hide verbose fields
+                  levelFirst: true,
+                  translateTime: 'HH:MM:ss',
+                  ignore: 'pid,hostname,reqId,responseTime,req,res',
                   messageFormat: '{msg}',
                   errorLikeObjectKeys: ['err', 'error'],
                 },
@@ -64,7 +68,6 @@ registerEnumType(UserRole, {
             return {
               method: req.method,
               url: req.url,
-              // Remove headers entirely for cleaner logs
             };
           },
           res(res) {
@@ -73,16 +76,15 @@ registerEnumType(UserRole, {
             };
           },
         },
-        // Reduce HTTP request logging verbosity
+
         autoLogging: {
           ignore: (req) => {
-            // Ignore health checks, static files, etc.
             return !!(
               req.url?.includes('/health') || req.url?.includes('/favicon')
             );
           },
         },
-        customProps: (req, res) => ({
+        customProps: () => ({
           context: 'HTTP',
         }),
       },
@@ -90,9 +92,9 @@ registerEnumType(UserRole, {
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
-      context: ({ req, res }: { req: Request; res: Response }): GqlContext => ({
-        req: req as GqlContext['req'],
-        res,
+      context: (context: { req: Request; res: Response }): GqlContext => ({
+        req: context.req as GqlContext['req'],
+        res: context.res,
       }),
     }),
     AuthModule,
@@ -109,9 +111,7 @@ registerEnumType(UserRole, {
     IssueUpdatesModule,
     PrismaModule,
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,

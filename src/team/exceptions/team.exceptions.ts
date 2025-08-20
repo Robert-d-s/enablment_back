@@ -1,59 +1,30 @@
 import {
-  ConflictException,
-  NotFoundException,
-  BadRequestException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+  ResourceNotFoundException,
+  ResourceConflictException,
+  ValidationException,
+  DatabaseException,
+} from '../../common/exceptions';
 
-export class TeamNotFoundException extends NotFoundException {
+export class TeamNotFoundException extends ResourceNotFoundException {
   constructor(teamId: string, operation?: string) {
-    const message = operation
-      ? `Team ${teamId} not found for ${operation}`
-      : `Team ${teamId} not found`;
-
-    super({
-      message,
-      error: 'TEAM_NOT_FOUND',
-      statusCode: 404,
-      teamId,
-      operation,
-    });
+    super('Team', teamId, operation);
   }
 }
 
-export class TeamAlreadyExistsException extends ConflictException {
+export class TeamAlreadyExistsException extends ResourceConflictException {
   constructor(teamId: string) {
-    super({
-      message: `Team with ID ${teamId} already exists`,
-      error: 'TEAM_ALREADY_EXISTS',
-      statusCode: 409,
-      teamId,
-    });
+    super('Team', `Team with ID ${teamId} already exists`, { teamId });
   }
 }
 
-export class TeamValidationException extends BadRequestException {
+export class TeamValidationException extends ValidationException {
   constructor(field: string, value: string, reason: string) {
-    super({
-      message: `Invalid ${field}: ${reason}`,
-      error: 'TEAM_VALIDATION_ERROR',
-      statusCode: 400,
-      field,
-      value,
-      reason,
-    });
+    super(field, value, reason);
   }
 }
 
-export class TeamOperationFailedException extends InternalServerErrorException {
+export class TeamOperationFailedException extends DatabaseException {
   constructor(operation: string, teamId: string, originalError?: Error) {
-    super({
-      message: `Failed to ${operation} for team ${teamId}`,
-      error: 'TEAM_OPERATION_FAILED',
-      statusCode: 500,
-      operation,
-      teamId,
-      originalError: originalError?.message,
-    });
+    super(operation, 'Team', originalError, { teamId });
   }
 }
