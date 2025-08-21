@@ -29,7 +29,9 @@ export class UserProjectsResolver {
 
     // Efficiently get all projects for user's teams in one batch
     const teamIds = userTeams.map((team) => team.id);
-    const projectsPerTeam = await this.projectLoader.byTeamId.loadMany(teamIds);
+    const projectsPerTeam = (await this.projectLoader.byTeamId.loadMany(
+      teamIds,
+    )) as Array<Project[] | Error | null>;
 
     // Create team name lookup map from already loaded data
     const teamNameMap = new Map<string, string>();
@@ -37,14 +39,26 @@ export class UserProjectsResolver {
       teamNameMap.set(team.id, team.name);
     });
 
+    // Separate loader errors from successful results and log them
+    const validProjectArrays: Project[] = [];
+    projectsPerTeam.forEach((res, idx) => {
+      const teamId = teamIds[idx];
+      if (res instanceof Error) {
+        // Log loader errors for observability instead of silently dropping them
+        this.logger.warn(
+          { teamId, err: res },
+          'Error loading projects for team',
+        );
+      } else if (res && Array.isArray(res)) {
+        validProjectArrays.push(...res);
+      }
+    });
+
     // Process and enrich projects with team names
-    const allProjects = projectsPerTeam
-      .flat()
-      .filter((p): p is Project => p instanceof Error === false && p !== null)
-      .map((project) => ({
-        ...project,
-        teamName: teamNameMap.get(project.teamId) || 'Unknown Team',
-      }));
+    const allProjects = validProjectArrays.map((project) => ({
+      ...project,
+      teamName: teamNameMap.get(project.teamId) || 'Unknown Team',
+    }));
 
     this.logger.debug(
       {
