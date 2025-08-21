@@ -2,7 +2,7 @@ import { Query, Resolver, Context } from '@nestjs/graphql';
 import { ProjectLoader } from '../../loaders/project.loader';
 import { TeamLoader } from '../../loaders/team.loader';
 import { Project } from '../../project/project.model';
-import { ensureUserProfileDto } from '../../auth/convert';
+import { UnauthorizedException } from '@nestjs/common';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { GqlContext } from '../../app.module';
 
@@ -17,7 +17,8 @@ export class UserProjectsResolver {
 
   @Query(() => [Project])
   async myProjects(@Context() context: GqlContext): Promise<Project[]> {
-    const currentUser = ensureUserProfileDto(context.req.user);
+    const currentUser = context.req.user;
+    if (!currentUser) throw new UnauthorizedException('No user in request');
     this.logger.debug({ userId: currentUser.id }, 'Executing myProjects query');
 
     // Single optimized query to get user's teams with their projects

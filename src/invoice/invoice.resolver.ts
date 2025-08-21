@@ -1,11 +1,11 @@
 import { Args, Query, Resolver, Context } from '@nestjs/graphql';
+import { UnauthorizedException } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
 import { Invoice } from './invoice.model';
 import { InvoiceInput } from './invoice.input';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { GqlContext } from '../app.module';
-import { ensureUserProfileDto } from '../auth/convert';
 import type { UserProfile } from '../auth';
 
 @Resolver(() => Invoice)
@@ -18,11 +18,12 @@ export class InvoiceResolver {
     @Args('input') input: InvoiceInput,
     @Context() context: GqlContext,
   ): Promise<Invoice> {
-    const userDto = ensureUserProfileDto(context.req.user);
+    const user = context.req.user;
+    if (!user) throw new UnauthorizedException('No user in request');
     const currentUser: UserProfile = {
-      id: userDto.id,
-      email: userDto.email,
-      role: userDto.role,
+      id: user.id,
+      email: user.email,
+      role: user.role,
     };
     return this.invoiceService.generateInvoiceForProject(
       input.projectId,

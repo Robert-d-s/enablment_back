@@ -6,7 +6,7 @@ import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { GqlContext } from '../app.module';
-import { ensureUserProfileDto } from '../auth/convert';
+import { UnauthorizedException } from '@nestjs/common';
 
 @Resolver(() => Rate)
 export class RateResolver {
@@ -20,7 +20,8 @@ export class RateResolver {
     @Args('teamId') teamId: string,
     @Context() context: GqlContext,
   ): Promise<Rate[]> {
-    const currentUser = ensureUserProfileDto(context.req.user);
+    const currentUser = context.req.user;
+    if (!currentUser) throw new UnauthorizedException('No user in request');
     this.logger.debug(
       { teamId, userId: currentUser.id },
       'Executing rates query',

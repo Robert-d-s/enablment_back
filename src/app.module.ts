@@ -27,12 +27,12 @@ import { ProjectModule } from './project/project.module';
 import { RateModule } from './rate/rate.module';
 import { TeamModule } from './team/team.module';
 import { TimeModule } from './time/time.module';
-import { User } from './user/user.model';
+import { UserProfileDto } from './auth/dto/user-profile.dto';
 import { UserModule } from './user/user.module';
 import { WebhookModule } from './webhook/webhook.module';
 
 export interface GqlContext {
-  req: Request & { user?: User };
+  req: Request & { user?: UserProfileDto };
   res: Response;
 }
 
