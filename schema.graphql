@@ -2,232 +2,9 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type Project {
-  id: String!
-  estimatedTime: Int
-  name: String!
-  teamId: String!
-  teamName: String
-  createdAt: String!
-  updatedAt: String!
-  description: String
-  state: String!
-  startDate: String
-  targetDate: String
-}
-
-type Rate {
-  id: Int!
-  name: String!
-  teamId: String!
-
-  """Hourly rate in Danish Krona (DKK) - e.g., 50.00 for 50.00 DKK/hour"""
-  rate: Float!
-}
-
-type DeleteRateResponse {
-  id: Int!
-}
-
-type Team {
-  id: String!
-  name: String!
-  projects: [Project!]
-  rates: [Rate!]
-}
-
-type SimpleTeamDTO {
-  id: String!
-  name: String!
-}
-
-type User {
-  id: Int!
-  email: String!
-  role: UserRole!
-  teams: [Team!]!
-}
-
-"""Defines the roles a user can have"""
-enum UserRole {
-  ADMIN
-  ENABLER
-  COLLABORATOR
-  PENDING
-}
-
-type UserProfileDto {
-  id: Int!
-  email: String!
-  role: UserRole!
-}
-
 type AuthResponse {
   accessToken: String!
   user: UserProfileDto
-}
-
-type LogoutResponse {
-  success: Boolean!
-}
-
-type RefreshTokenResponse {
-  accessToken: String!
-}
-
-type SyncResponse {
-  status: String!
-  message: String!
-  timestamp: String!
-}
-
-type Invoice {
-  projectId: String!
-  projectName: String!
-  teamId: String!
-  teamName: String!
-  totalHours: Float!
-
-  """Total cost in Danish Krona (DKK)"""
-  totalCost: Float!
-  rates: [RateDetail!]
-}
-
-type RateDetail {
-  rateId: Int!
-  rateName: String!
-  hours: Float!
-
-  """Cost in Danish Krona (DKK) for this rate"""
-  cost: Float!
-
-  """Rate per hour in Danish Krona (DKK)"""
-  ratePerHour: Float!
-}
-
-type Issue {
-  id: String!
-  createdAt: String!
-  updatedAt: String!
-  title: String!
-  dueDate: String
-  projectId: String!
-  priorityLabel: String!
-  identifier: String!
-  assigneeName: String!
-  projectName: String!
-  state: String!
-  teamKey: String!
-  teamName: String!
-  labels: [Label]
-}
-
-type Label {
-  id: String!
-  color: String!
-  name: String!
-  parentId: String
-}
-
-type PaginatedIssueResponse {
-  issues: [Issue!]!
-  total: Int!
-  hasNext: Boolean!
-}
-
-type Time {
-  id: Int!
-  startTime: DateTime!
-  endTime: DateTime
-  userId: Int!
-  projectId: String!
-  rateId: Int
-  totalElapsedTime: Int!
-}
-
-"""
-A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
-"""
-scalar DateTime
-
-type Query {
-  me: UserProfileDto!
-  usersCount(search: String, role: UserRole): Int!
-  users(args: UserQueryArgs!): [User!]!
-  myProjects: [Project!]!
-  projects: [Project!]!
-  project(id: String!): Project!
-  projectsByTeam(teamId: String!): [Project!]!
-  projectCount: Int!
-  projectCountByTeam(teamId: String!): Int!
-  issues(page: Int! = 1, limit: Int! = 50): PaginatedIssueResponse!
-  getAllSimpleTeams: [SimpleTeamDTO!]!
-  getTeam(input: GetTeamInput!): Team!
-  rates(teamId: String!): [Rate!]!
-  times(projectId: String!): [Time!]!
-  getTotalTimeSpent(userId: Float!, projectId: String!, startDate: String!, endDate: String!): Float!
-  getTotalTimeForUserProject(userId: Float!, projectId: String!): Float!
-  invoiceForProject(input: InvoiceInput!): Invoice!
-}
-
-input UserQueryArgs {
-  page: Int = 1
-  pageSize: Int = 10
-  search: String
-  role: UserRole
-}
-
-input GetTeamInput {
-  """Team ID to retrieve"""
-  id: String!
-}
-
-input InvoiceInput {
-  """Project id for invoice"""
-  projectId: String!
-
-  """Start date for invoice period"""
-  startDate: DateTime!
-
-  """End date for invoice period"""
-  endDate: DateTime!
-}
-
-type Mutation {
-  login(input: SignInInput!): AuthResponse!
-  refreshToken: RefreshTokenResponse!
-  logout: LogoutResponse!
-  signup(input: SignUpInput!): AuthResponse!
-  addUserToTeam(input: UserTeamInput!): User!
-  removeUserFromTeam(input: UserTeamInput!): User!
-  updateUserRole(input: UpdateUserRoleInput!): User!
-  createTeam(input: CreateTeamInput!): Team!
-  synchronizeDatabase: SyncResponse!
-  createRate(rateInputCreate: RateInputCreate!): Rate!
-  deleteRate(input: DeleteRateInput!): DeleteRateResponse!
-  createTime(timeInputCreate: TimeInputCreate!): Time!
-  updateTime(timeInputUpdate: TimeInputUpdate!): Time!
-  deleteTime(input: DeleteTimeInput!): Time!
-}
-
-input SignInInput {
-  email: String!
-  password: String!
-}
-
-input SignUpInput {
-  email: String!
-  password: String!
-}
-
-input UserTeamInput {
-  userId: Int!
-  teamId: String!
-}
-
-input UpdateUserRoleInput {
-  userId: Int!
-  newRole: UserRole!
 }
 
 input CreateTeamInput {
@@ -238,6 +15,156 @@ input CreateTeamInput {
 
   """Team display name (2-100 characters)"""
   name: String!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+input DeleteRateInput {
+  rateId: Int!
+}
+
+type DeleteRateResponse {
+  id: Int!
+}
+
+input DeleteTimeInput {
+  id: Int!
+}
+
+input GetTeamInput {
+  """Team ID to retrieve"""
+  id: String!
+}
+
+type Invoice {
+  projectId: String!
+  projectName: String!
+  rates: [RateDetail!]
+  teamId: String!
+  teamName: String!
+
+  """Total cost in Danish Krona (DKK)"""
+  totalCost: Float!
+  totalHours: Float!
+}
+
+input InvoiceInput {
+  """End date for invoice period"""
+  endDate: DateTime!
+
+  """Project id for invoice"""
+  projectId: String!
+
+  """Start date for invoice period"""
+  startDate: DateTime!
+}
+
+type Issue {
+  assigneeName: String!
+  createdAt: String!
+  dueDate: String
+  id: String!
+  identifier: String!
+  labels: [Label]
+  priorityLabel: String!
+  projectId: String!
+  projectName: String!
+  state: String!
+  teamKey: String!
+  teamName: String!
+  title: String!
+  updatedAt: String!
+}
+
+type Label {
+  color: String!
+  id: String!
+  name: String!
+  parentId: String
+}
+
+type LogoutResponse {
+  success: Boolean!
+}
+
+type Mutation {
+  addUserToTeam(input: UserTeamInput!): User!
+  createRate(rateInputCreate: RateInputCreate!): Rate!
+  createTeam(input: CreateTeamInput!): Team!
+  createTime(timeInputCreate: TimeInputCreate!): Time!
+  deleteRate(input: DeleteRateInput!): DeleteRateResponse!
+  deleteTime(input: DeleteTimeInput!): Time!
+  login(input: SignInInput!): AuthResponse!
+  logout: LogoutResponse!
+  refreshToken: RefreshTokenResponse!
+  removeUserFromTeam(input: UserTeamInput!): User!
+  signup(input: SignUpInput!): AuthResponse!
+  synchronizeDatabase: SyncResponse!
+  updateTime(timeInputUpdate: TimeInputUpdate!): Time!
+  updateUserRole(input: UpdateUserRoleInput!): User!
+}
+
+type PaginatedIssueResponse {
+  hasNext: Boolean!
+  issues: [Issue!]!
+  total: Int!
+}
+
+type Project {
+  createdAt: String!
+  description: String
+  estimatedTime: Int
+  id: String!
+  name: String!
+  startDate: String
+  state: String!
+  targetDate: String
+  teamId: String!
+  teamName: String
+  updatedAt: String!
+}
+
+type Query {
+  getAllSimpleTeams: [SimpleTeamDTO!]!
+  getTeam(input: GetTeamInput!): Team!
+  getTotalTimeForUserProject(projectId: String!, userId: Float!): Float!
+  getTotalTimeSpent(endDate: String!, projectId: String!, startDate: String!, userId: Float!): Float!
+  invoiceForProject(input: InvoiceInput!): Invoice!
+  issues(limit: Int! = 50, page: Int! = 1): PaginatedIssueResponse!
+  me: UserProfileDto!
+  myProjects: [Project!]!
+  project(id: String!): Project!
+  projectCount: Int!
+  projectCountByTeam(teamId: String!): Int!
+  projects: [Project!]!
+  projectsByTeam(teamId: String!): [Project!]!
+  rates(teamId: String!): [Rate!]!
+  times(projectId: String!): [Time!]!
+  users(args: UserQueryArgs!): [User!]!
+  usersCount(role: UserRole, search: String): Int!
+}
+
+type Rate {
+  id: Int!
+  name: String!
+
+  """Hourly rate in Danish Krona (DKK) - e.g., 50.00 for 50.00 DKK/hour"""
+  rate: Float!
+  teamId: String!
+}
+
+type RateDetail {
+  """Cost in Danish Krona (DKK) for this rate"""
+  cost: Float!
+  hours: Float!
+  rateId: Int!
+  rateName: String!
+
+  """Rate per hour in Danish Krona (DKK)"""
+  ratePerHour: Float!
 }
 
 input RateInputCreate {
@@ -251,41 +178,113 @@ input RateInputCreate {
   teamId: String!
 }
 
-input DeleteRateInput {
-  rateId: Int!
+type RefreshTokenResponse {
+  accessToken: String!
+}
+
+input SignInInput {
+  email: String!
+  password: String!
+}
+
+input SignUpInput {
+  email: String!
+  password: String!
+}
+
+type SimpleTeamDTO {
+  id: String!
+  name: String!
+}
+
+type SyncResponse {
+  message: String!
+  status: String!
+  timestamp: String!
+}
+
+type Team {
+  id: String!
+  name: String!
+  projects: [Project!]
+  rates: [Rate!]
+}
+
+type Time {
+  endTime: DateTime
+  id: Int!
+  projectId: String!
+  rateId: Int
+  startTime: DateTime!
+  totalElapsedTime: Int!
+  userId: Int!
 }
 
 input TimeInputCreate {
-  """Start time"""
-  startTime: DateTime!
-
   """End time"""
   endTime: DateTime
 
   """Project ID"""
   projectId: String!
 
-  """User ID"""
-  userId: Int!
-
   """Rate ID"""
   rateId: Int!
 
+  """Start time"""
+  startTime: DateTime!
+
   """Total Elapsed Time"""
   totalElapsedTime: Int!
+
+  """User ID"""
+  userId: Int!
 }
 
 input TimeInputUpdate {
-  """Time entry ID"""
-  id: Int!
-
   """End time"""
   endTime: DateTime
+
+  """Time entry ID"""
+  id: Int!
 
   """Total Elapsed Time"""
   totalElapsedTime: Int!
 }
 
-input DeleteTimeInput {
+input UpdateUserRoleInput {
+  newRole: UserRole!
+  userId: Int!
+}
+
+type User {
+  email: String!
   id: Int!
+  role: UserRole!
+  teams: [Team!]!
+}
+
+type UserProfileDto {
+  email: String!
+  id: Int!
+  role: UserRole!
+}
+
+input UserQueryArgs {
+  page: Int = 1
+  pageSize: Int = 10
+  role: UserRole
+  search: String
+}
+
+"""Defines the roles a user can have"""
+enum UserRole {
+  ADMIN
+  COLLABORATOR
+  ENABLER
+  PENDING
+}
+
+input UserTeamInput {
+  teamId: String!
+  userId: Int!
 }

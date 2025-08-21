@@ -49,7 +49,6 @@ export class UserProjectsResolver {
       }
     });
 
-    // Process and enrich projects with team names
     const allProjects = validProjectArrays.map((project) => ({
       ...project,
       teamName: teamNameMap.get(project.teamId) || 'Unknown Team',

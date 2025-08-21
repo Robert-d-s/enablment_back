@@ -4,7 +4,6 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
-// Constants
 const BCRYPT_SALT_ROUNDS = 10;
 
 @Injectable()
