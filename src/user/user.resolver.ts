@@ -81,16 +81,7 @@ export class UserResolver {
   @ResolveField(() => [Team])
   async teams(@Parent() user: User): Promise<Team[]> {
     this.logger.trace({ userId: user.id }, 'Resolving teams field for User');
-
     const teams = await this.teamLoader.byUserId.load(user.id);
-
-    // Return teams with properly initialized empty arrays
-    // Note: If clients need projects/rates, they should use dedicated queries
-    // This prevents N+1 problems while keeping the resolver simple
-    return teams.map((team) => ({
-      ...team,
-      projects: [], // Empty by design - use dedicated queries for project data
-      rates: [], // Empty by design - use dedicated queries for rate data
-    }));
+    return teams.map((t) => ({ ...t }) as Team);
   }
 }

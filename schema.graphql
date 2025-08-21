@@ -32,8 +32,8 @@ type DeleteRateResponse {
 type Team {
   id: String!
   name: String!
-  projects: [Project!]!
-  rates: [Rate!]!
+  projects: [Project!]
+  rates: [Rate!]
 }
 
 type SimpleTeamDTO {

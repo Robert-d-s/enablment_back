@@ -12,10 +12,12 @@ export class Team implements TeamClient {
   name: string;
 
   @Field(() => [Project])
-  projects: Project[];
+  @Field(() => [Project], { nullable: true })
+  projects?: Project[];
 
   @Field(() => [Rate])
-  rates: Rate[];
+  @Field(() => [Rate], { nullable: true })
+  rates?: Rate[];
 }
 
 @ObjectType()
