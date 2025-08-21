@@ -92,6 +92,7 @@ registerEnumType(UserRole, {
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: './schema.graphql',
+      playground: false,
       context: (context: { req: Request; res: Response }): GqlContext => ({
         req: context.req as GqlContext['req'],
         res: context.res,
