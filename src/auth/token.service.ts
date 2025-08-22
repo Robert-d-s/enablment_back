@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { User } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { TokenBlacklistService } from '../common/services/token-blacklist.service';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface TokenPair {
   accessToken: string;
@@ -15,10 +17,12 @@ export interface AccessTokenPayload {
   id: number;
   role: string;
   tokenVersion: number;
+  jti: string; // JWT ID for blacklisting
 }
 
 export interface RefreshTokenPayload {
   sub: number;
+  jti: string; // JWT ID for blacklisting
 }
 
 @Injectable()
@@ -28,19 +32,25 @@ export class TokenService {
     private readonly logger: PinoLogger,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   async generateTokens(user: User): Promise<TokenPair> {
+    const accessTokenJti = uuidv4();
+    const refreshTokenJti = uuidv4();
+
     const accessTokenPayload: AccessTokenPayload = {
       email: user.email,
       sub: user.id,
       id: user.id,
       role: user.role,
       tokenVersion: user.tokenVersion,
+      jti: accessTokenJti,
     };
 
     const refreshTokenPayload: RefreshTokenPayload = {
       sub: user.id,
+      jti: refreshTokenJti,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -56,7 +66,14 @@ export class TokenService {
       }),
     ]);
 
-    this.logger.debug(`Generated token pair for user ${user.id}`);
+    // Track both tokens for potential blacklisting
+    this.tokenBlacklistService.trackUserToken(user.id, accessTokenJti);
+    this.tokenBlacklistService.trackUserToken(user.id, refreshTokenJti);
+
+    this.logger.debug(
+      { userId: user.id, accessTokenJti, refreshTokenJti },
+      'Generated token pair with tracking',
+    );
     return { accessToken, refreshToken };
   }
 

@@ -15,7 +15,7 @@ import { IssueUpdateValidationService } from './utils/issue-update-validation.se
 import { ConnectionManagerService } from './services/connection-manager.service';
 import { WebSocketAuthGuard } from './guards/websocket-auth.guard';
 import { TokenService } from '../auth/token.service';
-import { TokenBlacklistService } from '../auth/token-blacklist.service';
+import { TokenBlacklistService } from '../common/services/token-blacklist.service';
 
 @WebSocketGateway({
   cors: getCorsConfig(),

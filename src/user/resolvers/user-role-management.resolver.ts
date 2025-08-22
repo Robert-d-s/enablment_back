@@ -20,7 +20,6 @@ export class UserRoleManagementResolver {
     @Args('input') input: UpdateUserRoleInput,
   ): Promise<User> {
     this.logger.info({ input }, 'Executing updateUserRole mutation');
-    // Let custom exceptions bubble up with proper error codes
     const updatedUser = await this.userRoleService.updateUserRole(
       input.userId,
       input.newRole,

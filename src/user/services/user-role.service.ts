@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { User, UserRole } from '@prisma/client';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { TokenBlacklistService } from '../../common/services/token-blacklist.service';
 import {
   UserNotFoundException,
   UserOperationFailedException,
@@ -11,15 +12,16 @@ import {
 @Injectable()
 export class UserRoleService {
   constructor(
-    @InjectPinoLogger(UserRoleService.name) private readonly logger: PinoLogger,
+    @InjectPinoLogger(UserRoleService.name)
+    private readonly logger: PinoLogger,
     private prisma: PrismaService,
+    private tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   async updateUserRole(userId: number, newRole: UserRole): Promise<User> {
     this.logger.info({ userId, newRole }, 'Updating user role');
 
     try {
-      // First verify user exists
       const existingUser = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, role: true },
@@ -29,7 +31,6 @@ export class UserRoleService {
         throw new UserNotFoundException(userId, 'role update');
       }
 
-      // Validate role change is allowed
       if (existingUser.role === newRole) {
         this.logger.warn(
           { userId, currentRole: existingUser.role, newRole },
@@ -48,12 +49,20 @@ export class UserRoleService {
         },
         data: {
           role: newRole,
-          // Increment token version to invalidate all existing JWT tokens
           tokenVersion: {
             increment: 1,
           },
         },
       });
+
+      try {
+        this.tokenBlacklistService.blacklistUserTokens(userId);
+      } catch (err) {
+        this.logger.debug(
+          { err, userId },
+          'Token blacklist service call failed (non-fatal)',
+        );
+      }
 
       this.logger.info(
         {
@@ -71,7 +80,7 @@ export class UserRoleService {
         error instanceof UserNotFoundException ||
         error instanceof InvalidRoleChangeException
       ) {
-        throw error; // Re-throw our custom exceptions
+        throw error;
       }
 
       this.logger.error(
@@ -138,62 +147,6 @@ export class UserRoleService {
       );
       throw new UserOperationFailedException(
         'get permissions',
-        userId,
-        error as Error,
-      );
-    }
-  }
-
-  /**
-   * Emergency method to invalidate all tokens for a user
-   * Useful for security incidents or when user account is compromised
-   */
-  async invalidateAllUserTokens(userId: number): Promise<User> {
-    this.logger.warn(
-      { userId },
-      'Invalidating all tokens for user - emergency action',
-    );
-
-    try {
-      // Verify user exists first
-      const existingUser = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true },
-      });
-
-      if (!existingUser) {
-        throw new UserNotFoundException(userId, 'token invalidation');
-      }
-
-      const updatedUser = await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          tokenVersion: {
-            increment: 1,
-          },
-        },
-      });
-
-      this.logger.info(
-        {
-          userId,
-          newTokenVersion: updatedUser.tokenVersion,
-        },
-        'All user tokens invalidated successfully',
-      );
-
-      return updatedUser;
-    } catch (error) {
-      if (error instanceof UserNotFoundException) {
-        throw error;
-      }
-
-      this.logger.error(
-        { err: error, userId },
-        'Failed to invalidate user tokens',
-      );
-      throw new UserOperationFailedException(
-        'invalidate tokens',
         userId,
         error as Error,
       );

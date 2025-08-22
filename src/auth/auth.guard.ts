@@ -13,7 +13,7 @@ import { UserRole } from '@prisma/client';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { UserProfileDto } from './dto/user-profile.dto';
-import { TokenBlacklistService } from './token-blacklist.service';
+import { TokenBlacklistService } from '../common/services/token-blacklist.service';
 import { JwtCacheService } from './jwt-cache.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -80,9 +80,13 @@ export class AuthGuard implements CanActivate {
       });
       this.logger.debug({ payload }, 'Token verified successfully.');
 
-      if (this.tokenBlacklistService.isTokenBlacklisted(token)) {
+      // Check if token is blacklisted by jti (JWT ID)
+      if (
+        payload.jti &&
+        this.tokenBlacklistService.isTokenBlacklisted(payload.jti)
+      ) {
         this.logger.warn(
-          { userId: payload.id },
+          { userId: payload.id, jti: payload.jti },
           'Attempted access with blacklisted token',
         );
         throw new UnauthorizedException({

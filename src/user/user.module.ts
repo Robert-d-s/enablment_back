@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { UserCoreService } from './user-core.service';
 import { UserSecurityService } from './services/user-security.service';
 import { UserTeamService } from './services/user-team.service';
@@ -12,7 +13,12 @@ import { ConfigModule } from '@nestjs/config';
 import { DataLoaderModule } from '../loaders/data-loader.module';
 
 @Module({
-  imports: [PrismaModule, ConfigModule, DataLoaderModule],
+  imports: [
+    PrismaModule,
+    ConfigModule,
+    DataLoaderModule,
+    forwardRef(() => AuthModule),
+  ],
   providers: [
     UserResolver,
     UserProjectsResolver,

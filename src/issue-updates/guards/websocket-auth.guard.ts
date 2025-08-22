@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Socket } from 'socket.io';
 import { TokenService } from '../../auth/token.service';
-import { TokenBlacklistService } from '../../auth/token-blacklist.service';
+import { TokenBlacklistService } from '../../common/services/token-blacklist.service';
 import { ExceptionFactory } from '../../common/exceptions';
 
 @Injectable()

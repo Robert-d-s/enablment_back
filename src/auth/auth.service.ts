@@ -8,8 +8,8 @@ import { UserSecurityService } from '../user/services/user-security.service';
 import { User, UserRole } from '@prisma/client';
 import type { UserProfile } from '../auth';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
-import { TokenBlacklistService } from './token-blacklist.service';
-import { TokenService } from './token.service';
+import { TokenBlacklistService } from '../common/services/token-blacklist.service';
+import { TokenService, RefreshTokenPayload } from './token.service';
 
 @Injectable()
 export class AuthService {
@@ -150,6 +150,31 @@ export class AuthService {
     rt: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     this.logger.debug(`Attempting token refresh for user ${userId}`);
+
+    // First decode the refresh token to check blacklist
+    let refreshPayload: RefreshTokenPayload;
+    try {
+      refreshPayload = await this.tokenService.verifyRefreshToken(rt);
+    } catch (error) {
+      this.logger.warn(
+        { userId, error: error.message },
+        'Refresh token verification failed',
+      );
+      throw ExceptionFactory.tokenExpired();
+    }
+
+    // Check if refresh token is blacklisted
+    if (
+      refreshPayload.jti &&
+      this.tokenBlacklistService.isTokenBlacklisted(refreshPayload.jti)
+    ) {
+      this.logger.warn(
+        { userId, jti: refreshPayload.jti },
+        'Attempted refresh with blacklisted token',
+      );
+      throw ExceptionFactory.tokenExpired();
+    }
+
     const user = await this.userCoreService.findById(userId);
 
     if (!user || !user.hashedRefreshToken) {

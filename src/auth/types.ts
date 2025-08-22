@@ -6,6 +6,7 @@ export interface JwtPayload {
   id: number;
   role: UserRole;
   tokenVersion: number;
+  jti?: string; // JWT ID for blacklisting (optional for backward compatibility)
   [key: string]: unknown;
 }
 
