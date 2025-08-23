@@ -22,7 +22,6 @@ export class UserTeamService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Verify both user and team exist
         const [userExists, teamExists] = await Promise.all([
           tx.user.findUnique({ where: { id: userId }, select: { id: true } }),
           tx.team.findUnique({ where: { id: teamId }, select: { id: true } }),
@@ -36,7 +35,6 @@ export class UserTeamService {
           throw new TeamNotFoundException(teamId, 'user assignment');
         }
 
-        // Check if relation already exists
         const existingRelation = await tx.userTeam.findUnique({
           where: {
             userId_teamId: {
@@ -51,8 +49,6 @@ export class UserTeamService {
             { userId, teamId },
             'User is already a member of the team',
           );
-          // Could throw UserTeamRelationExistsException or just return current state
-          // For now, we'll be idempotent and not throw an error
         } else {
           await tx.userTeam.create({
             data: {
@@ -66,7 +62,6 @@ export class UserTeamService {
           );
         }
 
-        // Get the full user record for the response
         const user = await tx.user.findUnique({
           where: { id: userId },
         });
@@ -105,7 +100,6 @@ export class UserTeamService {
     this.logger.info({ userId, teamId }, 'Removing user from team');
 
     try {
-      // First verify the relationship exists
       const existingRelation = await this.prisma.userTeam.findUnique({
         where: {
           userId_teamId: {
@@ -191,9 +185,6 @@ export class UserTeamService {
       { userId },
       'Fetching user (teams will be loaded by field resolvers)',
     );
-
-    // Only fetch the basic user data
-    // Team data will be efficiently loaded by DataLoaders when requested
     return this.prisma.user.findUnique({
       where: { id: userId },
     });

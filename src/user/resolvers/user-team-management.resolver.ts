@@ -18,7 +18,6 @@ export class UserTeamManagementResolver {
   @Roles(UserRole.ADMIN)
   async addUserToTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing addUserToTeam mutation');
-    // Let custom exceptions bubble up with proper error codes
     const user = await this.userTeamService.addUserToTeam(
       input.userId,
       input.teamId,
@@ -34,8 +33,6 @@ export class UserTeamManagementResolver {
   @Roles(UserRole.ADMIN)
   async removeUserFromTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing removeUserFromTeam mutation');
-    // No try-catch needed - let the custom exceptions bubble up
-    // They provide proper HTTP status codes and error messages
     const user = await this.userTeamService.removeUserFromTeam(
       input.userId,
       input.teamId,

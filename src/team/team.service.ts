@@ -21,7 +21,6 @@ export class TeamService {
     this.logger.debug({ teamId: id, name }, 'Creating team');
 
     try {
-      // Check if team already exists
       const existingTeam = await this.prisma.team.findUnique({
         where: { id },
         select: { id: true },
@@ -46,7 +45,6 @@ export class TeamService {
 
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation
           throw new TeamAlreadyExistsException(id);
         }
       }

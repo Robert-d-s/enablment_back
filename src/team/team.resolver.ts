@@ -35,7 +35,6 @@ export class TeamResolver {
 
     const team = await this.teamService.create(input.id, input.name);
 
-    // Return consistent structure - field resolvers will handle projects/rates
     return {
       ...team,
       projects: [],
@@ -57,7 +56,6 @@ export class TeamResolver {
 
     const team = await this.teamService.getTeamById(input.id);
 
-    // Service throws if team not found, so team is guaranteed to exist
     return {
       ...team,
       projects: [],
@@ -67,15 +65,11 @@ export class TeamResolver {
 
   @ResolveField(() => [Project])
   async projects(@Parent() team: Team): Promise<Project[]> {
-    // This will be called only when projects field is requested
-    // Uses DataLoader to batch and cache the requests
     return this.projectLoader.byTeamId.load(team.id);
   }
 
   @ResolveField(() => [Rate])
   async rates(@Parent() team: Team): Promise<Rate[]> {
-    // This will be called only when rates field is requested
-    // Uses DataLoader to batch and cache the requests
     return this.rateLoader.byTeamId.load(team.id);
   }
 }
