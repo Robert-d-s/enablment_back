@@ -4,7 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 
 // NestJS core imports
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { HttpModule } from '@nestjs/axios';
 import { GraphQLModule } from '@nestjs/graphql';
@@ -45,49 +45,53 @@ registerEnumType(UserRole, {
   imports: [
     ConfigModule.forRoot(),
     CommonModule,
-    LoggerModule.forRoot({
-      pinoHttp: {
-        level: process.env.LOG_LEVEL || 'info',
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? {
-                target: 'pino-pretty',
-                options: {
-                  singleLine: true,
-                  colorize: true,
-                  levelFirst: true,
-                  translateTime: 'HH:MM:ss',
-                  ignore: 'pid,hostname,reqId,responseTime,req,res',
-                  messageFormat: '{msg}',
-                  errorLikeObjectKeys: ['err', 'error'],
-                },
-              }
-            : undefined,
-        serializers: {
-          req(req) {
-            return {
-              method: req.method,
-              url: req.url,
-            };
+    LoggerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        pinoHttp: {
+          level: configService.get<string>('LOG_LEVEL') || 'info',
+          transport:
+            configService.get<string>('NODE_ENV') !== 'production'
+              ? {
+                  target: 'pino-pretty',
+                  options: {
+                    singleLine: true,
+                    colorize: true,
+                    levelFirst: true,
+                    translateTime: 'HH:MM:ss',
+                    ignore: 'pid,hostname,reqId,responseTime,req,res',
+                    messageFormat: '{msg}',
+                    errorLikeObjectKeys: ['err', 'error'],
+                  },
+                }
+              : undefined,
+          serializers: {
+            req(req) {
+              return {
+                method: req.method,
+                url: req.url,
+              };
+            },
+            res(res) {
+              return {
+                statusCode: res.statusCode,
+              };
+            },
           },
-          res(res) {
-            return {
-              statusCode: res.statusCode,
-            };
-          },
-        },
 
-        autoLogging: {
-          ignore: (req) => {
-            return !!(
-              req.url?.includes('/health') || req.url?.includes('/favicon')
-            );
+          autoLogging: {
+            ignore: (req) => {
+              return !!(
+                req.url?.includes('/health') || req.url?.includes('/favicon')
+              );
+            },
           },
+          customProps: () => ({
+            context: 'HTTP',
+          }),
         },
-        customProps: () => ({
-          context: 'HTTP',
-        }),
-      },
+      }),
     }),
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,

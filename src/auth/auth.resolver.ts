@@ -32,6 +32,10 @@ export class AuthResolver {
     private configService: ConfigService,
   ) {}
 
+  private isProduction(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'production';
+  }
+
   private setRefreshTokenCookie(context: GqlContext, token: string): void {
     if (!context?.res) {
       this.logger.error(
@@ -47,10 +51,11 @@ export class AuthResolver {
     );
     const maxAgeMs = refreshExpirationDays * 24 * 60 * 60 * 1000;
 
+    const isProduction = this.isProduction();
     context.res.cookie('refresh_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'strict' : 'lax',
       path: '/',
       maxAge: maxAgeMs,
     });
@@ -64,10 +69,11 @@ export class AuthResolver {
       );
       return;
     }
+    const isProduction = this.isProduction();
     context.res.clearCookie('refresh_token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'strict' : 'lax',
       path: '/',
     });
     this.logger.debug('Refresh token cookie cleared.');

@@ -1,20 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { IssueWebhookData, LinearWebhookBody } from './webhook.service';
 import { IssueService } from '../issue/issue.service';
 import { IssueUpdatesGateway } from '../issue-updates/issue-updates.gateway';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { Project, Issue } from '@prisma/client';
-
-// Constants for better maintainability
-const WEBHOOK_CONSTANTS = {
-  UNASSIGNED_PROJECT: {
-    ID: process.env.UNASSIGNED_PROJECT_ID || 'unassigned-project-default',
-    NAME: 'Unassigned',
-    STATE: 'Unassigned',
-    DESCRIPTION: 'Automatically created for issues without projects',
-  },
-} as const;
 
 // Interface for update operations return type
 interface IssueUpdateResult {
@@ -32,10 +23,22 @@ export class WebhookIssueService {
   constructor(
     @InjectPinoLogger(WebhookIssueService.name)
     private readonly logger: PinoLogger,
+    private readonly configService: ConfigService,
     private issueService: IssueService,
     private readonly issueUpdatesGateway: IssueUpdatesGateway,
     private readonly prisma: PrismaService,
   ) {}
+
+  private getUnassignedProjectConstants() {
+    return {
+      ID:
+        this.configService.get<string>('UNASSIGNED_PROJECT_ID') ||
+        'unassigned-project-default',
+      NAME: 'Unassigned',
+      STATE: 'Unassigned',
+      DESCRIPTION: 'Automatically created for issues without projects',
+    };
+  }
 
   async handleIssue(json: LinearWebhookBody): Promise<void> {
     if (json.type !== 'Issue') {
@@ -320,8 +323,9 @@ export class WebhookIssueService {
   private async createOrGetUnassignedProject(): Promise<Project | null> {
     try {
       // Try to find existing unassigned project
+      const unassignedConstants = this.getUnassignedProjectConstants();
       const existingProject = await this.prisma.project.findUnique({
-        where: { id: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.ID },
+        where: { id: unassignedConstants.ID },
       });
 
       if (existingProject) {
@@ -341,13 +345,13 @@ export class WebhookIssueService {
         this.logger.info('Creating "Unassigned" project');
         return await tx.project.create({
           data: {
-            id: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.ID,
-            name: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.NAME,
+            id: unassignedConstants.ID,
+            name: unassignedConstants.NAME,
             teamId: team.id,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            state: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.STATE,
-            description: WEBHOOK_CONSTANTS.UNASSIGNED_PROJECT.DESCRIPTION,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            state: unassignedConstants.STATE,
+            description: unassignedConstants.DESCRIPTION,
           },
         });
       });

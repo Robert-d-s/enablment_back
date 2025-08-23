@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
@@ -11,11 +12,12 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 export class WebhookGuard implements CanActivate {
   constructor(
     @InjectPinoLogger(WebhookGuard.name) private readonly logger: PinoLogger,
+    private readonly configService: ConfigService,
   ) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const linearSignature = request.headers['linear-signature'];
-    const webhookSecret = process.env.WEBHOOK_SECRET;
+    const webhookSecret = this.configService.get<string>('WEBHOOK_SECRET');
 
     if (!linearSignature) {
       this.logger.warn('Missing Linear signature header');

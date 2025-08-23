@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
@@ -12,6 +13,7 @@ async function bootstrap(): Promise<void> {
   });
 
   const logger = app.get(Logger);
+  const configService = app.get(ConfigService);
   app.useLogger(logger);
 
   app.useGlobalPipes(
@@ -26,10 +28,10 @@ async function bootstrap(): Promise<void> {
   );
   app.useGlobalFilters(app.get(GlobalGqlExceptionFilter));
 
-  app.enableCors(getCorsConfig());
+  app.enableCors(getCorsConfig(configService));
   app.use(cookieParser());
 
-  const port = process.env.PORT || 8080;
+  const port = configService.get<number>('PORT') || 8080;
   await app.listen(port);
   logger.log(`Server is running on http://localhost:${port}`);
   logger.log(`GraphQL endpoint available at http://localhost:${port}/graphql`);

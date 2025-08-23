@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { GqlExceptionFilter, GqlArgumentsHost } from '@nestjs/graphql';
 import { Prisma } from '@prisma/client';
 import { GraphQLError } from 'graphql';
@@ -18,7 +19,12 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
   constructor(
     @InjectPinoLogger(GlobalGqlExceptionFilter.name)
     private readonly logger: PinoLogger,
+    private readonly configService: ConfigService,
   ) {}
+
+  private isProduction(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'production';
+  }
 
   catch(exception: unknown, host: ArgumentsHost): GraphQLError {
     const gqlHost = GqlArgumentsHost.create(host);
@@ -60,7 +66,7 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
     // Default error handling with sanitized response
     this.logger.error({ err: exception }, 'Unhandled exception in GraphQL');
     return new GraphQLError(
-      process.env.NODE_ENV === 'production'
+      this.isProduction()
         ? 'Internal server error'
         : `Unhandled error: ${String(exception)}`,
       {
@@ -185,7 +191,7 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
         errorCode: error.errorCode,
         context: error.context,
         // Only include stack trace in development
-        ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+        ...(!this.isProduction() && { stack: error.stack }),
       };
     }
 
@@ -194,7 +200,7 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
         name: error.name,
         message: error.message,
         // Only include stack trace in development
-        ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+        ...(!this.isProduction() && { stack: error.stack }),
       };
     }
 

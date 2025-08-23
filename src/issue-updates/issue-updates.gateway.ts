@@ -7,7 +7,7 @@ import {
 } from '@nestjs/websockets';
 import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { getCorsConfig } from '../config/cors.config';
+import { getWebSocketCorsConfig } from '../config/cors.config';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { BroadcastOptions } from './dto/issue-update.dto';
 import { WEBSOCKET_CONSTANTS } from './constants/websocket.constants';
@@ -18,7 +18,7 @@ import { TokenService } from '../auth/token.service';
 import { TokenBlacklistService } from '../common/services/token-blacklist.service';
 
 @WebSocketGateway({
-  cors: getCorsConfig(),
+  cors: getWebSocketCorsConfig(),
 })
 @UseGuards(WebSocketAuthGuard)
 export class IssueUpdatesGateway
