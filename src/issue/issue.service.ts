@@ -119,7 +119,11 @@ export class IssueService {
       }
 
       const createdIssue = await this.prisma.issue.create({
-        data: createData,
+        data: {
+          ...createData,
+          createdAt: new Date(createData.createdAt),
+          updatedAt: new Date(createData.updatedAt),
+        },
       });
 
       // Cache the created issue and invalidate pagination cache
@@ -188,7 +192,11 @@ export class IssueService {
         if (existingIssue) {
           const updatedIssue = await prisma.issue.update({
             where: { id },
-            data: updateData,
+            data: {
+              ...updateData,
+              createdAt: new Date(updateData.createdAt),
+              updatedAt: new Date(updateData.updatedAt),
+            },
           });
 
           // Update cache and invalidate pagination cache

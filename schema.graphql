@@ -64,7 +64,7 @@ input InvoiceInput {
 
 type Issue {
   assigneeName: String!
-  createdAt: String!
+  createdAt: DateTime!
   dueDate: String
   id: String!
   identifier: String!
@@ -76,7 +76,7 @@ type Issue {
   teamKey: String!
   teamName: String!
   title: String!
-  updatedAt: String!
+  updatedAt: DateTime!
 }
 
 type Label {
@@ -114,7 +114,7 @@ type PaginatedIssueResponse {
 }
 
 type Project {
-  createdAt: String!
+  createdAt: DateTime!
   description: String
   estimatedTime: Int
   id: String!
@@ -124,7 +124,7 @@ type Project {
   targetDate: String
   teamId: String!
   teamName: String
-  updatedAt: String!
+  updatedAt: DateTime!
 }
 
 type Query {

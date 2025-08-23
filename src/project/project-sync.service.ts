@@ -34,21 +34,23 @@ export class ProjectSyncService {
     this.validateProjectData(data);
     await this.validateTeamExists(data.teamId);
 
-    return this.prisma.project.create({
+    const project = await this.prisma.project.create({
       data: {
         id: data.id,
         name: data.name,
         team: {
           connect: { id: data.teamId },
         },
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
+        createdAt: new Date(data.createdAt),
+        updatedAt: new Date(data.updatedAt),
         description: data.description || null,
         state: data.state || 'Active',
         startDate: data.startDate || null,
         targetDate: data.targetDate || null,
       },
     });
+
+    return project;
   }
 
   /**
@@ -63,14 +65,14 @@ export class ProjectSyncService {
     this.validateProjectData(data);
     await this.validateTeamExists(data.teamId);
 
-    return this.prisma.project.upsert({
+    const result = await this.prisma.project.upsert({
       where: {
         id: data.id,
       },
       update: {
         name: data.name,
         teamId: data.teamId,
-        updatedAt: data.updatedAt,
+        updatedAt: new Date(data.updatedAt),
         description: data.description || null,
         state: data.state || 'Active',
         startDate: data.startDate || null,
@@ -80,14 +82,16 @@ export class ProjectSyncService {
         id: data.id,
         name: data.name,
         teamId: data.teamId,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
+        createdAt: new Date(data.createdAt),
+        updatedAt: new Date(data.updatedAt),
         description: data.description || null,
         state: data.state || 'Active',
         startDate: data.startDate || null,
         targetDate: data.targetDate || null,
       },
     });
+
+    return result;
   }
 
   /**

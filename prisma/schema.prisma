@@ -68,8 +68,8 @@ model Project {
   estimatedTime Int?
   name          String
   teamId        String
-  createdAt     String
-  updatedAt     String
+  createdAt     DateTime
+  updatedAt     DateTime
   description   String?
   state         String
   startDate     String?
@@ -97,8 +97,8 @@ model Time {
 
 model Issue {
   id            String  @id
-  createdAt     String
-  updatedAt     String
+  createdAt     DateTime
+  updatedAt     DateTime
   title         String
   dueDate       String?
   projectId     String

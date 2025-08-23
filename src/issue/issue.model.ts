@@ -6,11 +6,11 @@ export class Issue implements IssueClient {
   @Field(() => String)
   id: string;
 
-  @Field(() => String)
-  createdAt: string;
+  @Field(() => Date)
+  createdAt: Date;
 
-  @Field(() => String)
-  updatedAt: string;
+  @Field(() => Date)
+  updatedAt: Date;
 
   @Field(() => String)
   title: string;

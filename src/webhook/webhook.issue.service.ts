@@ -392,7 +392,7 @@ export class WebhookIssueService {
     this.logger.debug({ issueId: data.id }, 'Updating existing issue data');
     try {
       const updateData: Partial<Issue> = {
-        updatedAt: data.updatedAt,
+        updatedAt: new Date(data.updatedAt),
         title: data.title,
         dueDate: data.dueDate,
         priorityLabel: data.priorityLabel || 'No Priority',

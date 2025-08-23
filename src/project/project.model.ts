@@ -18,11 +18,11 @@ export class Project implements ProjectClient {
   @Field(() => String, { nullable: true })
   teamName?: string;
 
-  @Field(() => String)
-  createdAt: string;
+  @Field(() => Date)
+  createdAt: Date;
 
-  @Field(() => String)
-  updatedAt: string;
+  @Field(() => Date)
+  updatedAt: Date;
 
   @Field(() => String, { nullable: true })
   description: string | null;
