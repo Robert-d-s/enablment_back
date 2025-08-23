@@ -10,6 +10,7 @@ import { HttpModule } from '@nestjs/axios';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { registerEnumType } from '@nestjs/graphql';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 // Prisma types
 import { UserRole } from '@prisma/client';
@@ -44,6 +45,28 @@ registerEnumType(UserRole, {
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: 60000, // 1 minute
+            limit: configService.get<number>('THROTTLE_LIMIT') || 100, // 100 requests per minute
+          },
+          {
+            name: 'auth',
+            ttl: 300000, // 5 minutes
+            limit: configService.get<number>('AUTH_THROTTLE_LIMIT') || 10, // 10 auth attempts per 5 minutes
+          },
+        ],
+        skipIf: () => {
+          // Skip throttling in test environment
+          return process.env.NODE_ENV === 'test';
+        },
+      }),
+    }),
     CommonModule,
     LoggerModule.forRootAsync({
       imports: [ConfigModule],
@@ -121,6 +144,10 @@ registerEnumType(UserRole, {
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

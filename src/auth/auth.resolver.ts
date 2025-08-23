@@ -3,6 +3,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { JwtService } from '@nestjs/jwt';
+import { Throttle } from '@nestjs/throttler';
 
 // Third-party packages
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -80,6 +81,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ auth: { limit: 5, ttl: 300000 } }) // 5 login attempts per 5 minutes
   @Mutation(() => AuthResponse)
   async login(
     @Context() context: GqlContext,
@@ -103,6 +105,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ auth: { limit: 10, ttl: 300000 } }) // 10 refresh attempts per 5 minutes
   @Mutation(() => RefreshTokenResponse)
   async refreshToken(
     @Context() context: GqlContext,
@@ -169,6 +172,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ auth: { limit: 3, ttl: 300000 } }) // 3 signup attempts per 5 minutes  
   @Mutation(() => AuthResponse)
   async signup(
     @Context() context: GqlContext,
