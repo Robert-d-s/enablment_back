@@ -39,7 +39,6 @@ export class GraphQLTimeoutPlugin implements ApolloServerPlugin {
             `GraphQL operation timeout: ${operationName} (${this.timeout}ms)`,
           );
 
-          const timeoutError = this.createTimeoutError(this.timeout);
           // Note: In a real implementation, you'd need to handle request cancellation
           // This is a simplified version for demonstration
         }, this.timeout);

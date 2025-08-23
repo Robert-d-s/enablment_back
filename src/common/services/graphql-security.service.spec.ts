@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { GraphQLSecurityService } from './graphql-security.service';
-import { ValidationRule } from 'graphql';
 
 describe('GraphQLSecurityService', () => {
   let service: GraphQLSecurityService;
@@ -73,8 +72,8 @@ describe('GraphQLSecurityService', () => {
     const rules = service.getValidationRules();
     expect(Array.isArray(rules)).toBe(true);
     expect(rules.length).toBeGreaterThan(0);
-    
-    rules.forEach(rule => {
+
+    rules.forEach((rule) => {
       expect(typeof rule).toBe('function');
     });
   });

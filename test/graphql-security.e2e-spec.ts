@@ -38,7 +38,9 @@ describe('GraphQL Security (e2e)', () => {
       .expect((res) => {
         if (process.env.NODE_ENV === 'production') {
           expect(res.body.errors).toBeDefined();
-          expect(res.body.errors[0].extensions.code).toBe('INTROSPECTION_DISABLED');
+          expect(res.body.errors[0].extensions.code).toBe(
+            'INTROSPECTION_DISABLED',
+          );
         }
       });
   });
@@ -76,7 +78,7 @@ describe('GraphQL Security (e2e)', () => {
       .send({
         query: deepQuery,
       })
-      .expect((res) => {
+      .expect(() => {
         // Note: This test would need actual GraphQL schema to work properly
         // In a real test, you'd expect a depth limit error
       });

@@ -76,7 +76,6 @@ export class GraphQLRateLimitPlugin implements ApolloServerPlugin {
   }
 
   private getClientId(requestContext: GraphQLRequestContext<any>): string {
-    const request = requestContext.request;
     const context = requestContext.contextValue;
 
     // Try to get user ID from context
@@ -92,15 +91,21 @@ export class GraphQLRateLimitPlugin implements ApolloServerPlugin {
   private getClientIP(req: any): string {
     if (!req) return 'unknown';
 
-    return (
-      req.ip ||
-      req.connection?.remoteAddress ||
-      req.socket?.remoteAddress ||
-      (req.connection?.socket ? req.connection.socket.remoteAddress : null) ||
-      req.headers['x-forwarded-for']?.split(',')[0] ||
-      req.headers['x-real-ip'] ||
-      'unknown'
-    );
+    try {
+      return (
+        req.ip ||
+        req.connection?.remoteAddress ||
+        req.socket?.remoteAddress ||
+        (req.connection?.socket ? req.connection.socket.remoteAddress : null) ||
+        req.headers?.['x-forwarded-for']?.split(',')[0] ||
+        req.headers?.['x-real-ip'] ||
+        req.remoteAddress ||
+        'unknown'
+      );
+    } catch (error) {
+      this.logger.debug('Error getting client IP:', error.message);
+      return 'unknown';
+    }
   }
 
   private cleanup(): void {

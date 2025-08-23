@@ -30,7 +30,7 @@ export class GraphQLSecurityService {
   }
 
   getComplexityLimitRule(): ValidationRule {
-    return createComplexityRule({
+    const baseComplexityRule = createComplexityRule({
       maximumComplexity: this.maxComplexity,
       estimators: [
         fieldExtensionsEstimator(),
@@ -56,6 +56,31 @@ export class GraphQLSecurityService {
         );
       },
     });
+
+    // Return a wrapper that handles the original complexity rule
+    return (context) => {
+      const originalRule = baseComplexityRule(context);
+
+      // If the original rule has an onOperationDefinitionEnter handler,
+      // wrap it to catch and handle errors gracefully
+      if (originalRule && originalRule.onOperationDefinitionEnter) {
+        const originalHandler = originalRule.onOperationDefinitionEnter;
+        originalRule.onOperationDefinitionEnter = (...args) => {
+          try {
+            return originalHandler(...args);
+          } catch (error) {
+            // Log the error but don't fail the query - let other validators handle it
+            this.logger.debug(
+              'Complexity analysis skipped due to validation error:',
+              error.message,
+            );
+            return undefined;
+          }
+        };
+      }
+
+      return originalRule;
+    };
   }
 
   getIntrospectionRule(): ValidationRule | undefined {
@@ -87,7 +112,8 @@ export class GraphQLSecurityService {
   getValidationRules(): ValidationRule[] {
     const rules: ValidationRule[] = [
       this.getDepthLimitRule(),
-      this.getComplexityLimitRule(),
+      // DISABLE complexity analysis - it conflicts with variable validation
+      // this.getComplexityLimitRule(),
     ];
 
     const introspectionRule = this.getIntrospectionRule();

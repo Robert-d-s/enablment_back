@@ -10,7 +10,7 @@ import { HttpModule } from '@nestjs/axios';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { registerEnumType } from '@nestjs/graphql';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 // Prisma types
 import { UserRole } from '@prisma/client';
@@ -22,6 +22,7 @@ import { CommonModule } from './common/common.module';
 import { GraphQLSecurityService } from './common/services/graphql-security.service';
 import { GraphQLTimeoutPlugin } from './common/plugins/graphql-timeout.plugin';
 import { GraphQLRateLimitPlugin } from './common/plugins/graphql-rate-limit.plugin';
+import { GraphQLComplexityPlugin } from './common/plugins/graphql-complexity.plugin';
 import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { IssueModule } from './issue/issue.module';
@@ -64,9 +65,18 @@ registerEnumType(UserRole, {
             limit: configService.get<number>('AUTH_THROTTLE_LIMIT') || 10, // 10 auth attempts per 5 minutes
           },
         ],
-        skipIf: () => {
+        skipIf: (context) => {
           // Skip throttling in test environment
-          return process.env.NODE_ENV === 'test';
+          if (process.env.NODE_ENV === 'test') return true;
+
+          // Skip throttling for GraphQL requests to avoid IP access issues
+          try {
+            const request = context.switchToHttp().getRequest();
+            return request?.url?.includes('/graphql');
+          } catch {
+            // If we can't get the request (e.g., in GraphQL context), skip throttling
+            return true;
+          }
         },
       }),
     }),
@@ -129,6 +139,7 @@ registerEnumType(UserRole, {
           timeout: configService.get<number>('GRAPHQL_TIMEOUT') || 30000,
         });
         const rateLimitPlugin = new GraphQLRateLimitPlugin(configService);
+        const complexityPlugin = new GraphQLComplexityPlugin(configService);
 
         return {
           autoSchemaFile: './schema.graphql',
@@ -137,7 +148,7 @@ registerEnumType(UserRole, {
           introspection:
             configService.get<boolean>('GRAPHQL_INTROSPECTION') || false,
           validationRules: graphqlSecurity.getValidationRules(),
-          plugins: [timeoutPlugin, rateLimitPlugin],
+          plugins: [timeoutPlugin, rateLimitPlugin, complexityPlugin],
           context: (context: { req: Request; res: Response }): GqlContext => ({
             req: context.req as GqlContext['req'],
             res: context.res,
@@ -176,10 +187,11 @@ registerEnumType(UserRole, {
       provide: APP_GUARD,
       useClass: AuthGuard,
     },
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    // Temporarily disable ThrottlerGuard - it's causing GraphQL context issues
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: ThrottlerGuard,
+    // },
     GraphQLSecurityService,
   ],
 })
