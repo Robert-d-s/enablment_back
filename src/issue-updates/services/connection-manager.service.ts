@@ -18,8 +18,8 @@ export class ConnectionManagerService implements OnModuleDestroy {
     @InjectPinoLogger(ConnectionManagerService.name)
     private readonly logger: PinoLogger,
   ) {
-    // Cleanup interval for expired rate limits
-    this.cleanupInterval = setInterval(() => this.cleanupRateLimits(), 60000); // Every minute
+    // Cleanup interval for expired rate limits - optimized for better responsiveness
+    this.cleanupInterval = setInterval(() => this.cleanupRateLimits(), 30000); // Every 30 seconds
     this.logger.debug(
       'ConnectionManagerService initialized with cleanup interval',
     );
@@ -62,18 +62,12 @@ export class ConnectionManagerService implements OnModuleDestroy {
       }
       this.userConnections.get(userId)!.add(socket.id);
 
-      // Check connection limit per user
+      // Log connection count for monitoring
       const userConnectionCount = this.userConnections.get(userId)!.size;
-      if (
-        userConnectionCount >
-        WEBSOCKET_CONSTANTS.LIMITS.MAX_CONNECTIONS_PER_USER
-      ) {
-        this.logger.warn(
-          { userId, connectionCount: userConnectionCount },
-          'User exceeded maximum connection limit',
-        );
-        // Could implement connection dropping logic here
-      }
+      this.logger.debug(
+        { userId, connectionCount: userConnectionCount },
+        'User connection count updated',
+      );
     }
 
     this.logger.info(
@@ -194,6 +188,27 @@ export class ConnectionManagerService implements OnModuleDestroy {
         'Cleaned up expired rate limits',
       );
     }
+  }
+
+  // Get the oldest connection for a specific user
+  getOldestUserConnection(userId: string): string | null {
+    const userConnections = this.userConnections.get(userId);
+    if (!userConnections || userConnections.size === 0) {
+      return null;
+    }
+
+    let oldestConnectionId: string | null = null;
+    let oldestTime = Date.now();
+
+    for (const socketId of userConnections) {
+      const connection = this.connections.get(socketId);
+      if (connection && connection.connectedAt.getTime() < oldestTime) {
+        oldestTime = connection.connectedAt.getTime();
+        oldestConnectionId = socketId;
+      }
+    }
+
+    return oldestConnectionId;
   }
 
   // Cleanup inactive connections

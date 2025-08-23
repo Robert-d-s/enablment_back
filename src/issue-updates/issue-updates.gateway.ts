@@ -77,6 +77,41 @@ export class IssueUpdatesGateway
       // User ID is now available from authentication guard
       const userId = client.data.userId || client.data.user?.id;
 
+      // Check for connection limit enforcement before adding
+      if (userId) {
+        const userConnections =
+          this.connectionManager.getUserConnections(userId);
+        if (
+          userConnections.length >=
+          WEBSOCKET_CONSTANTS.LIMITS.MAX_CONNECTIONS_PER_USER
+        ) {
+          // Get the oldest connection and disconnect it
+          const oldestConnectionId =
+            this.connectionManager.getOldestUserConnection(userId);
+          if (oldestConnectionId) {
+            const oldestSocket =
+              this.server.sockets.sockets.get(oldestConnectionId);
+            if (oldestSocket) {
+              this.logger.info(
+                {
+                  oldSocketId: oldestConnectionId,
+                  newSocketId: client.id,
+                  userId,
+                },
+                'Disconnecting oldest connection due to limit enforcement',
+              );
+              oldestSocket.emit(WEBSOCKET_CONSTANTS.EVENTS.CONNECTION_STATUS, {
+                status: 'disconnected',
+                reason: 'connection_limit_exceeded',
+                message: 'Disconnected due to new connection from same user',
+                timestamp: new Date().toISOString(),
+              });
+              oldestSocket.disconnect(true);
+            }
+          }
+        }
+      }
+
       this.connectionManager.addConnection(client, userId);
       this.logger.info(
         { clientId: client.id, userId, userEmail: client.data.user?.email },
