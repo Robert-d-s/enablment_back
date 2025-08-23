@@ -18,7 +18,6 @@ export class PasswordComplexityConstraint
       return false;
     }
 
-    // Use the same regex as frontend for consistency
     return PASSWORD_REGEX.test(password);
   }
 

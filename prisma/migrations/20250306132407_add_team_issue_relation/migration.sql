@@ -1,6 +1,0 @@
--- AlterTable
-ALTER TABLE `Issue` MODIFY `teamKey` VARCHAR(191) NULL,
-    MODIFY `teamName` VARCHAR(191) NULL;
-
--- AddForeignKey
-ALTER TABLE `Issue` ADD CONSTRAINT `Issue_teamKey_fkey` FOREIGN KEY (`teamKey`) REFERENCES `Team`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
