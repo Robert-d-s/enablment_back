@@ -128,6 +128,7 @@ type Project {
 }
 
 type Query {
+  allIssues(limit: Int! = 50, page: Int! = 1): PaginatedIssueResponse!
   getAllSimpleTeams: [SimpleTeamDTO!]!
   getTeam(input: GetTeamInput!): Team!
   getTotalTimeForUserProject(projectId: String!, userId: Float!): Float!

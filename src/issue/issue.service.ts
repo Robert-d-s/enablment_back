@@ -65,6 +65,101 @@ export class IssueService {
     return result;
   }
 
+  /**
+   * Get issues filtered by user's team memberships for security and performance
+   */
+  async getIssuesForUser(
+    userId: number,
+    page: number = 1,
+    limit: number = 50,
+  ): Promise<{ issues: Issue[]; total: number; hasNext: boolean }> {
+    this.logger.debug(
+      { userId, page, limit },
+      'Fetching paginated issues for user',
+    );
+
+    const skip = (page - 1) * limit;
+    const take = Math.min(limit, 100); // Cap at 100 items per page
+
+    // First, get the user's team IDs
+    const userTeams = await this.prisma.userTeam.findMany({
+      where: { userId },
+      select: { teamId: true },
+    });
+
+    const teamIds = userTeams.map((ut) => ut.teamId);
+
+    this.logger.debug(
+      { userId, teamIds: teamIds.length },
+      `User has access to ${teamIds.length} team(s)`,
+    );
+
+    if (teamIds.length === 0) {
+      // User is not assigned to any teams, return empty result
+      this.logger.debug(
+        { userId },
+        'User has no team assignments, returning empty issues',
+      );
+      return {
+        issues: [],
+        total: 0,
+        hasNext: false,
+      };
+    }
+
+    // Build where clause to filter by user's teams
+    const whereClause = {
+      OR: [
+        // Issues where the team matches user's teams
+        {
+          teamKey: {
+            in: teamIds,
+          },
+        },
+        // Also include issues from projects that belong to user's teams
+        {
+          project: {
+            teamId: {
+              in: teamIds,
+            },
+          },
+        },
+      ],
+    };
+
+    const [issues, total] = await Promise.all([
+      this.prisma.issue.findMany({
+        where: whereClause,
+        skip,
+        take,
+        include: {
+          labels: true,
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+      }),
+      this.prisma.issue.count({
+        where: whereClause,
+      }),
+    ]);
+
+    const hasNext = skip + take < total;
+
+    const result = {
+      issues,
+      total,
+      hasNext,
+    };
+
+    this.logger.debug(
+      { userId, totalIssues: total, returnedIssues: issues.length },
+      'Successfully fetched filtered issues for user',
+    );
+
+    return result;
+  }
+
   async findById(id: string): Promise<(Issue & { labels: Label[] }) | null> {
     this.logger.debug({ issueId: id }, 'Fetching issue by ID');
 
