@@ -5,6 +5,7 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { firstValueFrom } from 'rxjs';
 import { ExceptionFactory } from '../../common/exceptions';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SanitizationService } from '../../common/services/sanitization.service';
 
 export type TransactionClient = Parameters<
   Parameters<PrismaService['$transaction']>[0]
@@ -31,6 +32,7 @@ export class TeamSyncService {
     private readonly logger: PinoLogger,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly sanitizationService: SanitizationService,
   ) {
     this.linearApiKey = this.configService.get<string>('LINEAR_KEY') || '';
     if (!this.linearApiKey) {
@@ -138,12 +140,28 @@ export class TeamSyncService {
       );
 
       for (const teamData of teams) {
-        await tx.team.upsert({
-          where: { id: teamData.id },
-          update: { name: teamData.name },
-          create: { id: teamData.id, name: teamData.name },
-        });
-        teamsToDelete.delete(teamData.id);
+        try {
+          // Sanitize team data from Linear
+          const sanitizedTeam =
+            this.sanitizationService.sanitizeLinearTeam(teamData);
+
+          await tx.team.upsert({
+            where: { id: sanitizedTeam.id },
+            update: { name: sanitizedTeam.name },
+            create: { id: sanitizedTeam.id, name: sanitizedTeam.name },
+          });
+          teamsToDelete.delete(sanitizedTeam.id);
+        } catch (sanitizationError) {
+          this.logger.error(
+            {
+              err: sanitizationError,
+              teamId: teamData.id,
+              teamName: teamData.name,
+            },
+            'Failed to sanitize team data from Linear',
+          );
+          throw sanitizationError;
+        }
       }
 
       for (const teamId of teamsToDelete) {

@@ -5,6 +5,7 @@ import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { firstValueFrom } from 'rxjs';
 import { ExceptionFactory } from '../../common/exceptions';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SanitizationService } from '../../common/services/sanitization.service';
 
 export type TransactionClient = Parameters<
   Parameters<PrismaService['$transaction']>[0]
@@ -72,6 +73,7 @@ export class IssueSyncService {
     private readonly logger: PinoLogger,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly sanitizationService: SanitizationService,
   ) {
     this.linearApiKey = this.configService.get<string>('LINEAR_KEY') || '';
     if (!this.linearApiKey) {
@@ -249,29 +251,45 @@ export class IssueSyncService {
       });
 
       if (projectExists) {
-        const issueData = {
-          id: issue.id,
-          title: issue.title,
-          createdAt: new Date(issue.createdAt),
-          updatedAt: new Date(issue.updatedAt),
-          projectId: issue.project.id,
-          projectName: issue.project.name,
-          priorityLabel: issue.priorityLabel || 'No priority',
-          identifier: issue.identifier,
-          assigneeName: issue.assignee ? issue.assignee.name : 'No assignee',
-          state: issue.state ? issue.state.name : 'Triage',
-          teamKey: issue.team.id,
-          teamName: issue.team.name,
-          dueDate: issue.dueDate || null,
-        };
+        try {
+          // Sanitize all input data from Linear
+          const sanitizedIssue =
+            this.sanitizationService.sanitizeLinearIssue(issue);
 
-        await tx.issue.upsert({
-          where: { id: issue.id },
-          update: issueData,
-          create: issueData,
-        });
+          const issueData = {
+            id: sanitizedIssue.id,
+            title: sanitizedIssue.title,
+            createdAt: sanitizedIssue.createdAt || new Date(),
+            updatedAt: sanitizedIssue.updatedAt || new Date(),
+            projectId: sanitizedIssue.project?.id || issue.project.id,
+            projectName: sanitizedIssue.project?.name || 'Unknown Project',
+            priorityLabel: sanitizedIssue.priorityLabel || 'No priority',
+            identifier: sanitizedIssue.identifier,
+            assigneeName: sanitizedIssue.assignee?.name || 'No assignee',
+            state: sanitizedIssue.state?.name || 'Triage',
+            teamKey: sanitizedIssue.team?.id || issue.team.id,
+            teamName: sanitizedIssue.team?.name || 'Unknown Team',
+            dueDate: sanitizedIssue.dueDate?.toISOString() || null,
+          };
 
-        await this.processIssueLabels(tx, issue);
+          await tx.issue.upsert({
+            where: { id: sanitizedIssue.id },
+            update: issueData,
+            create: issueData,
+          });
+
+          await this.processIssueLabels(tx, issue);
+        } catch (sanitizationError) {
+          this.logger.error(
+            {
+              err: sanitizationError,
+              issueId: issue.id,
+              issueTitle: issue.title?.substring(0, 50) + '...',
+            },
+            'Failed to sanitize issue data from Linear',
+          );
+          throw sanitizationError;
+        }
       } else {
         this.logger.warn(
           { issueId: issue.id, projectId: issue.project.id },
@@ -291,15 +309,33 @@ export class IssueSyncService {
       });
 
       for (const label of issue.labels.nodes) {
-        await tx.label.create({
-          data: {
-            id: label.id,
-            name: label.name,
-            color: label.color,
-            parentId: label.parentId || null,
-            issueId: issue.id,
-          },
-        });
+        try {
+          // Sanitize each label individually
+          const sanitizedLabel = {
+            id: this.sanitizationService.sanitizeId(label.id),
+            name: this.sanitizationService.sanitizeString(label.name, 100),
+            color: this.sanitizationService.sanitizeColor(label.color),
+            parentId: label.parentId
+              ? this.sanitizationService.sanitizeId(label.parentId)
+              : null,
+            issueId: this.sanitizationService.sanitizeId(issue.id),
+          };
+
+          await tx.label.create({
+            data: sanitizedLabel,
+          });
+        } catch (sanitizationError) {
+          this.logger.error(
+            {
+              err: sanitizationError,
+              labelId: label.id,
+              labelName: label.name,
+              issueId: issue.id,
+            },
+            'Failed to sanitize label data from Linear',
+          );
+          // Continue processing other labels even if one fails
+        }
       }
     }
   }
