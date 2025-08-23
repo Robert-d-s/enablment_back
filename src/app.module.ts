@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { LoggerModule } from 'nestjs-pino';
 
 // NestJS core imports
-import { Module } from '@nestjs/common';
+import { Module, Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { HttpModule } from '@nestjs/axios';
@@ -19,6 +19,9 @@ import { UserRole } from '@prisma/client';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
+import { GraphQLSecurityService } from './common/services/graphql-security.service';
+import { GraphQLTimeoutPlugin } from './common/plugins/graphql-timeout.plugin';
+import { GraphQLRateLimitPlugin } from './common/plugins/graphql-rate-limit.plugin';
 import { DatabaseSyncModule } from './dbSynch/dbSynch.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { IssueModule } from './issue/issue.module';
@@ -116,15 +119,43 @@ registerEnumType(UserRole, {
         },
       }),
     }),
-    GraphQLModule.forRoot<ApolloDriverConfig>({
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: './schema.graphql',
-      sortSchema: true,
-      playground: false,
-      context: (context: { req: Request; res: Response }): GqlContext => ({
-        req: context.req as GqlContext['req'],
-        res: context.res,
-      }),
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const graphqlSecurity = new GraphQLSecurityService(configService);
+        const timeoutPlugin = new GraphQLTimeoutPlugin({
+          timeout: configService.get<number>('GRAPHQL_TIMEOUT') || 30000,
+        });
+        const rateLimitPlugin = new GraphQLRateLimitPlugin(configService);
+
+        return {
+          autoSchemaFile: './schema.graphql',
+          sortSchema: true,
+          playground: configService.get<string>('NODE_ENV') !== 'production',
+          introspection:
+            configService.get<boolean>('GRAPHQL_INTROSPECTION') || false,
+          validationRules: graphqlSecurity.getValidationRules(),
+          plugins: [timeoutPlugin, rateLimitPlugin],
+          context: (context: { req: Request; res: Response }): GqlContext => ({
+            req: context.req as GqlContext['req'],
+            res: context.res,
+          }),
+          formatError: (error) => {
+            // Log security-related errors
+            if (error.extensions?.code) {
+              const logger = new Logger('GraphQLSecurity');
+              logger.warn(`GraphQL Security Error: ${error.extensions.code}`, {
+                message: error.message,
+                code: error.extensions.code,
+                path: error.path,
+              });
+            }
+            return error;
+          },
+        };
+      },
     }),
     AuthModule,
     UserModule,
@@ -149,6 +180,7 @@ registerEnumType(UserRole, {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    GraphQLSecurityService,
   ],
 })
 export class AppModule {}

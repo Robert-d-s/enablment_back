@@ -6,7 +6,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { getCorsConfig } from './config/cors.config';
 import { Logger } from 'nestjs-pino';
 import { GlobalGqlExceptionFilter } from './common/filters/gql-exception.filter';
-import { validateEnvironment, logEnvironmentInfo } from './config/env.validation';
+import {
+  validateEnvironment,
+  logEnvironmentInfo,
+} from './config/env.validation';
 
 async function bootstrap(): Promise<void> {
   // Validate environment variables before creating the app

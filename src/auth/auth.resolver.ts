@@ -172,7 +172,7 @@ export class AuthResolver {
   }
 
   @Public()
-  @Throttle({ auth: { limit: 3, ttl: 300000 } }) // 3 signup attempts per 5 minutes  
+  @Throttle({ auth: { limit: 3, ttl: 300000 } }) // 3 signup attempts per 5 minutes
   @Mutation(() => AuthResponse)
   async signup(
     @Context() context: GqlContext,
