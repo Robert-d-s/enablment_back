@@ -7,7 +7,8 @@ import {
 import { Socket } from 'socket.io';
 import { TokenService } from '../../auth/token.service';
 import { TokenBlacklistService } from '../../common/services/token-blacklist.service';
-import { ExceptionFactory } from '../../common/exceptions';
+import { ExceptionFactory, BaseAppException } from '../../common/exceptions';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class WebSocketAuthGuard implements CanActivate {
@@ -16,6 +17,7 @@ export class WebSocketAuthGuard implements CanActivate {
   constructor(
     private readonly tokenService: TokenService,
     private readonly tokenBlacklistService: TokenBlacklistService,
+    private readonly prismaService: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -56,6 +58,60 @@ export class WebSocketAuthGuard implements CanActivate {
         return false;
       }
 
+      // Ensure tokenVersion and role are still valid (parity with HTTP AuthGuard)
+      const currentUser = await this.prismaService.user.findUnique({
+        where: { id: payload.id },
+        select: { tokenVersion: true, role: true },
+      });
+
+      if (!currentUser) {
+        const exception = ExceptionFactory.userNotFound(payload.id, 'ws auth');
+        this.logger.warn(
+          {
+            socketId: client.id,
+            userId: payload.id,
+            error: exception.errorCode,
+          },
+          'WebSocket connection denied: User not found',
+        );
+        this.emitAuthError(client, exception);
+        return false;
+      }
+
+      if (currentUser.tokenVersion !== payload.tokenVersion) {
+        const exception = ExceptionFactory.tokenExpired();
+        this.logger.warn(
+          {
+            socketId: client.id,
+            userId: payload.id,
+            tokenVersion: payload.tokenVersion,
+            currentVersion: currentUser.tokenVersion,
+            error: exception.errorCode,
+          },
+          'WebSocket connection denied: Token invalidated due to role change',
+        );
+        this.emitAuthError(client, exception);
+        return false;
+      }
+
+      if (currentUser.role !== payload.role) {
+        const exception = ExceptionFactory.insufficientPermissions(
+          'connect to websocket',
+        );
+        this.logger.warn(
+          {
+            socketId: client.id,
+            userId: payload.id,
+            tokenRole: payload.role,
+            currentRole: currentUser.role,
+            error: exception.errorCode,
+          },
+          'WebSocket connection denied: Role mismatch',
+        );
+        this.emitAuthError(client, exception);
+        return false;
+      }
+
       // Store user info in socket for later use
       client.data.user = payload;
       client.data.userId = payload.id;
@@ -78,7 +134,7 @@ export class WebSocketAuthGuard implements CanActivate {
     }
   }
 
-  private emitAuthError(client: Socket, exception: any): void {
+  private emitAuthError(client: Socket, exception: BaseAppException): void {
     const errorResponse = {
       message: exception.message,
       error: exception.errorCode,
