@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
-export class TokenBlacklistService {
+export class TokenBlacklistService implements OnModuleDestroy {
   private blacklistedTokens = new Map<string, number>();
   private userTokens = new Map<number, Set<string>>();
   private blacklistCleanupInterval: NodeJS.Timeout;
@@ -93,8 +93,19 @@ export class TokenBlacklistService {
   }
 
   onModuleDestroy(): void {
+    this.logger.info(
+      'TokenBlacklistService shutting down, cleaning up interval',
+    );
+
     if (this.blacklistCleanupInterval) {
       clearInterval(this.blacklistCleanupInterval);
+      this.logger.debug('Blacklist cleanup interval cleared');
     }
+
+    // Clear all tracking maps
+    this.blacklistedTokens.clear();
+    this.userTokens.clear();
+
+    this.logger.info('TokenBlacklistService shutdown complete');
   }
 }

@@ -1,24 +1,47 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Socket } from 'socket.io';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { WebSocketConnectionInfo } from '../dto/issue-update.dto';
 import { WEBSOCKET_CONSTANTS } from '../constants/websocket.constants';
 
 @Injectable()
-export class ConnectionManagerService {
+export class ConnectionManagerService implements OnModuleDestroy {
   private connections = new Map<string, WebSocketConnectionInfo>();
   private userConnections = new Map<string, Set<string>>();
   private rateLimitMap = new Map<
     string,
     { count: number; resetTime: number }
   >();
+  private cleanupInterval: NodeJS.Timeout;
 
   constructor(
     @InjectPinoLogger(ConnectionManagerService.name)
     private readonly logger: PinoLogger,
   ) {
     // Cleanup interval for expired rate limits
-    setInterval(() => this.cleanupRateLimits(), 60000); // Every minute
+    this.cleanupInterval = setInterval(() => this.cleanupRateLimits(), 60000); // Every minute
+    this.logger.debug(
+      'ConnectionManagerService initialized with cleanup interval',
+    );
+  }
+
+  onModuleDestroy(): void {
+    this.logger.info(
+      'ConnectionManagerService shutting down, cleaning up resources',
+    );
+
+    // Clear the cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.logger.debug('Cleanup interval cleared');
+    }
+
+    // Clear all connections
+    this.connections.clear();
+    this.userConnections.clear();
+    this.rateLimitMap.clear();
+
+    this.logger.info('ConnectionManagerService shutdown complete');
   }
 
   addConnection(socket: Socket, userId?: string): void {

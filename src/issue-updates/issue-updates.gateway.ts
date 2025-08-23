@@ -5,7 +5,7 @@ import {
   OnGatewayDisconnect,
   OnGatewayInit,
 } from '@nestjs/websockets';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, OnModuleDestroy } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { getWebSocketCorsConfig } from '../config/cors.config';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
@@ -22,9 +22,15 @@ import { TokenBlacklistService } from '../common/services/token-blacklist.servic
 })
 @UseGuards(WebSocketAuthGuard)
 export class IssueUpdatesGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+  implements
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnGatewayInit,
+    OnModuleDestroy
 {
   @WebSocketServer() server: Server;
+  private heartbeatInterval: NodeJS.Timeout;
+  private cleanupInterval: NodeJS.Timeout;
 
   constructor(
     @InjectPinoLogger(IssueUpdatesGateway.name)
@@ -38,14 +44,32 @@ export class IssueUpdatesGateway
     this.logger.info('WebSocket Gateway initialized');
 
     // Setup heartbeat interval
-    setInterval(() => {
+    this.heartbeatInterval = setInterval(() => {
       this.sendHeartbeat();
     }, WEBSOCKET_CONSTANTS.LIMITS.HEARTBEAT_INTERVAL);
 
     // Setup cleanup interval for inactive connections
-    setInterval(() => {
+    this.cleanupInterval = setInterval(() => {
       this.cleanupInactiveConnections();
     }, WEBSOCKET_CONSTANTS.LIMITS.CONNECTION_TIMEOUT);
+
+    this.logger.debug('WebSocket intervals initialized');
+  }
+
+  onModuleDestroy(): void {
+    this.logger.info('WebSocket Gateway shutting down, cleaning up intervals');
+
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.logger.debug('Heartbeat interval cleared');
+    }
+
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.logger.debug('Cleanup interval cleared');
+    }
+
+    this.logger.info('WebSocket Gateway shutdown complete');
   }
 
   handleConnection(client: Socket): void {
