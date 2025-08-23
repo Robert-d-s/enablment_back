@@ -78,6 +78,7 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
 
     let message = exception.message;
     let code = 'BAD_REQUEST';
+    let originalCode: string | undefined;
 
     // Extract message from response if it's an object
     if (typeof response === 'object' && response !== null) {
@@ -85,6 +86,9 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
       message = Array.isArray(responseObj.message)
         ? responseObj.message.join(', ')
         : responseObj.message || message;
+      if (typeof responseObj.code === 'string') {
+        originalCode = responseObj.code;
+      }
     }
 
     // Map common HTTP status codes to GraphQL error codes
@@ -106,7 +110,17 @@ export class GlobalGqlExceptionFilter implements GqlExceptionFilter {
     }
 
     return new GraphQLError(message, {
-      extensions: { code },
+      extensions: {
+        code,
+        httpStatus: status,
+        statusCode: status,
+        ...(originalCode && {
+          originalError: {
+            code: originalCode,
+            statusCode: status,
+          },
+        }),
+      },
     });
   }
 

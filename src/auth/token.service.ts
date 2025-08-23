@@ -108,6 +108,21 @@ export class TokenService {
     }
   }
 
+  getAccessTokenJti(token: string): string | null {
+    try {
+      const decoded = this.jwtService.decode(
+        token,
+      ) as Partial<AccessTokenPayload> | null;
+      if (decoded && typeof (decoded as any).jti === 'string') {
+        return (decoded as any).jti as string;
+      }
+      return null;
+    } catch (err) {
+      this.logger.warn({ err }, 'Failed to decode token for jti extraction');
+      return null;
+    }
+  }
+
   extractTokenFromAuthHeader(authHeader?: string): string | undefined {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.substring(7);

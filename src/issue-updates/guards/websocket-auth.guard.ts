@@ -34,19 +34,27 @@ export class WebSocketAuthGuard implements CanActivate {
         return false;
       }
 
-      // Check if token is blacklisted
-      if (this.tokenBlacklistService.isTokenBlacklisted(token)) {
+      // Verify JWT token
+      const payload = await this.tokenService.verifyAccessToken(token);
+
+      // Check if token is blacklisted using JTI
+      if (
+        payload.jti &&
+        this.tokenBlacklistService.isTokenBlacklisted(payload.jti)
+      ) {
         const exception = ExceptionFactory.tokenBlacklisted();
         this.logger.warn(
-          { socketId: client.id, error: exception.errorCode },
-          'WebSocket connection denied: Token is blacklisted',
+          {
+            socketId: client.id,
+            userId: payload.id,
+            jti: payload.jti,
+            error: exception.errorCode,
+          },
+          'WebSocket connection denied: Token JTI is blacklisted',
         );
         this.emitAuthError(client, exception);
         return false;
       }
-
-      // Verify JWT token
-      const payload = await this.tokenService.verifyAccessToken(token);
 
       // Store user info in socket for later use
       client.data.user = payload;

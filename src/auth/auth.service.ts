@@ -131,14 +131,22 @@ export class AuthService {
     this.logger.info(`Logging out user ${userId}. Clearing token hash.`);
 
     if (accessToken) {
-      const expiresAt = this.tokenService.getTokenExpiry(accessToken);
-      if (expiresAt) {
-        const ttlMs = Math.max(0, expiresAt - Date.now());
-        this.tokenBlacklistService.blacklistToken(accessToken, { ttlMs });
+      const jti = this.tokenService.getAccessTokenJti(accessToken);
+      if (jti) {
+        const expiresAt = this.tokenService.getTokenExpiry(accessToken);
+        if (expiresAt) {
+          const ttlMs = Math.max(0, expiresAt - Date.now());
+          this.tokenBlacklistService.blacklistToken(jti, { ttlMs });
+        } else {
+          this.tokenBlacklistService.blacklistToken(jti);
+        }
+        this.logger.debug({ userId, jti }, 'Access token blacklisted by jti');
       } else {
-        this.tokenBlacklistService.blacklistToken(accessToken);
+        this.logger.warn(
+          { userId },
+          'Failed to extract jti from access token during logout; skipping blacklist',
+        );
       }
-      this.logger.debug({ userId }, 'Access token blacklisted');
     }
 
     await this.userSecurityService.clearRefreshToken(userId);
