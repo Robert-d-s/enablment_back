@@ -8,6 +8,12 @@ import { DatabaseSyncResolver } from './dbSynch.resolver';
 import { JwtModule } from '@nestjs/jwt';
 import { UserModule } from '../user/user.module';
 import { AuthModule } from '../auth/auth.module';
+import {
+  TeamSyncService,
+  ProjectSyncService,
+  IssueSyncService,
+  CleanupSyncService,
+} from './services';
 
 @Module({
   imports: [
@@ -26,7 +32,14 @@ import { AuthModule } from '../auth/auth.module';
     forwardRef(() => UserModule),
     forwardRef(() => AuthModule),
   ],
-  providers: [DatabaseSyncService, DatabaseSyncResolver],
+  providers: [
+    DatabaseSyncService,
+    DatabaseSyncResolver,
+    TeamSyncService,
+    ProjectSyncService,
+    IssueSyncService,
+    CleanupSyncService,
+  ],
   exports: [DatabaseSyncService],
 })
 export class DatabaseSyncModule {}
