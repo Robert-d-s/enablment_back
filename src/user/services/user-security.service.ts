@@ -3,6 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import {
+  PASSWORD_REGEX,
+  PASSWORD_ERROR_MESSAGE,
+} from '../../auth/constants/password.constants';
 
 const BCRYPT_SALT_ROUNDS = 10;
 
@@ -85,21 +89,9 @@ export class UserSecurityService {
       throw new BadRequestException('Password is required');
     }
 
-    if (password.length < 6) {
-      throw new BadRequestException(
-        'Password must be at least 6 characters long',
-      );
-    }
-
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-
-    if (!(hasUpperCase && hasLowerCase && (hasNumbers || hasSpecialChar))) {
-      throw new BadRequestException(
-        'Password must contain at least one uppercase letter, one lowercase letter, and either a number or special character',
-      );
+    // Use the same regex pattern as frontend and DTO validation for consistency
+    if (!PASSWORD_REGEX.test(password)) {
+      throw new BadRequestException(PASSWORD_ERROR_MESSAGE);
     }
   }
 }

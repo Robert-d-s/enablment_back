@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { WebhookService } from './webhook.service';
 import { WebhookController } from './webhook.controller';
 import { WebhookProjectService } from './webhook.project.service';
@@ -12,6 +13,7 @@ import { ProjectModule } from '../project/project.module';
 import { IssueModule } from '../issue/issue.module';
 @Module({
   imports: [
+    ConfigModule,
     TeamModule,
     IssueUpdatesModule,
     PrismaModule,
