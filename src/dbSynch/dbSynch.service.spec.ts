@@ -7,7 +7,7 @@ import {
   IssueSyncService,
   CleanupSyncService,
 } from './services';
-import { PinoLogger } from 'nestjs-pino';
+import { getLoggerToken } from 'nestjs-pino';
 
 describe('DatabaseSyncService', () => {
   let service: DatabaseSyncService;
@@ -52,7 +52,7 @@ describe('DatabaseSyncService', () => {
           },
         },
         {
-          provide: PinoLogger,
+          provide: getLoggerToken(DatabaseSyncService.name),
           useValue: {
             info: jest.fn(),
             error: jest.fn(),
