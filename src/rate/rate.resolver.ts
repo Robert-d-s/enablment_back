@@ -1,4 +1,5 @@
 import { Args, Mutation, Query, Resolver, Context } from '@nestjs/graphql';
+import { Throttle } from '@nestjs/throttler';
 import { RateService } from './rate.service';
 import { Rate, DeleteRateResponse } from './rate.model';
 import { RateInputCreate, DeleteRateInput } from './rate.input';
@@ -31,6 +32,7 @@ export class RateResolver {
 
   @Mutation(() => Rate)
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
+  @Throttle({ default: { limit: 20, ttl: 300000 } }) // 20 rate operations per 5 minutes
   async createRate(
     @Args('rateInputCreate') rateInputCreate: RateInputCreate,
   ): Promise<Rate> {
@@ -46,6 +48,7 @@ export class RateResolver {
   }
   @Mutation(() => DeleteRateResponse)
   @Roles(UserRole.ADMIN, UserRole.ENABLER)
+  @Throttle({ default: { limit: 20, ttl: 300000 } }) // 20 rate operations per 5 minutes
   async deleteRate(
     @Args('input') input: DeleteRateInput,
   ): Promise<DeleteRateResponse> {

@@ -6,6 +6,7 @@ import {
   ResolveField,
   Parent,
 } from '@nestjs/graphql';
+import { Throttle } from '@nestjs/throttler';
 import { Team } from './team.model';
 import { TeamService } from './team.service';
 import { SimpleTeamDTO } from './team.model';
@@ -30,6 +31,7 @@ export class TeamResolver {
 
   @Mutation(() => Team)
   @Roles(UserRole.ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 300000 } }) // 10 team creations per 5 minutes
   async createTeam(@Args('input') input: CreateTeamInput): Promise<Team> {
     this.logger.info({ input }, 'Executing createTeam mutation');
 

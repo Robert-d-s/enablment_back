@@ -10,13 +10,14 @@ import { HttpModule } from '@nestjs/axios';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { registerEnumType } from '@nestjs/graphql';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 // Prisma types
 import { UserRole } from '@prisma/client';
 
 // Internal modules
 import { AuthGuard } from './auth/auth.guard';
+import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { GraphQLSecurityService } from './common/services/graphql-security.service';
@@ -67,16 +68,7 @@ registerEnumType(UserRole, {
         ],
         skipIf: (context) => {
           // Skip throttling in test environment
-          if (process.env.NODE_ENV === 'test') return true;
-
-          // Skip throttling for GraphQL requests to avoid IP access issues
-          try {
-            const request = context.switchToHttp().getRequest();
-            return request?.url?.includes('/graphql');
-          } catch {
-            // If we can't get the request (e.g., in GraphQL context), skip throttling
-            return true;
-          }
+          return process.env.NODE_ENV === 'test';
         },
       }),
     }),
@@ -149,9 +141,9 @@ registerEnumType(UserRole, {
             configService.get<boolean>('GRAPHQL_INTROSPECTION') || false,
           validationRules: graphqlSecurity.getValidationRules(),
           plugins: [timeoutPlugin, rateLimitPlugin, complexityPlugin],
-          context: (context: { req: Request; res: Response }): GqlContext => ({
-            req: context.req as GqlContext['req'],
-            res: context.res,
+          context: ({ req, res }: { req: Request; res: Response }): GqlContext => ({
+            req: req as GqlContext['req'],
+            res: res,
           }),
           formatError: (error) => {
             // Log security-related errors
@@ -187,11 +179,10 @@ registerEnumType(UserRole, {
       provide: APP_GUARD,
       useClass: AuthGuard,
     },
-    // Temporarily disable ThrottlerGuard - it's causing GraphQL context issues
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: ThrottlerGuard,
-    // },
+    {
+      provide: APP_GUARD,
+      useClass: GqlThrottlerGuard,
+    },
     GraphQLSecurityService,
   ],
 })

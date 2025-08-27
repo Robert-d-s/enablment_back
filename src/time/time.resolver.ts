@@ -1,4 +1,5 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Throttle } from '@nestjs/throttler';
 import { TimeService } from './time.service';
 import { Time } from './time.model';
 import {
@@ -23,6 +24,7 @@ export class TimeResolver {
   }
 
   @Mutation(() => Time)
+  @Throttle({ default: { limit: 60, ttl: 300000 } }) // 60 time entries per 5 minutes
   async createTime(
     @Args('timeInputCreate') timeInputCreate: TimeInputCreate,
   ): Promise<Time> {
@@ -40,6 +42,7 @@ export class TimeResolver {
   }
 
   @Mutation(() => Time)
+  @Throttle({ default: { limit: 60, ttl: 300000 } }) // 60 time updates per 5 minutes
   async updateTime(
     @Args('timeInputUpdate') timeInputUpdate: TimeInputUpdate,
   ): Promise<Time> {
@@ -83,6 +86,7 @@ export class TimeResolver {
   }
 
   @Mutation(() => Time)
+  @Throttle({ default: { limit: 30, ttl: 300000 } }) // 30 time deletions per 5 minutes
   async deleteTime(@Args('input') input: DeleteTimeInput): Promise<Time> {
     this.logger.info({ input }, 'Executing deleteTime mutation');
     return this.timeService.remove(input.id);

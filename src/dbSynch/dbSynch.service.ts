@@ -24,12 +24,17 @@ export class DatabaseSyncService {
   async synchronizeDatabase(): Promise<void> {
     this.logger.info('Starting comprehensive database synchronization');
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await this.teamSyncService.synchronize(tx);
-        await this.projectSyncService.synchronize(tx);
-        await this.issueSyncService.synchronize(tx);
-        await this.cleanupSyncService.synchronize(tx);
-      });
+      await this.prisma.$transaction(
+        async (tx) => {
+          await this.teamSyncService.synchronize(tx);
+          await this.projectSyncService.synchronize(tx);
+          await this.issueSyncService.synchronize(tx);
+          await this.cleanupSyncService.synchronize(tx);
+        },
+        {
+          timeout: 60000, // 60 seconds timeout
+        },
+      );
       this.logger.info('Database synchronization completed successfully');
     } catch (error) {
       this.logger.error({ err: error }, 'Database synchronization failed');
@@ -45,9 +50,14 @@ export class DatabaseSyncService {
     this.logger.info('Starting teams-only synchronization');
 
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await this.teamSyncService.synchronize(tx);
-      });
+      await this.prisma.$transaction(
+        async (tx) => {
+          await this.teamSyncService.synchronize(tx);
+        },
+        {
+          timeout: 30000, // 30 seconds timeout
+        },
+      );
 
       this.logger.info('Teams synchronization completed successfully');
     } catch (error) {

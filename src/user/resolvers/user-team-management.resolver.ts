@@ -1,4 +1,5 @@
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
+import { Throttle } from '@nestjs/throttler';
 import { User } from '../user.model';
 import { UserTeamService } from '../services/user-team.service';
 import { Roles } from '../../auth/roles.decorator';
@@ -16,6 +17,7 @@ export class UserTeamManagementResolver {
 
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
+  @Throttle({ default: { limit: 15, ttl: 300000 } }) // 15 team operations per 5 minutes
   async addUserToTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing addUserToTeam mutation');
     const user = await this.userTeamService.addUserToTeam(
@@ -31,6 +33,7 @@ export class UserTeamManagementResolver {
 
   @Mutation(() => User)
   @Roles(UserRole.ADMIN)
+  @Throttle({ default: { limit: 15, ttl: 300000 } }) // 15 team operations per 5 minutes
   async removeUserFromTeam(@Args('input') input: UserTeamInput): Promise<User> {
     this.logger.info({ input }, 'Executing removeUserFromTeam mutation');
     const user = await this.userTeamService.removeUserFromTeam(
