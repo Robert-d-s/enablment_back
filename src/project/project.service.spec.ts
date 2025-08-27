@@ -87,7 +87,10 @@ describe('ProjectService', () => {
     });
 
     it('should return projects with team names', async () => {
-      const projects = [mockProject, { ...mockProject, id: 'project-2', teamId: 'team-2' }];
+      const projects = [
+        mockProject,
+        { ...mockProject, id: 'project-2', teamId: 'team-2' },
+      ];
       const teams = [mockTeam, { ...mockTeam, id: 'team-2', name: 'Team Two' }];
 
       (prismaService.project.findMany as jest.Mock).mockResolvedValue(projects);
@@ -97,9 +100,17 @@ describe('ProjectService', () => {
 
       expect(result).toEqual([
         { ...mockProject, teamName: 'Test Team' },
-        { ...mockProject, id: 'project-2', teamId: 'team-2', teamName: 'Team Two' },
+        {
+          ...mockProject,
+          id: 'project-2',
+          teamId: 'team-2',
+          teamName: 'Team Two',
+        },
       ]);
-      expect(teamLoader.byId.loadMany).toHaveBeenCalledWith(['team-1', 'team-2']);
+      expect(teamLoader.byId.loadMany).toHaveBeenCalledWith([
+        'team-1',
+        'team-2',
+      ]);
     });
 
     it('should handle projects with missing teams gracefully', async () => {
@@ -111,9 +122,7 @@ describe('ProjectService', () => {
 
       const result = await service.all();
 
-      expect(result).toEqual([
-        { ...mockProject, teamName: undefined },
-      ]);
+      expect(result).toEqual([{ ...mockProject, teamName: undefined }]);
     });
 
     it('should deduplicate team IDs for efficient loading', async () => {
@@ -129,13 +138,18 @@ describe('ProjectService', () => {
 
       await service.all();
 
-      expect(teamLoader.byId.loadMany).toHaveBeenCalledWith(['team-1', 'team-2']);
+      expect(teamLoader.byId.loadMany).toHaveBeenCalledWith([
+        'team-1',
+        'team-2',
+      ]);
     });
   });
 
   describe('findById', () => {
     it('should return project when found', async () => {
-      (prismaService.project.findUnique as jest.Mock).mockResolvedValue(mockProject);
+      (prismaService.project.findUnique as jest.Mock).mockResolvedValue(
+        mockProject,
+      );
 
       const result = await service.findById('project-1');
 
@@ -162,7 +176,9 @@ describe('ProjectService', () => {
   describe('findByTeamId', () => {
     it('should return projects for team', async () => {
       const teamProjects = [mockProject, { ...mockProject, id: 'project-2' }];
-      (prismaService.project.findMany as jest.Mock).mockResolvedValue(teamProjects);
+      (prismaService.project.findMany as jest.Mock).mockResolvedValue(
+        teamProjects,
+      );
 
       const result = await service.findByTeamId('team-1');
 

@@ -6,7 +6,7 @@ import { TokenBlacklistService } from '../common/services/token-blacklist.servic
 import { TokenService } from './token.service';
 import { getLoggerToken } from 'nestjs-pino';
 import { UserRole } from '@prisma/client';
-import { ExceptionFactory, ResourceConflictException } from '../common/exceptions/base.exception';
+import { ResourceConflictException } from '../common/exceptions/base.exception';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -281,7 +281,9 @@ describe('AuthService', () => {
       const result = await service.refreshToken(userId, refreshToken);
 
       expect(result).toEqual(newTokens);
-      expect(tokenService.verifyRefreshToken).toHaveBeenCalledWith(refreshToken);
+      expect(tokenService.verifyRefreshToken).toHaveBeenCalledWith(
+        refreshToken,
+      );
       expect(userSecurityService.verifyRefreshToken).toHaveBeenCalledWith(
         refreshToken,
         mockUser.hashedRefreshToken,
@@ -292,7 +294,9 @@ describe('AuthService', () => {
       tokenService.verifyRefreshToken.mockResolvedValue(refreshPayload);
       tokenBlacklistService.isTokenBlacklisted.mockReturnValue(true);
 
-      await expect(service.refreshToken(userId, refreshToken)).rejects.toThrow();
+      await expect(
+        service.refreshToken(userId, refreshToken),
+      ).rejects.toThrow();
 
       expect(mockLogger.warn).toHaveBeenCalledWith(
         { userId, jti: refreshPayload.jti },
@@ -305,7 +309,9 @@ describe('AuthService', () => {
       tokenBlacklistService.isTokenBlacklisted.mockReturnValue(false);
       userCoreService.findById.mockResolvedValue(null);
 
-      await expect(service.refreshToken(userId, refreshToken)).rejects.toThrow();
+      await expect(
+        service.refreshToken(userId, refreshToken),
+      ).rejects.toThrow();
 
       expect(mockLogger.warn).toHaveBeenCalledWith(
         `Refresh Denied: User ${userId} not found or no stored hash.`,
@@ -318,7 +324,9 @@ describe('AuthService', () => {
       userCoreService.findById.mockResolvedValue(mockUser);
       userSecurityService.verifyRefreshToken.mockResolvedValue(false);
 
-      await expect(service.refreshToken(userId, refreshToken)).rejects.toThrow();
+      await expect(
+        service.refreshToken(userId, refreshToken),
+      ).rejects.toThrow();
 
       expect(mockLogger.warn).toHaveBeenCalledWith(
         `Refresh Denied: Provided token does not match stored hash for user ${userId}.`,
